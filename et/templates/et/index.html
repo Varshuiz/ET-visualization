@@ -125,487 +125,360 @@
 
         .submit-btn {
             background: linear-gradient(135deg, var(--teal), var(--midnight-green));
-            color: white;
-            padding: 15px 40px;
-            border: none;
-            border-radius: 50px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-left: 20px;
-            box-shadow: 0 5px 15px rgba(8, 127, 140, 0.3);
-        }
+            {% extends 'et/base.html' %}
 
-        .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(8, 127, 140, 0.4);
-        }
+{% block title %}Priestley-Taylor ET Calculator{% endblock %}
 
-        .submit-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
+{% block extra_css %}
+<style>
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
 
-        .file-info {
-            margin-top: 15px;
-            padding: 10px;
-            background: var(--light-green);
-            border-radius: 10px;
-            color: var(--midnight-green);
-            display: none;
-        }
+.stat-card {
+    background: linear-gradient(135deg, var(--zomp), var(--asparagus));
+    color: white;
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(90, 170, 149, 0.3);
+    transition: transform 0.3s ease;
+}
 
-        .results-section h2 {
-            color: var(--midnight-green);
-            margin-bottom: 25px;
-            font-size: 1.8rem;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+.stat-card:hover {
+    transform: translateY(-3px);
+}
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
 
-        .stat-card {
-            background: linear-gradient(135deg, var(--zomp), var(--asparagus));
-            color: white;
-            padding: 20px;
-            border-radius: 15px;
-            text-align: center;
-            box-shadow: 0 5px 15px rgba(90, 170, 149, 0.3);
-        }
+.stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
 
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 5px;
-        }
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 5px 15px var(--shadow);
+}
 
-        .stat-label {
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
+.data-table th {
+    background: linear-gradient(135deg, var(--midnight-green), var(--teal));
+    color: white;
+    padding: 15px;
+    font-weight: 600;
+    text-align: left;
+}
 
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 5px 15px var(--shadow);
-        }
+.data-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid rgba(90, 170, 149, 0.1);
+}
 
-        .data-table th {
-            background: linear-gradient(135deg, var(--midnight-green), var(--teal));
-            color: white;
-            padding: 15px;
-            font-weight: 600;
-            text-align: left;
-        }
+.data-table tr:hover {
+    background: var(--light-green);
+}
 
-        .data-table td {
-            padding: 12px 15px;
-            border-bottom: 1px solid rgba(90, 170, 149, 0.1);
-        }
+.data-table tr:nth-child(even) {
+    background: rgba(90, 170, 149, 0.05);
+}
 
-        .data-table tr:hover {
-            background: var(--light-green);
-        }
+.chart-container {
+    margin: 30px 0;
+    text-align: center;
+    background: white;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 5px 15px var(--shadow);
+}
 
-        .data-table tr:nth-child(even) {
-            background: rgba(90, 170, 149, 0.05);
-        }
+.chart-container img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+}
 
-        .chart-container {
-            margin: 30px 0;
-            text-align: center;
-            background: white;
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px var(--shadow);
-        }
+.download-btn {
+    background: linear-gradient(135deg, var(--satin-gold), #d4af37);
+    color: white;
+    padding: 15px 30px;
+    border: none;
+    border-radius: 50px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 5px 15px rgba(187, 159, 6, 0.3);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+}
 
-        .chart-container img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 10px;
-        }
+.download-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(187, 159, 6, 0.4);
+}
 
-        .download-btn {
-            background: linear-gradient(135deg, var(--satin-gold), #d4af37);
-            color: white;
-            padding: 15px 30px;
-            border: none;
-            border-radius: 50px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 5px 15px rgba(187, 159, 6, 0.3);
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            text-decoration: none;
-        }
+.instructions {
+    background: var(--light-green);
+    padding: 20px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+    border-left: 5px solid var(--zomp);
+}
 
-        .download-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(187, 159, 6, 0.4);
-        }
+.instructions h3 {
+    color: var(--midnight-green);
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
 
-        .instructions {
-            background: var(--light-green);
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 30px;
-            border-left: 5px solid var(--zomp);
-        }
+.instructions ul {
+    color: var(--midnight-green);
+    padding-left: 20px;
+    margin: 0;
+}
 
-        .instructions h3 {
-            color: var(--midnight-green);
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+.instructions li {
+    margin-bottom: 8px;
+}
 
-        .instructions ul {
-            color: var(--midnight-green);
-            padding-left: 20px;
-        }
+.upload-section {
+    text-align: center;
+}
 
-        .instructions li {
-            margin-bottom: 8px;
-        }
+.upload-section h2 {
+    color: var(--midnight-green);
+    margin-bottom: 20px;
+    font-size: 1.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
 
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
+.file-info {
+    margin-top: 15px;
+    padding: 10px;
+    background: var(--light-green);
+    border-radius: 10px;
+    color: var(--midnight-green);
+    display: none;
+}
 
-        .spinner {
-            border: 4px solid var(--light-green);
-            border-top: 4px solid var(--zomp);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
+.results-section h2 {
+    color: var(--midnight-green);
+    margin-bottom: 25px;
+    font-size: 1.8rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+.forecast-section {
+    max-height: 300px;
+    overflow-y: auto;
+}
 
-        .error-message {
-            background: #ffeaea;
-            color: var(--error);
-            padding: 15px;
-            border-radius: 10px;
-            border-left: 5px solid var(--error);
-            margin: 15px 0;
-        }
+.forecast-item {
+    padding: 10px;
+    border-bottom: 1px solid var(--light-green);
+}
 
-        .success-message {
-            background: #eafaf1;
-            color: var(--success);
-            padding: 15px;
-            border-radius: 10px;
-            border-left: 5px solid var(--success);
-            margin: 15px 0;
-        }
+.forecast-item:last-child {
+    border-bottom: none;
+}
 
-        .no-data-placeholder {
-            height: 300px; 
-            background: var(--light-green); 
-            border-radius: 10px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            color: var(--zomp); 
-            font-size: 1.2rem;
-        }
+.forecast-item strong {
+    color: var(--midnight-green);
+}
 
-        @media (max-width: 768px) {
-            .container {
-                padding: 15px;
-            }
-            
-            .header h1 {
-                font-size: 2rem;
-            }
-            
-            .card {
-                padding: 20px;
-            }
-            
-            .submit-btn {
-                margin-left: 0;
-                margin-top: 15px;
-                display: block;
-                width: 100%;
-            }
-            
-            .data-table {
-                font-size: 0.9rem;
-            }
-            
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-        }
+.forecast-item small {
+    color: var(--zomp);
+}
+</style>
+{% endblock %}
 
-        .fade-in {
-            animation: fadeIn 0.6s ease-in;
-        }
+{% block content %}
+<div class="page-header fade-in">
+    <h1><i class="fas fa-seedling"></i> Priestley-Taylor ET Calculator</h1>
+    <p>Calculate evapotranspiration using the Priestley-Taylor method with temperature and solar radiation data</p>
+</div>
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header fade-in">
-            <h1><i class="fas fa-seedling"></i> Agricultural ET Calculator</h1>
-            <p>Upload your ACIS weather data to calculate evapotranspiration rates for optimal crop management</p>
-        </div>
-
-        <div class="card fade-in">
-            <div class="instructions">
-                <h3><i class="fas fa-info-circle"></i> How to Use</h3>
-                <ul>
-                    <li>Upload CSV files from ACIS (Applied Climate Information System)</li>
-                    <li>Ensure your CSV contains columns for Air Temperature (°C) and Solar Radiation (MJ/m²)</li>
-                    <li>The tool will calculate ET₀ using the Priestley-Taylor method</li>
-                    <li>View results in table format and download processed data</li>
-                </ul>
-            </div>
-
-            <div class="upload-section">
-                <h2><i class="fas fa-cloud-upload-alt"></i> Upload Weather Data</h2>
-                
-                <form method="post" enctype="multipart/form-data" id="uploadForm">
-                    {% csrf_token %}
-                    <div class="file-upload-wrapper">
-                        <label class="file-upload">
-                            <i class="fas fa-file-csv"></i> Choose CSV File
-                            {{ form.file }}
-                        </label>
-                        <button type="submit" class="submit-btn" id="submitBtn">
-                            <i class="fas fa-calculator"></i> Calculate ET
-                        </button>
-                    </div>
-                    
-                    <div class="file-info" id="fileInfo">
-                        <i class="fas fa-check-circle"></i> <span id="fileName"></span>
-                    </div>
-                </form>
-
-                <div class="loading" id="loading">
-                    <div class="spinner"></div>
-                    <p>Processing your weather data...</p>
-                </div>
-            </div>
-        </div>
-
-        {% if et_data %}
-        <div class="card fade-in">
-            <div class="success-message">
-                <i class="fas fa-check-circle"></i> ET calculations completed successfully! Found {{ et_data|length }} records.
-            </div>
-            
-            <div class="results-section">
-                <h2><i class="fas fa-chart-line"></i> ET Calculation Results</h2>
-                
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value">{{ et_data|length }}</div>
-                        <div class="stat-label">Total Records</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">{{ et_stats.avg|floatformat:1 }}</div>
-                        <div class="stat-label">Avg ET₀ (mm/day)</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">{{ et_stats.max|floatformat:1 }}</div>
-                        <div class="stat-label">Max ET₀ (mm/day)</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">{{ et_stats.min|floatformat:1 }}</div>
-                        <div class="stat-label">Min ET₀ (mm/day)</div>
-                    </div>
-                </div>
-
-                {% if plot_url %}
-                <div class="chart-container">
-                    <h3 style="margin-bottom: 20px; color: var(--midnight-green);">
-                        <i class="fas fa-chart-area"></i> ET₀ Over Time
-                    </h3>
-                    <img src="data:image/png;base64,{{ plot_url }}" alt="ET Line Chart" />
-                </div>
-                {% endif %}
-
-                <h3 style="margin: 30px 0 20px 0; color: var(--midnight-green);">
-                    <i class="fas fa-table"></i> Detailed ET Data (First 50 records)
-                </h3>
-                
-                <div style="max-height: 400px; overflow-y: auto;">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th><i class="fas fa-calendar"></i> Date</th>
-                                <th><i class="fas fa-tint"></i> ET₀ (mm/day)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in et_data|slice:":50" %}
-                            <tr>
-                                <td>
-                                    {% if row.Date %}
-                                        {{ row.Date|date:"Y-m-d" }}
-                                    {% else %}
-                                        N/A
-                                    {% endif %}
-                                </td>
-                                <td>{{ row.ET|floatformat:2 }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-
-
-                </div>
-
-                {% if forecast_data %}
-                <div class="card fade-in">
-                    <h2><i class="fas fa-cloud-sun"></i> Lethbridge Forecast</h2>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Period</th>
-                                <th>Temperature (°C)</th>
-                                <th>Wind (km/h)</th>
-                                <th>Humidex</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in forecast_data %}
-                            <tr>
-                                <td>{{ item.period }}</td>
-                                <td>{{ item.temp_C }}</td>
-                                <td>{{ item.wind_kmh }}</td>
-                                <td>{{ item.humidex }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% endif %}
-
-
-                {% if et_data|length > 50 %}
-                <p style="text-align: center; color: var(--zomp); margin-top: 10px;">
-                    <i class="fas fa-info-circle"></i> Showing first 50 records. Download CSV for complete data.
-                </p>
-                {% endif %}
-
-                <div style="text-align: center; margin-top: 30px;">
-                    <a href="{% url 'download_et_csv' %}" class="download-btn">
-                        <i class="fas fa-download"></i> Download Complete ET Data as CSV
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        setTimeout(() => {
-            const resultsSection = document.querySelector('.results-section');
-            if (resultsSection) {
-                resultsSection.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            }
-        }, 500);
-        {% endif %}
+<div class="card fade-in">
+    <div class="instructions">
+        <h3><i class="fas fa-info-circle"></i> How to Use</h3>
+        <ul>
+            <li>Upload CSV files from ACIS (Applied Climate Information System) or similar weather data sources</li>
+            <li>Ensure your CSV contains columns for Air Temperature (°C) and Solar Radiation (MJ/m²/day)</li>
+            <li>The tool will calculate ET₀ using the Priestley-Taylor method</li>
+            <li>View results in table format and download processed data</li>
+            <li>For more comprehensive analysis, try the <a href="{% url 'et:comparison' %}" style="color: var(--teal); text-decoration: none; font-weight: 600;">Comparison Calculator</a></li>
+        </ul>
     </div>
 
-    <script>
-        // File input handling
-        const fileInput = document.querySelector('input[type="file"]');
-        if (fileInput) {
-            fileInput.addEventListener('change', function(e) {
-                const fileInfo = document.getElementById('fileInfo');
-                const fileName = document.getElementById('fileName');
-                
-                if (e.target.files.length > 0) {
-                    const file = e.target.files[0];
-                    fileName.textContent = `Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
-                    fileInfo.style.display = 'block';
-                } else {
-                    fileInfo.style.display = 'none';
-                }
-            });
-        }
-
-        // Form submission with loading indicator
-        document.getElementById('uploadForm').addEventListener('submit', function(e) {
-            const loading = document.getElementById('loading');
-            const submitBtn = document.getElementById('submitBtn');
-            const fileInput = document.querySelector('input[type="file"]');
+    <div class="upload-section">
+        <h2><i class="fas fa-cloud-upload-alt"></i> Upload Weather Data</h2>
+        
+        <form method="post" enctype="multipart/form-data" id="uploadForm">
+            {% csrf_token %}
+            <div class="file-upload-wrapper">
+                <label class="file-upload">
+                    <i class="fas fa-file-csv"></i> Choose CSV File
+                    {{ form.file }}
+                </label>
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    <i class="fas fa-calculator"></i> Calculate ET
+                </button>
+            </div>
             
-            if (!fileInput.files.length) {
-                e.preventDefault();
-                alert('Please select a CSV file first.');
-                return;
-            }
-            
-            loading.style.display = 'block';
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            <div class="file-info" id="fileInfo">
+                <i class="fas fa-check-circle"></i> <span id="fileName"></span>
+            </div>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing your weather data using Priestley-Taylor method...</p>
+        </div>
+    </div>
+</div>
+
+{% if error_message %}
+<div class="card fade-in">
+    <div class="error-message">
+        <i class="fas fa-exclamation-triangle"></i> {{ error_message }}
+    </div>
+</div>
+{% endif %}
+
+{% if et_data %}
+<div class="card fade-in">
+    <div class="success-message">
+        <i class="fas fa-check-circle"></i> ET calculations completed successfully! Found {{ et_data|length }} records.
+    </div>
+    
+    <div class="results-section">
+        <h2><i class="fas fa-chart-line"></i> Priestley-Taylor ET Results</h2>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ et_data|length }}</div>
+                <div class="stat-label">Total Records</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ et_stats.avg|floatformat:1 }}</div>
+                <div class="stat-label">Avg ET₀ (mm/day)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ et_stats.max|floatformat:1 }}</div>
+                <div class="stat-label">Max ET₀ (mm/day)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ et_stats.min|floatformat:1 }}</div>
+                <div class="stat-label">Min ET₀ (mm/day)</div>
+            </div>
+        </div>
+
+        {% if plot_url %}
+        <div class="chart-container">
+            <h3 style="margin-bottom: 20px; color: var(--midnight-green);">
+                <i class="fas fa-chart-area"></i> ET₀ Over Time
+            </h3>
+            <img src="data:image/png;base64,{{ plot_url }}" alt="ET Line Chart" />
+        </div>
+        {% endif %}
+
+        <h3 style="margin: 30px 0 20px 0; color: var(--midnight-green);">
+            <i class="fas fa-table"></i> Detailed ET Data (First 50 records)
+        </h3>
+        
+        <div style="max-height: 400px; overflow-y: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th><i class="fas fa-calendar"></i> Date</th>
+                        <th><i class="fas fa-tint"></i> ET₀ (mm/day)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in et_data|slice:":50" %}
+                    <tr>
+                        <td>
+                            {% if row.Date %}
+                                {{ row.Date|date:"Y-m-d" }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>{{ row.ET|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if et_data|length > 50 %}
+        <p style="text-align: center; color: var(--zomp); margin-top: 10px;">
+            <i class="fas fa-info-circle"></i> Showing first 50 records. Download CSV for complete data.
+        </p>
+        {% endif %}
+
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="{% url 'et:download_et_csv' %}" class="download-btn">
+                <i class="fas fa-download"></i> Download Complete ET Data as CSV
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if forecast_data %}
+<div class="card fade-in">
+    <h2><i class="fas fa-cloud-sun"></i> Lethbridge Weather Forecast</h2>
+    <div class="forecast-section">
+        {% for item in forecast_data %}
+        <div class="forecast-item">
+            <strong>{{ item.title }}</strong><br>
+            <small>{{ item.date }}</small><br>
+            <span style="color: var(--midnight-green);">{{ item.summary|truncatewords:20 }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-scroll to results if they exist
+{% if et_data %}
+setTimeout(() => {
+    const resultsSection = document.querySelector('.results-section');
+    if (resultsSection) {
+        resultsSection.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
         });
-
-        // Add fade-in animation to elements as they come into view
-        const observerOptions = {
-            threshold: 0.1,
-            rootMargin: '0px 0px -50px 0px'
-        };
-
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('fade-in');
-                }
-            });
-        }, observerOptions);
-
-        document.querySelectorAll('.card').forEach(card => {
-            observer.observe(card);
-        });
-
-        // Auto-scroll to results if they exist
-        // {% if et_data %}
-        // setTimeout(() => {
-        //     const resultsSection = document.querySelector('.results-section');
-        //     if (resultsSection) {
-        //         resultsSection.scrollIntoView({
-        //             behavior: 'smooth',
-        //             block: 'start'
-        //         });
-        //     }
-        // }, 500);
-        // {% endif %}
-    </script>
+    }
+}, 500);
+{% endif %}
+</script>
+{% endblock %}
 </body>
 </html>

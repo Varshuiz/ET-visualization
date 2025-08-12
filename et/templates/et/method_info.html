@@ -1,0 +1,72 @@
+{% extends 'et/base.html' %}
+
+{% block title %}ET Calculation Methods - Information{% endblock %}
+
+{% block content %}
+<div class="page-header fade-in">
+    <h1><i class="fas fa-info-circle"></i> ET Calculation Methods</h1>
+    <p>Learn about the different evapotranspiration calculation methods available in this calculator</p>
+</div>
+
+<div class="card fade-in">
+    <div class="method-comparison-info">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 30px;">
+            
+            <!-- Priestley-Taylor Method -->
+            <div class="method-info-card" style="border: 2px solid var(--asparagus); border-radius: 15px; padding: 25px;">
+                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                    <div style="width: 50px; height: 50px; background: var(--asparagus); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                        <i class="fas fa-leaf"></i>
+                    </div>
+                    <h2 style="color: var(--midnight-green); margin: 0;">Priestley-Taylor</h2>
+                </div>
+                
+                <h3 style="color: var(--asparagus); margin-bottom: 10px;">Overview</h3>
+                <p style="margin-bottom: 15px; line-height: 1.6;">
+                    A simplified energy balance method that requires only temperature and solar radiation data. 
+                    It's based on the assumption that under humid conditions with minimal advection, 
+                    evapotranspiration can be estimated using an empirical coefficient (α = 1.26).
+                </p>
+                
+                <h3 style="color: var(--asparagus); margin-bottom: 10px;">Advantages</h3>
+                <ul style="margin-bottom: 15px; padding-left: 20px;">
+                    <li>Simple data requirements</li>
+                    <li>Good accuracy in humid regions</li>
+                    <li>Computational efficiency</li>
+                    <li>Widely used in research</li>
+                </ul>
+                
+                <h3 style="color: var(--asparagus); margin-bottom: 10px;">Limitations</h3>
+                <ul style="margin-bottom: 15px; padding-left: 20px;">
+                    <li>Less accurate in arid regions</li>
+                    <li>Doesn't account for wind effects</li>
+                    <li>Assumes minimal advection</li>
+                </ul>
+
+                <h3 style="color: var(--asparagus); margin-bottom: 10px;">Required Data</h3>
+                <ul style="padding-left: 20px;">
+                    <li>Average air temperature (°C)</li>
+                    <li>Solar radiation (MJ/m²/day)</li>
+                </ul>
+            </div>
+
+            <!-- Penman-Monteith Method -->
+            <div class="method-info-card" style="border: 2px solid var(--teal); border-radius: 15px; padding: 25px;">
+                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                    <div style="width: 50px; height: 50px; background: var(--teal); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                        <i class="fas fa-wind"></i>
+                    </div>
+                    <h2 style="color: var(--midnight-green); margin: 0;">Penman-Monteith</h2>
+                </div>
+                
+                <h3 style="color: var(--teal); margin-bottom: 10px;">Overview</h3>
+                <p style="margin-bottom: 15px; line-height: 1.6;">
+                    The FAO-56 international standard method for calculating reference evapotranspiration. 
+                    It combines energy balance and aerodynamic terms to provide the most accurate ET₀ estimates 
+                    for all climatic conditions.
+                </p>
+                
+                <h3 style="color: var(--teal); margin-bottom: 10px;">Advantages</h3>
+                <ul style="margin-bottom: 15px; padding-left: 20px;">
+                    <li>Highest accuracy</li>
+                    <li>International standard (FAO-56)</li>

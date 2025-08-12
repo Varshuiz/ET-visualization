@@ -16,8 +16,22 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.views.generic import RedirectView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('et.urls')),
+    
+    # ET Calculator app URLs
+    path('et/', include('et.urls')),
+    
+    # Redirect root to ET comparison calculator (main page)
+    path('', RedirectView.as_view(url='/et/comparison/', permanent=False)),
+    
+    # Alternative direct access routes
+    path('calculator/', include('et.urls')),  # Alternative path
+    path('evapotranspiration/', include('et.urls')),  # SEO-friendly path
 ]
+
+# Optional: Add custom error handlers
+# handler404 = 'et.views.custom_404_view'
+# handler500 = 'et.views.custom_500_view'

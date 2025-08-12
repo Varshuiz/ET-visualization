@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}🌾 Agricultural ET Calculator{% endblock %}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --midnight-green: #095256;
+            --teal: #087F8C;
+            --zomp: #5AAA95;
+            --asparagus: #86A873;
+            --satin-gold: #BB9F06;
+            --light-green: #E8F5E8;
+            --white: #ffffff;
+            --shadow: rgba(9, 82, 86, 0.1);
+            --error: #e74c3c;
+            --success: #27ae60;
+            --warning: #f39c12;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--light-green) 0%, #f8fffe 100%);
+            min-height: 100vh;
+            line-height: 1.6;
+            color: var(--midnight-green);
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, var(--midnight-green), var(--teal));
+            padding: 15px 0;
+            box-shadow: 0 5px 15px var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+
+        .nav-brand {
+            color: white;
+            text-decoration: none;
+            font-size: 1.5rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-links {
+            display: flex;
+            list-style: none;
+            gap: 30px;
+            margin: 0;
+        }
+
+        .nav-links li {
+            margin: 0;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            padding: 8px 16px;
+            border-radius: 25px;
+        }
+
+        .nav-links a:hover,
+        .nav-links a.active {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .card {
+            background: var(--white);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 25px var(--shadow);
+            border: 1px solid rgba(90, 170, 149, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px var(--shadow);
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px 0;
+            background: linear-gradient(135deg, var(--midnight-green), var(--teal));
+            border-radius: 20px;
+            color: white;
+            box-shadow: 0 10px 30px var(--shadow);
+        }
+
+        .page-header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .page-header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .file-upload-wrapper {
+            position: relative;
+            display: inline-block;
+            margin: 20px 0;
+        }
+
+        .file-upload {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            cursor: pointer;
+            background: linear-gradient(135deg, var(--zomp), var(--asparagus));
+            color: white;
+            padding: 15px 30px;
+            border-radius: 50px;
+            border: none;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(90, 170, 149, 0.3);
+        }
+
+        .file-upload:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(90, 170, 149, 0.4);
+        }
+
+        .file-upload input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .submit-btn {
+            background: linear-gradient(135deg, var(--teal), var(--midnight-green));
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-left: 20px;
+            box-shadow: 0 5px 15px rgba(8, 127, 140, 0.3);
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(8, 127, 140, 0.4);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-message {
+            background: #ffeaea;
+            color: var(--error);
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 5px solid var(--error);
+            margin: 15px 0;
+        }
+
+        .success-message {
+            background: #eafaf1;
+            color: var(--success);
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 5px solid var(--success);
+            margin: 15px 0;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid var(--light-green);
+            border-top: 4px solid var(--zomp);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.6s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .mobile-menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: var(--midnight-green);
+                flex-direction: column;
+                padding: 20px;
+                gap: 10px;
+            }
+
+            .nav-links.active {
+                display: flex;
+            }
+
+            .mobile-menu-toggle {
+                display: block;
+            }
+
+            .container {
+                padding: 15px;
+            }
+
+            .page-header h1 {
+                font-size: 2rem;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .submit-btn {
+                margin-left: 0;
+                margin-top: 15px;
+                display: block;
+                width: 100%;
+            }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="{% url 'et:comparison' %}" class="nav-brand">
+                <i class="fas fa-seedling"></i> ET Calculator
+            </a>
+            <ul class="nav-links" id="navLinks">
+                <li><a href="{% url 'et:comparison' %}" {% if request.resolver_match.url_name == 'comparison' %}class="active"{% endif %}>
+                    <i class="fas fa-chart-line"></i> Comparison
+                </a></li>
+                <li><a href="{% url 'et:priestley_taylor' %}" {% if request.resolver_match.url_name == 'priestley_taylor' %}class="active"{% endif %}>
+                    <i class="fas fa-leaf"></i> Priestley-Taylor
+                </a></li>
+                <li><a href="{% url 'et:penman_monteith' %}" {% if request.resolver_match.url_name == 'penman_monteith' %}class="active"{% endif %}>
+                    <i class="fas fa-wind"></i> Penman-Monteith
+                </a></li>
+                <li><a href="{% url 'et:method_info' %}" {% if request.resolver_match.url_name == 'method_info' %}class="active"{% endif %}>
+                    <i class="fas fa-info-circle"></i> Methods
+                </a></li>
+                <li><a href="{% url 'et:help' %}" {% if request.resolver_match.url_name == 'help' %}class="active"{% endif %}>
+                    <i class="fas fa-question-circle"></i> Help
+                </a></li>
+            </ul>
+            <button class="mobile-menu-toggle" id="mobileMenuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script>
+        // Mobile menu toggle
+        document.getElementById('mobileMenuToggle').addEventListener('click', function() {
+            const navLinks = document.getElementById('navLinks');
+            navLinks.classList.toggle('active');
+        });
+
+        // File input handling
+        const fileInput = document.querySelector('input[type="file"]');
+        if (fileInput) {
+            fileInput.addEventListener('change', function(e) {
+                const fileInfo = document.getElementById('fileInfo');
+                const fileName = document.getElementById('fileName');
+                
+                if (e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    if (fileName) {
+                        fileName.textContent = 'Selected: ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+                    }
+                    if (fileInfo) {
+                        fileInfo.style.display = 'block';
+                    }
+                } else {
+                    if (fileInfo) {
+                        fileInfo.style.display = 'none';
+                    }
+                }
+            });
+        }
+
+        // Form submission with loading indicator
+        const uploadForm = document.getElementById('uploadForm');
+        if (uploadForm) {
+            uploadForm.addEventListener('submit', function(e) {
+                const loading = document.getElementById('loading');
+                const submitBtn = document.getElementById('submitBtn');
+                const fileInput = document.querySelector('input[type="file"]');
+                
+                if (!fileInput || !fileInput.files.length) {
+                    e.preventDefault();
+                    alert('Please select a CSV file first.');
+                    return;
+                }
+                
+                if (loading) {
+                    loading.style.display = 'block';
+                }
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                }
+            });
+        }
+
+        // Add fade-in animation to elements
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('fade-in');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.card').forEach(function(card) {
+            observer.observe(card);
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

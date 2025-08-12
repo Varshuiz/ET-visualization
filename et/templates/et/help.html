@@ -1,0 +1,223 @@
+{% extends 'et/base.html' %}
+
+{% block title %}Help Guide - ET Calculator{% endblock %}
+
+{% block content %}
+<div class="page-header fade-in">
+    <h1><i class="fas fa-question-circle"></i> Help Guide</h1>
+    <p>Learn how to use the Agricultural ET Calculator effectively</p>
+</div>
+
+<div class="card fade-in">
+    <h2 style="color: var(--midnight-green); margin-bottom: 20px;"><i class="fas fa-upload"></i> Data Upload Guide</h2>
+    
+    <div style="background: var(--light-green); padding: 20px; border-radius: 15px; margin-bottom: 30px;">
+        <h3 style="color: var(--midnight-green); margin-bottom: 15px;">CSV File Requirements</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+            <div>
+                <h4 style="color: var(--teal); margin-bottom: 10px;">File Format:</h4>
+                <ul style="color: var(--midnight-green); line-height: 1.6;">
+                    <li>CSV format (.csv extension)</li>
+                    <li>Header row with column names</li>
+                    <li>One record per day</li>
+                    <li>No missing critical data points</li>
+                </ul>
+            </div>
+            <div>
+                <h4 style="color: var(--teal); margin-bottom: 10px;">Column Names (flexible):</h4>
+                <ul style="color: var(--midnight-green); line-height: 1.6;">
+                    <li><strong>Date:</strong> date, Date, DATE</li>
+                    <li><strong>Temperature:</strong> temp, temperature, air_temp</li>
+                    <li><strong>Solar Radiation:</strong> solar, rad, radiation</li>
+                    <li><strong>Humidity:</strong> rh, humidity, relative_humidity</li>
+                    <li><strong>Wind:</strong> wind, wind_speed, ws</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <h3 style="color: var(--midnight-green); margin-bottom: 15px;">Sample CSV Structure</h3>
+    <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 10px; padding: 15px; margin-bottom: 20px; overflow-x: auto;">
+        <code style="font-family: 'Courier New', monospace; font-size: 0.9rem;">
+Date,Temperature,Solar_Radiation,Humidity,Wind_Speed<br>
+2024-01-01,22.5,18.2,65,2.1<br>
+2024-01-02,24.1,19.8,60,1.8<br>
+2024-01-03,21.3,16.5,70,2.4<br>
+...
+        </code>
+    </div>
+</div>
+
+<div class="card fade-in">
+    <h2 style="color: var(--midnight-green); margin-bottom: 20px;"><i class="fas fa-cogs"></i> Using the Calculator</h2>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+        <div style="background: linear-gradient(135deg, #e8f5e8, #f0f8f0); padding: 20px; border-radius: 15px;">
+            <h3 style="color: var(--asparagus); margin-bottom: 15px;"><i class="fas fa-leaf"></i> Priestley-Taylor</h3>
+            <ol style="color: var(--midnight-green); line-height: 1.8;">
+                <li>Visit the Priestley-Taylor page</li>
+                <li>Upload CSV with temperature and solar radiation</li>
+                <li>Click "Calculate Priestley-Taylor ET"</li>
+                <li>View results and download data</li>
+            </ol>
+        </div>
+        
+        <div style="background: linear-gradient(135deg, #e6f7f7, #f0fafa); padding: 20px; border-radius: 15px;">
+            <h3 style="color: var(--teal); margin-bottom: 15px;"><i class="fas fa-wind"></i> Penman-Monteith</h3>
+            <ol style="color: var(--midnight-green); line-height: 1.8;">
+                <li>Visit the Penman-Monteith page</li>
+                <li>Upload CSV with all meteorological data</li>
+                <li>Click "Calculate Penman-Monteith ET"</li>
+                <li>Review comprehensive results</li>
+            </ol>
+        </div>
+        
+        <div style="background: linear-gradient(135deg, #f0f8ff, #f8f9ff); padding: 20px; border-radius: 15px;">
+            <h3 style="color: var(--zomp); margin-bottom: 15px;"><i class="fas fa-chart-line"></i> Comparison</h3>
+            <ol style="color: var(--midnight-green); line-height: 1.8;">
+                <li>Visit the Comparison page</li>
+                <li>Upload complete meteorological dataset</li>
+                <li>Click "Compare Methods"</li>
+                <li>Analyze side-by-side results</li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<div class="card fade-in">
+    <h2 style="color: var(--midnight-green); margin-bottom: 20px;"><i class="fas fa-chart-bar"></i> Understanding Results</h2>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
+        <div>
+            <h3 style="color: var(--teal); margin-bottom: 15px;">Statistics Explained</h3>
+            <div style="background: var(--light-green); padding: 15px; border-radius: 10px;">
+                <ul style="color: var(--midnight-green); line-height: 1.6;">
+                    <li><strong>Average ET₀:</strong> Mean daily evapotranspiration</li>
+                    <li><strong>Maximum ET₀:</strong> Highest daily value</li>
+                    <li><strong>Minimum ET₀:</strong> Lowest daily value</li>
+                    <li><strong>Standard Deviation:</strong> Measure of variability</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div>
+            <h3 style="color: var(--teal); margin-bottom: 15px;">Chart Interpretation</h3>
+            <div style="background: var(--light-green); padding: 15px; border-radius: 10px;">
+                <ul style="color: var(--midnight-green); line-height: 1.6;">
+                    <li><strong>Daily Values:</strong> Raw ET calculations</li>
+                    <li><strong>Smooth Line:</strong> 5-day rolling average</li>
+                    <li><strong>Seasonal Patterns:</strong> Look for trends</li>
+                    <li><strong>Peak Values:</strong> Summer maximums</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card fade-in">
+    <h2 style="color: var(--midnight-green); margin-bottom: 20px;"><i class="fas fa-exclamation-triangle"></i> Troubleshooting</h2>
+    
+    <div style="space-y: 15px;">
+        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+            <h4 style="color: #856404; margin-bottom: 10px;">File Upload Issues</h4>
+            <ul style="color: #856404; padding-left: 20px;">
+                <li>Ensure file is in CSV format</li>
+                <li>Check that column headers match expected names</li>
+                <li>Verify no special characters in data</li>
+                <li>File size should be under 10MB</li>
+            </ul>
+        </div>
+        
+        <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+            <h4 style="color: #721c24; margin-bottom: 10px;">Calculation Errors</h4>
+            <ul style="color: #721c24; padding-left: 20px;">
+                <li>Check for missing required columns</li>
+                <li>Ensure numeric data is properly formatted</li>
+                <li>Remove any text in numeric columns</li>
+                <li>Verify date format (YYYY-MM-DD preferred)</li>
+            </ul>
+        </div>
+        
+        <div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 10px; padding: 15px;">
+            <h4 style="color: #0c5460; margin-bottom: 10px;">Result Issues</h4>
+            <ul style="color: #0c5460; padding-left: 20px;">
+                <li>Very high/low values may indicate data errors</li>
+                <li>Check units: temperature in °C, radiation in MJ/m²/day</li>
+                <li>Missing data points will be skipped</li>
+                <li>Compare results with local ET estimates</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="card fade-in">
+    <h2 style="color: var(--midnight-green); margin-bottom: 20px;"><i class="fas fa-download"></i> Data Export</h2>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+        <div style="background: var(--light-green); padding: 20px; border-radius: 15px;">
+            <h3 style="color: var(--midnight-green); margin-bottom: 15px;">Download Options</h3>
+            <ul style="color: var(--zomp); line-height: 1.6;">
+                <li>Complete calculated dataset</li>
+                <li>Original data with ET values added</li>
+                <li>Smoothed values included</li>
+                <li>CSV format for easy import</li>
+            </ul>
+        </div>
+        
+        <div style="background: var(--light-green); padding: 20px; border-radius: 15px;">
+            <h3 style="color: var(--midnight-green); margin-bottom: 15px;">Use Downloaded Data</h3>
+            <ul style="color: var(--zomp); line-height: 1.6;">
+                <li>Import into Excel or other tools</li>
+                <li>Create custom visualizations</li>
+                <li>Perform additional analysis</li>
+                <li>Archive for future reference</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="card fade-in">
+    <h2 style="color: var(--midnight-green); margin-bottom: 20px;"><i class="fas fa-lightbulb"></i> Tips for Best Results</h2>
+    
+    <div style="background: linear-gradient(135deg, var(--light-green), #e6f7f1); padding: 25px; border-radius: 15px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+            <div>
+                <h4 style="color: var(--teal); margin-bottom: 10px;"><i class="fas fa-check"></i> Data Quality</h4>
+                <ul style="color: var(--midnight-green); line-height: 1.6;">
+                    <li>Use high-quality weather station data</li>
+                    <li>Ensure consistent measurement intervals</li>
+                    <li>Verify data for obvious errors</li>
+                </ul>
+            </div>
+            <div>
+                <h4 style="color: var(--teal); margin-bottom: 10px;"><i class="fas fa-calendar"></i> Time Period</h4>
+                <ul style="color: var(--midnight-green); line-height: 1.6;">
+                    <li>Use complete growing seasons</li>
+                    <li>Include multiple years for patterns</li>
+                    <li>Consider seasonal variations</li>
+                </ul>
+            </div>
+            <div>
+                <h4 style="color: var(--teal); margin-bottom: 10px;"><i class="fas fa-map-marker-alt"></i> Location</h4>
+                <ul style="color: var(--midnight-green); line-height: 1.6;">
+                    <li>Use data from nearby weather stations</li>
+                    <li>Consider elevation differences</li>
+                    <li>Account for local microclimates</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div style="text-align: center; margin: 40px 0;">
+    <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+        <a href="{% url 'et:comparison' %}" style="background: linear-gradient(135deg, var(--teal), var(--midnight-green)); color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: 600; box-shadow: 0 5px 15px rgba(8, 127, 140, 0.3); display: inline-flex; align-items: center; gap: 10px;">
+            <i class="fas fa-calculator"></i> Start Calculating
+        </a>
+        <a href="{% url 'et:method_info' %}" style="background: linear-gradient(135deg, var(--zomp), var(--asparagus)); color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: 600; box-shadow: 0 5px 15px rgba(90, 170, 149, 0.3); display: inline-flex; align-items: center; gap: 10px;">
+            <i class="fas fa-info-circle"></i> Learn About Methods
+        </a>
+    </div>
+</div>
+
+{% endblock %}
