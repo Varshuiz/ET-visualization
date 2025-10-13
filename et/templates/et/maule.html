@@ -1,477 +1,248 @@
 {% extends 'et/base.html' %}
 
-{% block title %}{{ method_name }} ET Calculator{% endblock %}
+{% block title %}Maulé ET Calculator{% endblock %}
 
 {% block extra_css %}
 <style>
-    .method-info {
-        background: linear-gradient(135deg, #fff8dc, #f5f5dc);
-        border-radius: 15px;
-        padding: 25px;
-        margin-bottom: 30px;
-        border-left: 5px solid var(--satin-gold);
+    .method-info-box {
+        background: linear-gradient(135deg, #fff8e1, #fffbf0);
+        border-left: 5px solid #BB9F06;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 20px 0;
     }
 
-    .method-features {
+    .method-info-box h3 {
+        color: #BB9F06;
+        margin-bottom: 10px;
+    }
+
+    .advantages-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
         gap: 15px;
-        margin-top: 20px;
+        margin: 20px 0;
     }
 
-    .feature-item {
-        background: var(--white);
+    .advantage-card {
+        background: white;
+        border-radius: 10px;
         padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.05);
-        border-left: 3px solid var(--satin-gold);
+        box-shadow: 0 3px 10px rgba(187, 159, 6, 0.1);
     }
 
-    .feature-title {
-        font-weight: 600;
-        color: var(--midnight-green);
+    .advantage-card h4 {
+        color: #BB9F06;
         margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .feature-text {
-        color: var(--zomp);
-        font-size: 0.9rem;
-        line-height: 1.4;
-    }
-
-    .unit-toggle-section {
-        background: linear-gradient(135deg, #f0f8ff, #e6f7f1);
-        border-radius: 15px;
-        padding: 20px;
-        margin-bottom: 25px;
-        border-left: 5px solid var(--teal);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 15px;
-    }
-
-    .unit-toggle-info h4 {
-        color: var(--midnight-green);
-        margin: 0;
-        font-size: 1.1rem;
-    }
-
-    .unit-toggle-controls {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }
-
-    .unit-toggle {
-        position: relative;
-        display: inline-block;
-        width: 80px;
-        height: 34px;
-    }
-
-    .unit-toggle input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
-
-    .unit-slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(135deg, var(--zomp), var(--asparagus));
-        transition: 0.4s;
-        border-radius: 34px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 8px;
-        font-weight: 600;
-        font-size: 0.8rem;
-        color: white;
-    }
-
-    .unit-slider:before {
-        position: absolute;
-        content: "";
-        height: 26px;
-        width: 26px;
-        left: 4px;
-        bottom: 4px;
-        background-color: white;
-        transition: 0.4s;
-        border-radius: 50%;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-
-    input:checked + .unit-slider {
-        background: linear-gradient(135deg, var(--teal), var(--midnight-green));
-    }
-
-    input:checked + .unit-slider:before {
-        transform: translateX(46px);
-    }
-
-    .unit-labels {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-weight: 500;
-        color: var(--midnight-green);
-    }
-
-    .unit-label {
-        font-size: 0.9rem;
-        padding: 5px 10px;
-        border-radius: 15px;
-        transition: all 0.3s ease;
-    }
-
-    .unit-label.active {
-        background: var(--teal);
-        color: white;
-        font-weight: 600;
-    }
-
-    .conversion-info {
-        background: var(--white);
-        padding: 12px 16px;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        font-size: 0.85rem;
-        color: var(--zomp);
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header fade-in">
-    <h1><i class="fas fa-sun"></i> {{ method_name }} ET Calculator</h1>
-    <p>Simplified evapotranspiration method that accounts for temperature and solar radiation with humidity corrections</p>
-</div>
+<div class="container">
+    <div class="page-header">
+        <h1>🌾 Maulé Method ET Calculator</h1>
+        <p class="subtitle">Simplified ET estimation for regions with limited data</p>
+    </div>
 
-<div class="card fade-in">
+    <!-- Method Information -->
+    <div class="method-info-box">
+        <h3>📚 About the Maulé Method</h3>
+        <p>
+            The Maulé method is a simplified evapotranspiration estimation technique designed for 
+            conditions where limited meteorological data is available. It provides reasonable ET 
+            estimates using basic temperature and solar radiation parameters, with optional humidity correction.
+        </p>
+        <div class="advantages-grid">
+            <div class="advantage-card">
+                <h4>✓ Minimal Data Requirements</h4>
+                <p>Works with just temperature and solar radiation data</p>
+            </div>
+            <div class="advantage-card">
+                <h4>✓ Regional Calibration</h4>
+                <p>Calibrated for prairie and semi-arid conditions</p>
+            </div>
+            <div class="advantage-card">
+                <h4>✓ Optional Humidity Correction</h4>
+                <p>Improved accuracy when humidity data is available</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unit Toggle Section -->
     <div class="unit-toggle-section">
-        <div class="unit-toggle-info">
-            <h4><i class="fas fa-ruler"></i> Display Units</h4>
-        </div>
-        <div class="unit-toggle-controls">
-            <div class="unit-labels">
-                <span class="unit-label {% if selected_unit == 'mm' %}active{% endif %}">Millimeters</span>
-                <label class="unit-toggle">
-                    <input type="checkbox" id="unitToggle" {% if selected_unit == 'inches' %}checked{% endif %}>
-                    <span class="unit-slider">
-                        <span>mm</span>
-                        <span>in</span>
-                    </span>
-                </label>
-                <span class="unit-label {% if selected_unit == 'inches' %}active{% endif %}">Inches</span>
-            </div>
-            <div class="conversion-info">
-                {% if selected_unit == 'mm' %}
-                1 inch = 25.4 mm
-                {% else %}
-                1 mm = 0.0394 inches
-                {% endif %}
-            </div>
-        </div>
+        <span class="unit-label {% if selected_unit == 'mm' %}active{% endif %}">mm</span>
+        <label class="toggle-switch">
+            <input type="checkbox" id="unitToggle" {% if selected_unit == 'inches' %}checked{% endif %}>
+            <span class="slider"></span>
+        </label>
+        <span class="unit-label {% if selected_unit == 'inches' %}active{% endif %}">inches</span>
     </div>
 
-    <div class="method-info">
-        <h3><i class="fas fa-info-circle"></i> About the Maulé Method</h3>
-        <p>The Maulé method is a simplified evapotranspiration estimation approach that accounts for the limitations often encountered when using more complex methods with limited meteorological data.</p>
-        
-        <div class="method-features">
-            <div class="feature-item">
-                <div class="feature-title">
-                    <i class="fas fa-balance-scale"></i> Balanced Approach
-                </div>
-                <div class="feature-text">
-                    Provides reasonable accuracy with moderate data requirements between simple and complex methods.
-                </div>
-            </div>
-            
-            <div class="feature-item">
-                <div class="feature-title">
-                    <i class="fas fa-thermometer-half"></i> Data Requirements
-                </div>
-                <div class="feature-text">
-                    Requires temperature and solar radiation data, with optional humidity corrections for improved accuracy.
-                </div>
-            </div>
-            
-            <div class="feature-item">
-                <div class="feature-title">
-                    <i class="fas fa-seedling"></i> Best Use Cases
-                </div>
-                <div class="feature-text">
-                    Ideal for irrigation planning when you have basic weather station data but want better accuracy than temperature-only methods.
-                </div>
-            </div>
-            
-            <div class="feature-item">
-                <div class="feature-title">
-                    <i class="fas fa-calculator"></i> Calculation Method
-                </div>
-                <div class="feature-text">
-                    Uses empirical coefficients with temperature and radiation: ET = k × (T_mean + a) × Rs × humidity_factor × range_factor
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="instructions">
-        <h3><i class="fas fa-upload"></i> CSV Data Requirements</h3>
-        <ul>
-            <li><strong>Required:</strong> Maximum temperature (Tmax), Minimum temperature (Tmin), Solar radiation (Rs)</li>
-            <li><strong>Optional but recommended:</strong> Relative humidity (RH) for improved accuracy</li>
-            <li><strong>Date column:</strong> Any column with 'date' in the name</li>
-            <li><strong>Temperature units:</strong> Celsius degrees</li>
-            <li><strong>Solar radiation units:</strong> MJ/m²/day</li>
-            <li><strong>Humidity units:</strong> Percentage (%) if available</li>
-        </ul>
-    </div>
-
-    <div class="upload-section">
-        <h2><i class="fas fa-cloud-upload-alt"></i> Upload Weather Data</h2>
-        
+    <!-- File Upload Form -->
+    <div class="upload-card">
         <form method="post" enctype="multipart/form-data" id="uploadForm">
             {% csrf_token %}
-            <div class="file-upload-wrapper">
-                <label class="file-upload">
-                    <i class="fas fa-file-csv"></i> Choose CSV File
-                    {{ form.file }}
+            <div class="form-group">
+                <label for="id_file" class="form-label">
+                    📁 Upload CSV File with Weather Data
                 </label>
-                <button type="submit" class="submit-btn" id="submitBtn">
-                    <i class="fas fa-calculator"></i> Calculate {{ method_name }} ET
-                </button>
+                {{ form.file }}
+                <div class="file-requirements">
+                    <strong>Required columns:</strong> Tmax, Tmin (or Tavg), Solar Radiation (or will be estimated)
+                    <br>
+                    <strong>Optional columns:</strong> Relative Humidity (for improved accuracy)
+                </div>
             </div>
-            
-            <div class="file-info" id="fileInfo">
-                <i class="fas fa-check-circle"></i> <span id="fileName"></span>
+            {% if error_message %}
+                <div class="error-message">
+                    ❌ {{ error_message }}
+                </div>
+            {% endif %}
+            <button type="submit" class="submit-btn" id="submitBtn">
+                Calculate Maulé ET
+            </button>
+            <div class="loading" id="loading" style="display: none;">
+                Processing your data...
             </div>
         </form>
-
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>Processing your weather data with the {{ method_name }} method...</p>
-        </div>
     </div>
-</div>
 
-{% if error_message %}
-<div class="card fade-in">
-    <div class="error-message">
-        <i class="fas fa-exclamation-triangle"></i> {{ error_message }}
-    </div>
-</div>
-{% endif %}
-
-{% if et_data %}
-<div class="card fade-in">
-    <div class="success-message">
-        <i class="fas fa-check-circle"></i> {{ method_name }} ET calculation completed! Processed {{ et_data|length }} records.
-        <br><small>Currently displaying values in <strong>{{ unit_info.name }}</strong> ({{ unit_info.symbol }})</small>
-    </div>
-    
+    {% if et_data %}
     <div class="results-section">
-        <h2><i class="fas fa-chart-bar"></i> {{ method_name }} Results</h2>
-        
-        {% if et_stats %}
-        <div class="method-card maule" style="margin-bottom: 30px;">
-            <div class="method-header">
-                <div class="method-icon" style="background: var(--satin-gold);">
-                    <i class="fas fa-sun"></i>
-                </div>
-                <div class="method-title">{{ method_name }} Statistics</div>
+        <!-- Statistics Summary -->
+        <h2 style="color: #BB9F06; margin-bottom: 20px;">📊 Maulé ET Statistics</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Average Daily ET</div>
+                <div class="stat-value">{{ et_stats.avg|floatformat:unit_info.decimal_places }}</div>
+                <div class="stat-unit">{{ unit_info.daily_label }}</div>
             </div>
-            <div class="method-stats" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));">
-                <div class="stat-item">
-                    <div class="stat-value">{{ et_stats.avg|floatformat:unit_info.decimal_places }}</div>
-                    <div class="stat-label">Average ({{ unit_info.daily_label }})</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">{{ et_stats.max|floatformat:unit_info.decimal_places }}</div>
-                    <div class="stat-label">Maximum ({{ unit_info.daily_label }})</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">{{ et_stats.min|floatformat:unit_info.decimal_places }}</div>
-                    <div class="stat-label">Minimum ({{ unit_info.daily_label }})</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">{{ et_stats.std|floatformat:unit_info.decimal_places }}</div>
-                    <div class="stat-label">Std Deviation</div>
-                </div>
+            <div class="stat-card">
+                <div class="stat-label">Maximum Daily ET</div>
+                <div class="stat-value">{{ et_stats.max|floatformat:unit_info.decimal_places }}</div>
+                <div class="stat-unit">{{ unit_info.daily_label }}</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-label">Minimum Daily ET</div>
+                <div class="stat-value">{{ et_stats.min|floatformat:unit_info.decimal_places }}</div>
+                <div class="stat-unit">{{ unit_info.daily_label }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Standard Deviation</div>
+                <div class="stat-value">{{ et_stats.std|floatformat:unit_info.decimal_places }}</div>
+                <div class="stat-unit">{{ unit_info.daily_label }}</div>
+            </div>
+        </div>
+
+        <!-- Visualization -->
+        {% if plot_url %}
+        <div class="plot-container">
+            <h2 style="color: #BB9F06; margin-bottom: 20px;">📈 Maulé ET Over Time</h2>
+            <img src="data:image/png;base64,{{ plot_url }}" alt="Maulé ET Plot">
         </div>
         {% endif %}
 
+        <!-- Growing Season Analysis -->
         {% if growing_season_stats %}
-        <div class="growing-season-section">
-            <h3><i class="fas fa-calendar-alt"></i> Growing Season Analysis (May 1 - October 31)</h3>
-            
-            <div class="season-stats-grid">
-                <div class="season-stat-card">
-                    <div class="season-stat-value">{{ growing_season_stats.years_analyzed }}</div>
-                    <div class="season-stat-label">Years Analyzed</div>
-                </div>
-                <div class="season-stat-card">
-                    <div class="season-stat-value">{{ growing_season_stats.multi_year_avg_total|floatformat:unit_info.total_decimal_places }}</div>
-                    <div class="season-stat-label">Avg Seasonal Total ({{ unit_info.total_label }})</div>
-                </div>
-                <div class="season-stat-card">
-                    <div class="season-stat-value">{{ growing_season_stats.multi_year_avg_daily|floatformat:unit_info.daily_decimal_places }}</div>
-                    <div class="season-stat-label">Avg Daily ET ({{ unit_info.daily_label }})</div>
-                </div>
-                <div class="season-stat-card">
-                    <div class="season-stat-value">{{ growing_season_stats.highest_season_total|floatformat:unit_info.total_decimal_places }}</div>
-                    <div class="season-stat-label">Highest Season ({{ unit_info.total_label }})</div>
-                </div>
+        <h2 style="color: #BB9F06; margin: 40px 0 20px 0;">🌱 Growing Season Summary</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Years Analyzed</div>
+                <div class="stat-value">{{ growing_season_stats.years_analyzed }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Multi-Year Average Total</div>
+                <div class="stat-value">{{ growing_season_stats.multi_year_avg_total|floatformat:unit_info.total_decimal_places }}</div>
+                <div class="stat-unit">{{ unit_info.total_label }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Multi-Year Avg Daily</div>
+                <div class="stat-value">{{ growing_season_stats.multi_year_avg_daily|floatformat:unit_info.daily_decimal_places }}</div>
+                <div class="stat-unit">{{ unit_info.daily_label }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Days Analyzed</div>
+                <div class="stat-value">{{ growing_season_stats.total_days_analyzed }}</div>
             </div>
         </div>
-        {% endif %}
 
         {% if growing_season_plots.growing_season_analysis %}
-        <div class="chart-container">
-            <h3 style="margin-bottom: 20px; color: var(--midnight-green);">
-                <i class="fas fa-chart-area"></i> Growing Season Analysis Charts ({{ unit_info.name }})
-            </h3>
-            <img src="data:image/png;base64,{{ growing_season_plots.growing_season_analysis }}" alt="Growing Season Analysis Charts" />
+        <div class="plot-container">
+            <img src="data:image/png;base64,{{ growing_season_plots.growing_season_analysis }}" alt="Growing Season Analysis">
         </div>
         {% endif %}
-
-        {% if plot_url %}
-        <div class="chart-container">
-            <h3 style="margin-bottom: 20px; color: var(--midnight-green);">
-                <i class="fas fa-chart-area"></i> {{ method_name }} ET Over Time ({{ unit_info.name }})
-            </h3>
-            <img src="data:image/png;base64,{{ plot_url }}" alt="{{ method_name }} ET Chart" />
-        </div>
         {% endif %}
 
-        <h3 style="margin: 30px 0 20px 0; color: var(--midnight-green);">
-            <i class="fas fa-table"></i> {{ method_name }} Data (First 50 records) - {{ unit_info.name }}
-        </h3>
-        
-        <div style="max-height: 400px; overflow-y: auto;">
+        <!-- Data Table -->
+        <h2 style="color: #BB9F06; margin: 40px 0 20px 0;">📋 Daily ET Data (First 20 rows)</h2>
+        <div style="overflow-x: auto;">
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th><i class="fas fa-calendar"></i> Date</th>
-                        <th><i class="fas fa-sun"></i> {{ method_name }} ET ({{ unit_info.daily_label }})</th>
+                        <th>Date</th>
+                        <th>Maulé ET ({{ unit_info.daily_label }})</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for row in et_data|slice:":50" %}
+                    {% for row in et_data|slice:":20" %}
                     <tr>
-                        <td>
-                            {% if row.Date %}
-                                {{ row.Date|date:"Y-m-d" }}
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        </td>
-                        <td>{{ row.ET|floatformat:unit_info.decimal_places|default:"N/A" }}</td>
+                        <td>{{ row.Date|date:"Y-m-d" }}</td>
+                        <td>{{ row.ET }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
 
-        {% if et_data|length > 50 %}
-        <p style="text-align: center; color: var(--zomp); margin-top: 10px;">
-            <i class="fas fa-info-circle"></i> Showing first 50 records. Download CSV for complete data.
-        </p>
-        {% endif %}
-
+        <!-- Download Section -->
         <div class="download-section">
             <a href="{% url 'et:download_method_csv' 'maule' %}" class="download-btn">
-                <i class="fas fa-download"></i> Download {{ method_name }} Data
+                💾 Download Complete Data as CSV
             </a>
         </div>
     </div>
+    {% endif %}
 </div>
-{% endif %}
 
-{% if forecast_data %}
-<div class="card fade-in">
-    <h2><i class="fas fa-cloud-sun"></i> Local Weather Forecast</h2>
-    <div style="max-height: 300px; overflow-y: auto;">
-        {% for item in forecast_data %}
-        <div style="padding: 10px; border-bottom: 1px solid var(--light-green);">
-            <strong>{{ item.title }}</strong><br>
-            <small>{{ item.date }}</small><br>
-            {{ item.summary|truncatewords:20 }}
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Unit toggle functionality
 document.addEventListener('DOMContentLoaded', function() {
+    // Unit toggle functionality
     const unitToggle = document.getElementById('unitToggle');
-    const currentUnit = '{{ selected_unit }}';
-    
     if (unitToggle) {
         unitToggle.addEventListener('change', function() {
             const newUnit = this.checked ? 'inches' : 'mm';
-            
-            // Update URL with new unit parameter
             const url = new URL(window.location);
             url.searchParams.set('unit', newUnit);
-            
-            // Show loading state
-            const toggleSection = document.querySelector('.unit-toggle-section');
-            if (toggleSection) {
-                toggleSection.style.opacity = '0.6';
-                toggleSection.style.pointerEvents = 'none';
-            }
-            
-            // Reload page with new unit
             window.location.href = url.toString();
         });
     }
-    
-    // Update unit labels
-    function updateUnitLabels() {
-        const mmLabel = document.querySelector('.unit-label:first-child');
-        const inLabel = document.querySelector('.unit-label:last-child');
-        
-        if (mmLabel && inLabel) {
-            mmLabel.classList.toggle('active', currentUnit === 'mm');
-            inLabel.classList.toggle('active', currentUnit === 'inches');
-        }
-    }
-    
-    updateUnitLabels();
-});
-</script>
 
-{% if et_data %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Auto-scroll to results if they exist
-    setTimeout(function() {
-        var resultsSection = document.querySelector('.results-section');
-        if (resultsSection) {
+    // Form submission handling
+    const uploadForm = document.getElementById('uploadForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const loading = document.getElementById('loading');
+    
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', function() {
+            submitBtn.disabled = true;
+            loading.style.display = 'block';
+        });
+    }
+
+    // Auto-scroll to results
+    const resultsSection = document.querySelector('.results-section');
+    if (resultsSection) {
+        setTimeout(() => {
             resultsSection.scrollIntoView({
                 behavior: 'smooth',
                 block: 'start'
             });
-        }
-    }, 500);
+        }, 500);
+    }
 });
 </script>
-{% endif %}
+{% endblock %}

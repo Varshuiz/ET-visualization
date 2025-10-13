@@ -292,10 +292,13 @@
 <body>
     <nav class="navbar">
         <div class="nav-container">
-            <a href="{% url 'et:comparison' %}" class="nav-brand">
+            <a href="{% url 'et:enhanced_comparison' %}" class="nav-brand">
                 <i class="fas fa-seedling"></i> ET Calculator
             </a>
             <ul class="nav-links" id="navLinks">
+                <li><a href="{% url 'et:enhanced_comparison' %}" {% if request.resolver_match.url_name == 'enhanced_comparison' %}class="active"{% endif %}>
+                    <i class="fas fa-chart-line"></i> All Methods
+                </a></li>
                 <li><a href="{% url 'et:comparison' %}" {% if request.resolver_match.url_name == 'comparison' %}class="active"{% endif %}>
                     <i class="fas fa-chart-line"></i> Comparison
                 </a></li>
@@ -304,6 +307,12 @@
                 </a></li>
                 <li><a href="{% url 'et:penman_monteith' %}" {% if request.resolver_match.url_name == 'penman_monteith' %}class="active"{% endif %}>
                     <i class="fas fa-wind"></i> Penman-Monteith
+                </a></li>
+                <li><a href="{% url 'et:maule' %}" {% if request.resolver_match.url_name == 'maule' %}class="active"{% endif %}>
+                    <i class="fas fa-sun"></i> Maulé
+                </a></li>
+                <li><a href="{% url 'et:hargreaves' %}" {% if request.resolver_match.url_name == 'hargreaves' %}class="active"{% endif %}>
+                    <i class="fas fa-thermometer-half"></i> Hargreaves
                 </a></li>
                 <li><a href="{% url 'et:method_info' %}" {% if request.resolver_match.url_name == 'method_info' %}class="active"{% endif %}>
                     <i class="fas fa-info-circle"></i> Methods

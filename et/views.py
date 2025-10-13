@@ -349,256 +349,7 @@ def create_growing_season_plots(df, et_method='ET_PM', unit='mm'):
     
     return plots
 
-def comparison_calculator(request):
-    """Comprehensive ET calculator with growing season analysis and unit toggle"""
-    et_data = None
-    et_stats = None
-    comparison_stats = None
-    growing_season_stats = None
-    plot_url = None
-    growing_season_plots = None
-    
-    # Get selected unit from request (default to mm)
-    selected_unit = request.GET.get('unit', 'mm')
-    if selected_unit not in ['mm', 'inches']:
-        selected_unit = 'mm'
-    
-    unit_info = get_unit_info(selected_unit)
 
-    forecast_data = get_lethbridge_forecast()
-
-    if request.method == 'POST':
-        form = UploadFileForm(request.POST, request.FILES)
-        if form.is_valid():
-            csv_file = request.FILES['file']
-            try:
-                # [Previous CSV processing code remains the same...]
-                # Decode and read CSV safely
-                csv_bytes = csv_file.read()
-                csv_str = csv_bytes.decode('utf-8', errors='replace')
-                df = pd.read_csv(io.StringIO(csv_str))
-
-                # Clean and normalize column names
-                df.columns = df.columns.str.strip().str.replace(r"[^\w\s]", "", regex=True).str.replace(" ", "_")
-
-                # Parse Date column safely
-                date_col = [col for col in df.columns if 'date' in col.lower()]
-                if date_col:
-                    df['Date'] = pd.to_datetime(df[date_col[0]], errors='coerce')
-                else:
-                    df['Date'] = pd.date_range(start='2024-01-01', periods=len(df), freq='D')
-
-                # Find required columns with flexible matching
-                temp_cols = [col for col in df.columns if any(term in col.lower() for term in ['temp', 'air_temp', 'temperature'])]
-                tmax_cols = [col for col in df.columns if any(term in col.lower() for term in ['tmax', 'max_temp', 'maximum_temp'])]
-                tmin_cols = [col for col in df.columns if any(term in col.lower() for term in ['tmin', 'min_temp', 'minimum_temp'])]
-                rad_cols = [col for col in df.columns if any(term in col.lower() for term in ['solar', 'rad', 'radiation'])]
-                wind_cols = [col for col in df.columns if any(term in col.lower() for term in ['wind', 'wind_speed', 'ws'])]
-                rh_cols = [col for col in df.columns if any(term in col.lower() for term in ['rh', 'humidity', 'relative_humidity'])]
-
-                # Validate required columns
-                missing_cols = []
-                if not temp_cols and not (tmax_cols and tmin_cols):
-                    missing_cols.append("Temperature (average or max/min)")
-                if not rad_cols:
-                    missing_cols.append("Solar Radiation")
-
-                if missing_cols:
-                    raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
-
-                # Assign temperature columns
-                if temp_cols:
-                    df['Tavg'] = pd.to_numeric(df[temp_cols[0]], errors='coerce')
-                    if not tmax_cols or not tmin_cols:
-                        df['Tmax'] = df['Tavg'] + 5
-                        df['Tmin'] = df['Tavg'] - 5
-                    else:
-                        df['Tmax'] = pd.to_numeric(df[tmax_cols[0]], errors='coerce')
-                        df['Tmin'] = pd.to_numeric(df[tmin_cols[0]], errors='coerce')
-                else:
-                    df['Tmax'] = pd.to_numeric(df[tmax_cols[0]], errors='coerce')
-                    df['Tmin'] = pd.to_numeric(df[tmin_cols[0]], errors='coerce')
-                    df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
-
-                # Assign other meteorological variables
-                df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
-                
-                if wind_cols:
-                    df['u2'] = pd.to_numeric(df[wind_cols[0]], errors='coerce')
-                else:
-                    df['u2'] = 2.0  # Default wind speed
-                    
-                if rh_cols:
-                    df['RH'] = pd.to_numeric(df[rh_cols[0]], errors='coerce')
-                else:
-                    df['RH'] = 65.0  # Default relative humidity
-
-                # Calculate ET using both methods (always in mm first)
-                df['ET_PT'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Rs']), axis=1)
-                df['ET_PM'] = df.apply(lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs']), axis=1)
-
-                # Remove rows with NaN ET values for primary method
-                df = df.dropna(subset=['ET_PT'])
-                
-                if len(df) == 0:
-                    raise ValueError("No valid ET values could be calculated")
-
-                # Compute rolling averages for smoothing
-                for method in ['PT', 'PM']:
-                    df[f'ET_{method}_smooth'] = df[f'ET_{method}'].rolling(window=5, min_periods=1).mean()
-
-                # Calculate statistics for both methods with unit conversion
-                et_stats = {}
-                comparison_stats = {}
-                
-                for method, name in [('PT', 'Priestley-Taylor'), ('PM', 'Penman-Monteith')]:
-                    col = f'ET_{method}'
-                    if col in df.columns and not df[col].isna().all():
-                        # Convert values if needed
-                        if selected_unit == 'inches':
-                            avg_val = convert_units(df[col].mean(), 'mm', 'inches')
-                            max_val = convert_units(df[col].max(), 'mm', 'inches')
-                            min_val = convert_units(df[col].min(), 'mm', 'inches')
-                            std_val = convert_units(df[col].std(), 'mm', 'inches')
-                        else:
-                            avg_val = df[col].mean()
-                            max_val = df[col].max()
-                            min_val = df[col].min()
-                            std_val = df[col].std()
-                        
-                        et_stats[method] = {
-                            'name': name,
-                            'avg': avg_val,
-                            'max': max_val,
-                            'min': min_val,
-                            'std': std_val
-                        }
-
-                # Comparison statistics
-                if 'ET_PT' in df.columns and 'ET_PM' in df.columns:
-                    diff_mm = (df['ET_PM'] - df['ET_PT']).mean()
-                    if selected_unit == 'inches':
-                        comparison_stats['PT_PM_diff'] = convert_units(diff_mm, 'mm', 'inches')
-                    else:
-                        comparison_stats['PT_PM_diff'] = diff_mm
-                    comparison_stats['PT_PM_corr'] = df[['ET_PT', 'ET_PM']].corr().iloc[0, 1]
-
-                # Calculate growing season statistics with unit conversion
-                growing_season_stats = calculate_growing_season_stats(df, 'ET_PM', selected_unit)
-                
-                # Create growing season plots with unit conversion
-                growing_season_plots = create_growing_season_plots(df, 'ET_PM', selected_unit)
-
-                # Create comparison plot (existing code with unit conversion)
-                fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
-                fig.patch.set_facecolor('white')
-                
-                # Main ET comparison plot
-                ax1.set_facecolor('#f8fffe')
-                colors = {'PT': '#86A873', 'PM': '#087F8C'}
-                
-                for method in ['PT', 'PM']:
-                    if f'ET_{method}' in df.columns and not df[f'ET_{method}'].isna().all():
-                        # Convert data for plotting if needed
-                        if selected_unit == 'inches':
-                            plot_data = df[f'ET_{method}'].apply(lambda x: convert_units(x, 'mm', 'inches'))
-                            plot_data_smooth = df[f'ET_{method}_smooth'].apply(lambda x: convert_units(x, 'mm', 'inches'))
-                        else:
-                            plot_data = df[f'ET_{method}']
-                            plot_data_smooth = df[f'ET_{method}_smooth']
-                        
-                        ax1.plot(df['Date'], plot_data, 
-                                label=f'{et_stats[method]["name"]}', 
-                                color=colors[method], alpha=0.6, linewidth=1.5)
-                        ax1.plot(df['Date'], plot_data_smooth, 
-                                color=colors[method], linewidth=2.5, alpha=0.9)
-
-                ax1.set_title('Evapotranspiration Comparison: Priestley-Taylor vs Penman-Monteith', 
-                             fontsize=16, fontweight='bold', color='#095256', pad=20)
-                ax1.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
-                ax1.set_ylabel(f'ET₀ ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
-                ax1.grid(True, alpha=0.3, color='#5AAA95')
-                ax1.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
-                ax1.tick_params(axis='x', rotation=45)
-
-                # Difference plot
-                if 'ET_PT' in df.columns and 'ET_PM' in df.columns:
-                    ax2.set_facecolor('#f8fffe')
-                    diff = df['ET_PM'] - df['ET_PT']
-                    if selected_unit == 'inches':
-                        diff = diff.apply(lambda x: convert_units(x, 'mm', 'inches'))
-                    
-                    ax2.plot(df['Date'], diff, color='#5AAA95', linewidth=2, alpha=0.7)
-                    ax2.axhline(y=0, color='#095256', linestyle='--', alpha=0.8)
-                    ax2.fill_between(df['Date'], diff, 0, alpha=0.3, color='#5AAA95')
-                    
-                    ax2.set_title('Difference: Penman-Monteith - Priestley-Taylor', 
-                                 fontsize=14, fontweight='bold', color='#095256')
-                    ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
-                    ax2.set_ylabel(f'Difference ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
-                    ax2.grid(True, alpha=0.3, color='#5AAA95')
-                    ax2.tick_params(axis='x', rotation=45)
-
-                plt.tight_layout()
-                
-                # Convert plot to base64
-                buf = BytesIO()
-                plt.savefig(buf, format='png', dpi=150, bbox_inches='tight',
-                           facecolor='white', edgecolor='none')
-                buf.seek(0)
-                plot_url = base64.b64encode(buf.read()).decode('utf-8')
-                buf.close()
-                plt.close()
-
-                # Store enhanced CSV data in session
-                csv_columns = ['Date', 'ET_PT', 'ET_PM', 'ET_PT_smooth', 'ET_PM_smooth']
-                available_columns = ['Date'] + [col for col in csv_columns[1:] if col in df.columns]
-                request.session['et_data_csv'] = df[available_columns].to_csv(index=False)
-
-                # Prepare data for rendering with unit conversion
-                et_data = []
-                for _, row in df.iterrows():
-                    data_row = {'Date': row['Date']}
-                    for method in ['PT', 'PM']:
-                        col = f'ET_{method}'
-                        if col in df.columns:
-                            val = row[col] if not pd.isna(row[col]) else 0
-                            if selected_unit == 'inches' and val:
-                                val = convert_units(val, 'mm', 'inches')
-                            data_row[f'ET_{method}'] = round(val, unit_info['decimal_places']) if val else 0
-                    
-                    # Calculate difference for display
-                    if 'ET_PT' in data_row and 'ET_PM' in data_row and data_row['ET_PT'] and data_row['ET_PM']:
-                        data_row['difference'] = round(data_row['ET_PM'] - data_row['ET_PT'], unit_info['decimal_places'])
-                    else:
-                        data_row['difference'] = None
-                        
-                    et_data.append(data_row)
-
-            except Exception as e:
-                print(f"File processing error: {e}")
-                return render(request, 'et/comparison.html', {
-                    'form': form,
-                    'error_message': f"Error processing file: {str(e)}. Please check your CSV format."
-                })
-
-    else:
-        form = UploadFileForm()
-    
-    context = {
-        'form': form,
-        'et_data': et_data,
-        'et_stats': et_stats,
-        'comparison_stats': comparison_stats,
-        'growing_season_stats': growing_season_stats,
-        'plot_url': plot_url,
-        'growing_season_plots': growing_season_plots,
-        'forecast_data': forecast_data,
-        'selected_unit': selected_unit,
-        'unit_info': unit_info,
-    }
-    
-    return render(request, 'et/comparison.html', context)
 
 # Add unit toggle support to other views as well
 def index(request):
@@ -1105,3 +856,751 @@ def convert_et_units_api(request):
             return JsonResponse({'error': str(e)}, status=400)
     
     return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+# Replace the incorrect "Maule_ET" function with the proper Maulé method
+
+def maule_ET(Tmax, Tmin, Rs, RH=None, latitude=49.7):
+    """
+    Maulé ET estimation method
+    
+    The Maulé method is a simplified approach for estimating reference evapotranspiration
+    that uses temperature and solar radiation data, with optional humidity correction.
+    
+    Parameters:
+    - Tmax: Maximum temperature (°C)
+    - Tmin: Minimum temperature (°C) 
+    - Rs: Solar radiation (MJ/m²/day)
+    - RH: Relative humidity (%) - optional
+    - latitude: Latitude in degrees (default 49.7 for Lethbridge)
+    
+    Returns:
+    - ET in mm/day
+    """
+    if any(pd.isna(val) for val in [Tmax, Tmin, Rs]):
+        return np.nan
+    
+    # Mean temperature
+    Tmean = (Tmax + Tmin) / 2
+    
+    # Temperature range
+    Trange = Tmax - Tmin
+    
+    # Basic Maulé equation: ET = k * (Tmean + a) * Rs * f(RH)
+    # Where k and a are empirical coefficients
+    
+    # Empirical coefficients for the Maulé method
+    k = 0.0031  # Maulé coefficient
+    a = 15.0    # Temperature offset
+    
+    # Base calculation
+    ET_base = k * (Tmean + a) * Rs
+    
+    # Humidity correction factor (if RH is available)
+    if RH is not None and not pd.isna(RH):
+        # Humidity correction: higher humidity reduces ET
+        humidity_factor = 1.0 - (RH - 50) / 200  # Normalized around 50% RH
+        humidity_factor = max(0.7, min(1.3, humidity_factor))  # Constrain between 0.7 and 1.3
+    else:
+        humidity_factor = 1.0
+    
+    # Temperature range factor (larger ranges increase ET)
+    range_factor = 1.0 + (Trange - 10) / 100  # Normalized around 10°C range
+    range_factor = max(0.8, min(1.2, range_factor))  # Constrain between 0.8 and 1.2
+    
+    # Final Maulé ET calculation
+    ET_maule = ET_base * humidity_factor * range_factor
+    
+    return max(ET_maule, 0)
+
+
+# Update individual method views
+def maule_only(request):
+    """Maulé method only with unit toggle"""
+    return process_single_method_enhanced(request, 'Maule', 'Maulé', 'et/maule.html')
+
+
+
+def hargreaves_ET(Tmax, Tmin, Ra=None, latitude=49.7):
+    """
+    Hargreaves-Samani ET estimation method
+    
+    Parameters:
+    - Tmax: Maximum temperature (°C)
+    - Tmin: Minimum temperature (°C)
+    - Ra: Extraterrestrial radiation (MJ/m²/day) - optional
+    - latitude: Latitude in degrees (default 49.7 for Lethbridge)
+    
+    Returns:
+    - ET in mm/day
+    """
+    if any(pd.isna(val) for val in [Tmax, Tmin]):
+        return np.nan
+    
+    # Mean temperature
+    Tmean = (Tmax + Tmin) / 2
+    
+    # Temperature range
+    Trange = Tmax - Tmin
+    
+    if Ra is None:
+        # Calculate extraterrestrial radiation if not provided
+        from datetime import datetime
+        day_of_year = 200  # Mid-season approximation
+        
+        # Solar declination
+        solar_declination = 23.45 * np.sin(np.radians(360 * (284 + day_of_year) / 365))
+        
+        # Convert latitude to radians
+        lat_rad = np.radians(latitude)
+        decl_rad = np.radians(solar_declination)
+        
+        # Sunset hour angle
+        ws = np.arccos(-np.tan(lat_rad) * np.tan(decl_rad))
+        
+        # Extraterrestrial radiation (MJ/m²/day)
+        Ra = 37.6 * (ws * np.sin(lat_rad) * np.sin(decl_rad) + 
+                     np.cos(lat_rad) * np.cos(decl_rad) * np.sin(ws))
+    
+    # Hargreaves coefficient
+    C_H = 0.0023
+    
+    # Hargreaves ET equation
+    ET_hargreaves = C_H * (Tmean + 17.8) * np.sqrt(Trange) * Ra
+    
+    return max(ET_hargreaves, 0)
+
+def calculate_extraterrestrial_radiation(latitude, day_of_year):
+    """
+    Calculate extraterrestrial radiation for a given latitude and day of year
+    
+    Parameters:
+    - latitude: Latitude in degrees
+    - day_of_year: Day of year (1-365)
+    
+    Returns:
+    - Ra: Extraterrestrial radiation (MJ/m²/day)
+    """
+    # Solar constant
+    Gsc = 0.0820  # MJ/m²/min
+    
+    # Convert latitude to radians
+    lat_rad = np.radians(latitude)
+    
+    # Inverse relative distance Earth-Sun
+    dr = 1 + 0.033 * np.cos(2 * np.pi * day_of_year / 365)
+    
+    # Solar declination
+    delta = 0.409 * np.sin(2 * np.pi * day_of_year / 365 - 1.39)
+    
+    # Sunset hour angle
+    ws = np.arccos(-np.tan(lat_rad) * np.tan(delta))
+    
+    # Extraterrestrial radiation
+    Ra = (24 * 60 / np.pi) * Gsc * dr * (
+        ws * np.sin(lat_rad) * np.sin(delta) + 
+        np.cos(lat_rad) * np.cos(delta) * np.sin(ws)
+    )
+    
+    return Ra
+
+# Enhanced comparison calculator with all four methods
+# Replace your enhanced_comparison_calculator function with this fixed version
+
+def enhanced_comparison_calculator(request):
+    """Enhanced ET calculator with all four methods and growing season analysis"""
+    et_data = None
+    et_stats = None
+    comparison_stats = None
+    growing_season_stats = None
+    plot_url = None
+    growing_season_plots = None
+    
+    # Get selected unit from request
+    selected_unit = request.GET.get('unit', 'mm')
+    if selected_unit not in ['mm', 'inches']:
+        selected_unit = 'mm'
+    
+    unit_info = get_unit_info(selected_unit)
+    forecast_data = get_lethbridge_forecast()
+
+    if request.method == 'POST':
+        form = UploadFileForm(request.POST, request.FILES)
+        if form.is_valid():
+            csv_file = request.FILES['file']
+            try:
+                # Process CSV file
+                csv_bytes = csv_file.read()
+                csv_str = csv_bytes.decode('utf-8', errors='replace')
+                df = pd.read_csv(io.StringIO(csv_str))
+
+                # Clean and normalize column names
+                df.columns = df.columns.str.strip().str.replace(r"[^\w\s]", "", regex=True).str.replace(" ", "_")
+
+                # Parse Date column
+                date_col = [col for col in df.columns if 'date' in col.lower()]
+                if date_col:
+                    df['Date'] = pd.to_datetime(df[date_col[0]], errors='coerce')
+                else:
+                    df['Date'] = pd.date_range(start='2024-01-01', periods=len(df), freq='D')
+
+                # Add day of year column for radiation calculations
+                df['day_of_year'] = df['Date'].dt.dayofyear
+
+                # Find required columns
+                temp_cols = [col for col in df.columns if any(term in col.lower() for term in ['temp', 'air_temp', 'temperature'])]
+                tmax_cols = [col for col in df.columns if any(term in col.lower() for term in ['tmax', 'max_temp', 'maximum_temp'])]
+                tmin_cols = [col for col in df.columns if any(term in col.lower() for term in ['tmin', 'min_temp', 'minimum_temp'])]
+                rad_cols = [col for col in df.columns if any(term in col.lower() for term in ['solar', 'rad', 'radiation'])]
+                wind_cols = [col for col in df.columns if any(term in col.lower() for term in ['wind', 'wind_speed', 'ws'])]
+                rh_cols = [col for col in df.columns if any(term in col.lower() for term in ['rh', 'humidity', 'relative_humidity'])]
+
+                # Validate minimum required columns
+                missing_cols = []
+                if not temp_cols and not (tmax_cols and tmin_cols):
+                    missing_cols.append("Temperature (average or max/min)")
+
+                if missing_cols:
+                    raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
+
+                # Assign temperature columns
+                if temp_cols:
+                    df['Tavg'] = pd.to_numeric(df[temp_cols[0]], errors='coerce')
+                    if not tmax_cols or not tmin_cols:
+                        df['Tmax'] = df['Tavg'] + 5
+                        df['Tmin'] = df['Tavg'] - 5
+                    else:
+                        df['Tmax'] = pd.to_numeric(df[tmax_cols[0]], errors='coerce')
+                        df['Tmin'] = pd.to_numeric(df[tmin_cols[0]], errors='coerce')
+                else:
+                    df['Tmax'] = pd.to_numeric(df[tmax_cols[0]], errors='coerce')
+                    df['Tmin'] = pd.to_numeric(df[tmin_cols[0]], errors='coerce')
+                    df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
+
+                # Assign solar radiation (with fallback estimation)
+                if rad_cols:
+                    df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                else:
+                    # Estimate solar radiation from temperature if not available
+                    df['Rs'] = (df['Tmax'] - df['Tmin']) * 0.16 * np.sqrt(12)
+                
+                # Assign wind speed (with default)
+                if wind_cols:
+                    df['u2'] = pd.to_numeric(df[wind_cols[0]], errors='coerce')
+                else:
+                    df['u2'] = 2.0  # Default wind speed
+                    
+                # Assign relative humidity (with default)
+                if rh_cols:
+                    df['RH'] = pd.to_numeric(df[rh_cols[0]], errors='coerce')
+                else:
+                    df['RH'] = 65.0  # Default relative humidity
+
+                # Calculate extraterrestrial radiation for each day
+                df['Ra'] = df.apply(lambda row: calculate_extraterrestrial_radiation(49.7, row['day_of_year']), axis=1)
+
+                # Calculate ET using all four methods - with proper error handling
+                # Priestley-Taylor
+                try:
+                    df['ET_PT'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Rs']), axis=1)
+                except Exception as e:
+                    print(f"PT calculation failed: {e}")
+                    df['ET_PT'] = np.nan
+
+                # Penman-Monteith
+                try:
+                    df['ET_PM'] = df.apply(lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs']), axis=1)
+                except Exception as e:
+                    print(f"PM calculation failed: {e}")
+                    df['ET_PM'] = np.nan
+
+                # Maulé - FIXED: properly pass RH value
+                try:
+                    df['ET_Maule'] = df.apply(
+                        lambda row: maule_ET(
+                            row['Tmax'], 
+                            row['Tmin'], 
+                            row['Rs'], 
+                            row['RH'] if not pd.isna(row['RH']) else None
+                        ), 
+                        axis=1
+                    )
+                except Exception as e:
+                    print(f"Maule calculation failed: {e}")
+                    df['ET_Maule'] = np.nan
+
+                # Hargreaves
+                try:
+                    df['ET_Hargreaves'] = df.apply(lambda row: hargreaves_ET(row['Tmax'], row['Tmin'], row['Ra']), axis=1)
+                except Exception as e:
+                    print(f"Hargreaves calculation failed: {e}")
+                    df['ET_Hargreaves'] = np.nan
+
+                # Remove rows with ALL NaN ET values
+                et_columns = ['ET_PT', 'ET_PM', 'ET_Maule', 'ET_Hargreaves']
+                df = df.dropna(subset=et_columns, how='all')
+                
+                if len(df) == 0:
+                    raise ValueError("No valid ET values could be calculated for any method")
+
+                # Compute rolling averages for smoothing
+                for method in ['PT', 'PM', 'Maule', 'Hargreaves']:
+                    col = f'ET_{method}'
+                    if col in df.columns:
+                        df[f'{col}_smooth'] = df[col].rolling(window=5, min_periods=1).mean()
+
+                # Calculate statistics for all methods with unit conversion
+                et_stats = {}
+                method_names = {
+                    'PT': 'Priestley-Taylor',
+                    'PM': 'Penman-Monteith', 
+                    'Maule': 'Maulé',  
+                    'Hargreaves': 'Hargreaves-Samani'
+                }
+                
+                for method, name in method_names.items():
+                    col = f'ET_{method}'
+                    if col in df.columns and not df[col].isna().all():
+                        # Convert values if needed
+                        if selected_unit == 'inches':
+                            avg_val = convert_units(df[col].mean(), 'mm', 'inches')
+                            max_val = convert_units(df[col].max(), 'mm', 'inches')
+                            min_val = convert_units(df[col].min(), 'mm', 'inches')
+                            std_val = convert_units(df[col].std(), 'mm', 'inches')
+                        else:
+                            avg_val = df[col].mean()
+                            max_val = df[col].max()
+                            min_val = df[col].min()
+                            std_val = df[col].std()
+                        
+                        et_stats[method] = {
+                            'name': name,
+                            'avg': avg_val,
+                            'max': max_val,
+                            'min': min_val,
+                            'std': std_val
+                        }
+
+                # Enhanced comparison statistics
+                comparison_stats = {}
+                available_methods = [method for method in ['PT', 'PM', 'Maule', 'Hargreaves'] if f'ET_{method}' in df.columns and not df[f'ET_{method}'].isna().all()]
+                
+                if len(available_methods) >= 2:
+                    # Calculate correlations between methods
+                    et_cols = [f'ET_{method}' for method in available_methods]
+                    corr_matrix = df[et_cols].corr()
+                    
+                    # Store correlation data
+                    comparison_stats['correlations'] = {}
+                    for i, method1 in enumerate(available_methods):
+                        for j, method2 in enumerate(available_methods):
+                            if i < j:  # Only store upper triangle
+                                key = f'{method1} vs {method2}'
+                                comparison_stats['correlations'][key] = corr_matrix.iloc[i, j]
+                    
+                    # Calculate mean differences (with unit conversion) - only if PM exists
+                    if 'PM' in available_methods:
+                        for method in available_methods:
+                            if method != 'PM':
+                                diff_mm = (df[f'ET_{method}'] - df['ET_PM']).mean()
+                                if selected_unit == 'inches':
+                                    comparison_stats[f'{method}_PM_diff'] = convert_units(diff_mm, 'mm', 'inches')
+                                else:
+                                    comparison_stats[f'{method}_PM_diff'] = diff_mm
+
+                # Calculate growing season statistics for primary method (PM if available, otherwise first available)
+                if 'ET_PM' in df.columns and not df['ET_PM'].isna().all():
+                    growing_season_stats = calculate_growing_season_stats(df, 'ET_PM', selected_unit)
+                    growing_season_plots = create_growing_season_plots(df, 'ET_PM', selected_unit)
+                elif available_methods:
+                    primary_method = available_methods[0]
+                    growing_season_stats = calculate_growing_season_stats(df, f'ET_{primary_method}', selected_unit)
+                    growing_season_plots = create_growing_season_plots(df, f'ET_{primary_method}', selected_unit)
+
+                # Create enhanced comparison plot with all available methods
+                fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12))
+                fig.patch.set_facecolor('white')
+                
+                # Main ET comparison plot
+                ax1.set_facecolor('#f8fffe')
+                colors = {
+                    'PT': '#86A873',
+                    'PM': '#087F8C', 
+                    'Maule': '#BB9F06',
+                    'Hargreaves': '#5AAA95'
+                }
+                
+                for method in available_methods:
+                    col = f'ET_{method}'
+                    # Convert data for plotting if needed
+                    if selected_unit == 'inches':
+                        plot_data = df[col].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                        plot_data_smooth = df[f'{col}_smooth'].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                    else:
+                        plot_data = df[col]
+                        plot_data_smooth = df[f'{col}_smooth']
+                    
+                    ax1.plot(df['Date'], plot_data, 
+                            label=f'{method_names[method]}', 
+                            color=colors[method], alpha=0.6, linewidth=1.5)
+                    ax1.plot(df['Date'], plot_data_smooth, 
+                            color=colors[method], linewidth=2.5, alpha=0.9)
+
+                ax1.set_title('Evapotranspiration Method Comparison', 
+                             fontsize=16, fontweight='bold', color='#095256', pad=20)
+                ax1.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
+                ax1.set_ylabel(f'ET₀ ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
+                ax1.grid(True, alpha=0.3, color='#5AAA95')
+                ax1.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
+                ax1.tick_params(axis='x', rotation=45)
+
+                # Method differences from Penman-Monteith (reference) - only if PM exists
+                ax2.set_facecolor('#f8fffe')
+                if 'PM' in available_methods and len(available_methods) > 1:
+                    for method in available_methods:
+                        if method != 'PM':
+                            col = f'ET_{method}'
+                            diff = df['ET_PM'] - df[col]
+                            if selected_unit == 'inches':
+                                diff = diff.apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                            
+                            ax2.plot(df['Date'], diff, color=colors[method], linewidth=2, alpha=0.7, 
+                                    label=f'PM - {method_names[method]}')
+                    
+                    ax2.axhline(y=0, color='#095256', linestyle='--', alpha=0.8)
+                    ax2.set_title('Differences from Penman-Monteith (Reference Method)', 
+                                 fontsize=14, fontweight='bold', color='#095256')
+                    ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
+                    ax2.set_ylabel(f'Difference ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
+                    ax2.grid(True, alpha=0.3, color='#5AAA95')
+                    ax2.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=9)
+                    ax2.tick_params(axis='x', rotation=45)
+                else:
+                    # If no PM or only one method, show a message
+                    ax2.text(0.5, 0.5, 'Difference plot requires Penman-Monteith method', 
+                            ha='center', va='center', fontsize=14, color='#666')
+                    ax2.set_xlim(0, 1)
+                    ax2.set_ylim(0, 1)
+                    ax2.axis('off')
+
+                plt.tight_layout()
+                
+                # Convert plot to base64
+                buf = BytesIO()
+                plt.savefig(buf, format='png', dpi=150, bbox_inches='tight',
+                           facecolor='white', edgecolor='none')
+                buf.seek(0)
+                plot_url = base64.b64encode(buf.read()).decode('utf-8')
+                buf.close()
+                plt.close()
+
+                # Store enhanced CSV data in session
+                csv_columns = ['Date'] + [f'ET_{method}' for method in available_methods]
+                request.session['et_data_csv'] = df[csv_columns].to_csv(index=False)
+
+                # Prepare data for rendering with unit conversion
+                et_data = []
+                for _, row in df.iterrows():
+                    data_row = {'Date': row['Date']}
+                    
+                    for method in available_methods:
+                        col = f'ET_{method}'
+                        val = row[col] if not pd.isna(row[col]) else 0
+                        if selected_unit == 'inches' and val:
+                            val = convert_units(val, 'mm', 'inches')
+                        data_row[f'ET_{method}'] = round(val, unit_info['decimal_places']) if val else 0
+                    
+                    et_data.append(data_row)
+
+            except Exception as e:
+                print(f"File processing error: {e}")
+                import traceback
+                traceback.print_exc()
+                return render(request, 'et/comparison.html', {
+                    'form': form,
+                    'error_message': f"Error processing file: {str(e)}. Please check your CSV format.",
+                    'selected_unit': selected_unit,
+                    'unit_info': unit_info,
+                })
+
+    else:
+        form = UploadFileForm()
+    
+    context = {
+        'form': form,
+        'et_data': et_data,
+        'et_stats': et_stats,
+        'comparison_stats': comparison_stats,
+        'growing_season_stats': growing_season_stats,
+        'plot_url': plot_url,
+        'growing_season_plots': growing_season_plots,
+        'forecast_data': forecast_data,
+        'selected_unit': selected_unit,
+        'unit_info': unit_info,
+    }
+    
+    return render(request, 'et/comparison.html', context)
+
+
+# Add these individual method views to your views.py
+
+
+def hargreaves_only(request):
+    """Hargreaves-Samani method only with unit toggle"""
+    return process_single_method_enhanced(request, 'Hargreaves', 'Hargreaves-Samani', 'et/hargreaves.html')
+
+def process_single_method_enhanced(request, method_code, method_name, template_name):
+    """Enhanced helper function to process single ET method calculations with all four methods support"""
+    et_data = None
+    et_stats = None
+    growing_season_stats = None
+    plot_url = None
+    growing_season_plots = None
+    
+    # Get selected unit from request (default to mm)
+    selected_unit = request.GET.get('unit', 'mm')
+    if selected_unit not in ['mm', 'inches']:
+        selected_unit = 'mm'
+    
+    unit_info = get_unit_info(selected_unit)
+    
+    forecast_data = get_lethbridge_forecast()
+
+    if request.method == 'POST':
+        form = UploadFileForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                # Process CSV file
+                csv_file = request.FILES['file']
+                csv_bytes = csv_file.read()
+                csv_str = csv_bytes.decode('utf-8', errors='replace')
+                df = pd.read_csv(io.StringIO(csv_str))
+
+                # Clean column names
+                df.columns = df.columns.str.strip().str.replace(r"[^\w\s]", "", regex=True).str.replace(" ", "_")
+
+                # Parse Date column
+                date_col = [col for col in df.columns if 'date' in col.lower()]
+                if date_col:
+                    df['Date'] = pd.to_datetime(df[date_col[0]], errors='coerce')
+                else:
+                    df['Date'] = pd.date_range(start='2024-01-01', periods=len(df), freq='D')
+
+                # Add day of year for radiation calculations
+                df['day_of_year'] = df['Date'].dt.dayofyear
+
+                # Find required columns
+                temp_cols = [col for col in df.columns if any(term in col.lower() for term in ['temp', 'air_temp', 'temperature'])]
+                tmax_cols = [col for col in df.columns if any(term in col.lower() for term in ['tmax', 'max_temp', 'maximum_temp'])]
+                tmin_cols = [col for col in df.columns if any(term in col.lower() for term in ['tmin', 'min_temp', 'minimum_temp'])]
+                rad_cols = [col for col in df.columns if any(term in col.lower() for term in ['solar', 'rad', 'radiation'])]
+                wind_cols = [col for col in df.columns if any(term in col.lower() for term in ['wind', 'wind_speed', 'ws'])]
+                rh_cols = [col for col in df.columns if any(term in col.lower() for term in ['rh', 'humidity', 'relative_humidity'])]
+
+                # Process based on method requirements
+                if method_code in ['Maule', 'Hargreaves']:
+                    # Both Maulé and Hargreaves require temperature data
+                    if not temp_cols and not (tmax_cols and tmin_cols):
+                        raise ValueError("Missing required temperature columns for this method")
+                    
+                    # Assign temperature columns
+                    if temp_cols:
+                        df['Tavg'] = pd.to_numeric(df[temp_cols[0]], errors='coerce')
+                        if not tmax_cols or not tmin_cols:
+                            df['Tmax'] = df['Tavg'] + 5
+                            df['Tmin'] = df['Tavg'] - 5
+                        else:
+                            df['Tmax'] = pd.to_numeric(df[tmax_cols[0]], errors='coerce')
+                            df['Tmin'] = pd.to_numeric(df[tmin_cols[0]], errors='coerce')
+                    else:
+                        df['Tmax'] = pd.to_numeric(df[tmax_cols[0]], errors='coerce')
+                        df['Tmin'] = pd.to_numeric(df[tmin_cols[0]], errors='coerce')
+                        df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
+
+                    # Calculate extraterrestrial radiation
+                    df['Ra'] = df.apply(lambda row: calculate_extraterrestrial_radiation(49.7, row['day_of_year']), axis=1)
+
+                    if method_code == 'Maule':
+                        # Maulé needs solar radiation and optionally humidity
+                        if rad_cols:
+                            df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                        else:
+                            # Estimate solar radiation if not available
+                            df['Rs'] = (df['Tmax'] - df['Tmin']) * 0.16 * np.sqrt(12)
+                        
+                        # Assign humidity if available
+                        if rh_cols:
+                            df['RH'] = pd.to_numeric(df[rh_cols[0]], errors='coerce')
+                        else:
+                            df['RH'] = None  # Maulé can work without humidity
+                        
+                        # Apply Maulé method
+                        df['ET'] = df.apply(lambda row: maule_ET(row['Tmax'], row['Tmin'], row['Rs'], 
+                                                               row['RH'] if not pd.isna(row.get('RH', np.nan)) else None), axis=1)
+                    
+                    elif method_code == 'Hargreaves':
+                        df['ET'] = df.apply(lambda row: hargreaves_ET(row['Tmax'], row['Tmin'], row['Ra']), axis=1)
+
+                elif method_code == 'PT':
+                    # Priestley-Taylor processing
+                    if not temp_cols or not rad_cols:
+                        raise ValueError("Missing required columns for Priestley-Taylor method (temperature and solar radiation)")
+                    
+                    df['Tavg'] = pd.to_numeric(df[temp_cols[0]], errors='coerce')
+                    df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                    df['ET'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Rs']), axis=1)
+                    
+                elif method_code == 'PM':
+                    # Penman-Monteith processing
+                    missing_cols = []
+                    if not temp_cols and not (tmax_cols and tmin_cols):
+                        missing_cols.append("Temperature (average or max/min)")
+                    if not rad_cols:
+                        missing_cols.append("Solar Radiation")
+
+                    if missing_cols:
+                        raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
+
+                    # Assign temperature columns
+                    if temp_cols:
+                        df['Tavg'] = pd.to_numeric(df[temp_cols[0]], errors='coerce')
+                        if not tmax_cols or not tmin_cols:
+                            df['Tmax'] = df['Tavg'] + 5
+                            df['Tmin'] = df['Tavg'] - 5
+                        else:
+                            df['Tmax'] = pd.to_numeric(df[tmax_cols[0]], errors='coerce')
+                            df['Tmin'] = pd.to_numeric(df[tmin_cols[0]], errors='coerce')
+                    else:
+                        df['Tmax'] = pd.to_numeric(df[tmax_cols[0]], errors='coerce')
+                        df['Tmin'] = pd.to_numeric(df[tmin_cols[0]], errors='coerce')
+                        df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
+
+                    # Assign other meteorological variables
+                    df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                    
+                    if wind_cols:
+                        df['u2'] = pd.to_numeric(df[wind_cols[0]], errors='coerce')
+                    else:
+                        df['u2'] = 2.0  # Default wind speed
+                        
+                    if rh_cols:
+                        df['RH'] = pd.to_numeric(df[rh_cols[0]], errors='coerce')
+                    else:
+                        df['RH'] = 65.0  # Default relative humidity
+
+                    df['ET'] = df.apply(lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs']), axis=1)
+
+                # Common processing for all methods
+                df = df.dropna(subset=['ET'])
+                
+                if len(df) == 0:
+                    raise ValueError("No valid ET values could be calculated")
+                    
+                df['ET_smooth'] = df['ET'].rolling(window=5, min_periods=1).mean()
+
+                # Calculate statistics with unit conversion
+                if selected_unit == 'inches':
+                    et_stats = {
+                        'avg': convert_units(df['ET'].mean(), 'mm', 'inches'),
+                        'max': convert_units(df['ET'].max(), 'mm', 'inches'),
+                        'min': convert_units(df['ET'].min(), 'mm', 'inches'),
+                        'std': convert_units(df['ET'].std(), 'mm', 'inches')
+                    }
+                else:
+                    et_stats = {
+                        'avg': df['ET'].mean(),
+                        'max': df['ET'].max(),
+                        'min': df['ET'].min(),  
+                        'std': df['ET'].std()
+                    }
+
+                # Calculate growing season statistics for single method
+                df_temp = df.copy()
+                df_temp['ET_METHOD'] = df_temp['ET']  # Rename for compatibility
+                growing_season_stats = calculate_growing_season_stats(df_temp, 'ET_METHOD', selected_unit)
+                growing_season_plots = create_growing_season_plots(df_temp, 'ET_METHOD', selected_unit)
+
+                # Create single method plot with unit conversion
+                plt.figure(figsize=(12, 6))
+                plt.gca().set_facecolor('#f8fffe')
+                
+                colors = {
+                    'PT': '#86A873', 
+                    'PM': '#087F8C',
+                    'Maule': '#BB9F06',
+                    'Hargreaves': '#5AAA95'
+                }
+                
+                # Convert data for plotting if needed
+                if selected_unit == 'inches':
+                    plot_et = df['ET'].apply(lambda x: convert_units(x, 'mm', 'inches'))
+                    plot_et_smooth = df['ET_smooth'].apply(lambda x: convert_units(x, 'mm', 'inches'))
+                else:
+                    plot_et = df['ET']
+                    plot_et_smooth = df['ET_smooth']
+                
+                color = colors.get(method_code, '#087F8C')
+                plt.plot(df['Date'], plot_et, label=f'Daily {method_name} ET₀', 
+                        color=color, alpha=0.6, linewidth=1.5)
+                plt.plot(df['Date'], plot_et_smooth, label='5-day Rolling Average', 
+                        color=color, linewidth=3)
+                
+                plt.title(f'{method_name} Evapotranspiration', fontsize=16, fontweight='bold', color='#095256', pad=20)
+                plt.xlabel('Date', fontsize=12, fontweight='600', color='#095256')
+                plt.ylabel(f'ET₀ ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
+                plt.grid(True, alpha=0.3, color='#5AAA95')
+                plt.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
+                plt.xticks(rotation=45, ha='right')
+                plt.tight_layout()
+                
+                # Convert plot to base64
+                buf = BytesIO()
+                plt.savefig(buf, format='png', dpi=150, bbox_inches='tight',
+                           facecolor='white', edgecolor='none')
+                buf.seek(0)
+                plot_url = base64.b64encode(buf.read()).decode('utf-8')
+                buf.close()
+                plt.close()
+
+                # Store CSV data in session
+                request.session['et_data_csv'] = df[['Date', 'ET', 'ET_smooth']].to_csv(index=False)
+
+                # Prepare data for rendering with unit conversion
+                et_data = []
+                for _, row in df.iterrows():
+                    et_val = row['ET'] if not pd.isna(row['ET']) else 0
+                    if selected_unit == 'inches' and et_val:
+                        et_val = convert_units(et_val, 'mm', 'inches')
+                    
+                    et_data.append({
+                        'Date': row['Date'],
+                        'ET': round(et_val, unit_info['decimal_places']) if et_val else 0
+                    })
+
+            except Exception as e:
+                print(f"File processing error: {e}")
+                return render(request, template_name, {
+                    'form': form,
+                    'method_name': method_name,
+                    'selected_unit': selected_unit,
+                    'unit_info': unit_info,
+                    'error_message': f"Error processing file: {str(e)}. Please check your CSV format."
+                })
+
+    else:
+        form = UploadFileForm()
+    
+    context = {
+        'form': form,
+        'method_name': method_name,
+        'et_data': et_data,
+        'et_stats': et_stats,
+        'growing_season_stats': growing_season_stats,
+        'plot_url': plot_url,
+        'growing_season_plots': growing_season_plots,
+        'forecast_data': forecast_data,
+        'selected_unit': selected_unit,
+        'unit_info': unit_info,
+    }
+    
+    return render(request, template_name, context)
