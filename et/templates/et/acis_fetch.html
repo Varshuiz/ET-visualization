@@ -1,0 +1,331 @@
+{% extends 'et/base.html' %}
+
+{% block title %}Fetch Weather Data - ACIS{% endblock %}
+
+{% block extra_css %}
+<style>
+    .location-toggle {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        justify-content: center;
+    }
+
+    .location-toggle button {
+        padding: 10px 30px;
+        border: 2px solid #087F8C;
+        background: white;
+        color: #087F8C;
+        border-radius: 25px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .location-toggle button.active {
+        background: #087F8C;
+        color: white;
+    }
+
+    .location-toggle button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(8, 127, 140, 0.3);
+    }
+
+    .input-section {
+        display: none;
+    }
+
+    .input-section.active {
+        display: block;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+
+    .form-field {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-field label {
+        font-weight: 600;
+        color: #095256;
+        margin-bottom: 8px;
+    }
+
+    .form-field input,
+    .form-field select {
+        padding: 12px;
+        border: 2px solid #e0f2f1;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: border-color 0.3s ease;
+    }
+
+    .form-field input:focus,
+    .form-field select:focus {
+        outline: none;
+        border-color: #087F8C;
+    }
+
+    .info-box {
+        background: linear-gradient(135deg, #e0f2f1, #f1f8f7);
+        border-left: 5px solid #5AAA95;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 20px 0;
+    }
+
+    .info-box h3 {
+        color: #095256;
+        margin-bottom: 10px;
+    }
+
+    .preview-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 3px 10px rgba(9, 82, 86, 0.1);
+    }
+
+    .preview-table th {
+        background: linear-gradient(135deg, #087F8C, #5AAA95);
+        color: white;
+        padding: 12px;
+        text-align: left;
+    }
+
+    .preview-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #e0f2f1;
+    }
+
+    .preview-table tr:hover {
+        background: #f8fffe;
+    }
+
+    .success-message {
+        background: #d4edda;
+        border: 2px solid #28a745;
+        color: #155724;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1>🌐 Fetch Weather Data Automatically</h1>
+        <p class="subtitle">Get historical weather data using ACIS (Applied Climate Information System)</p>
+    </div>
+
+    <div class="info-box">
+        <h3>📍 About ACIS Data</h3>
+        <p>
+            ACIS provides high-quality gridded weather data for North America. 
+            You can fetch historical weather data by township/range (Alberta system) 
+            or by latitude/longitude coordinates.
+        </p>
+        <p style="margin-top: 10px;">
+            <strong>Available data:</strong> Temperature (max/min/avg), Solar Radiation, 
+            Relative Humidity, and Precipitation
+        </p>
+    </div>
+
+    {% if error_message %}
+    <div class="error-message">
+        ❌ {{ error_message }}
+    </div>
+    {% endif %}
+
+    {% if success_message %}
+    <div class="success-message">
+        ✓ {{ success_message }}
+    </div>
+    {% endif %}
+
+    <div class="upload-card">
+        <form method="post" id="acisForm">
+            {% csrf_token %}
+
+            <!-- Location Type Toggle -->
+            <div class="location-toggle">
+                <button type="button" class="active" data-target="township">
+                    Alberta Township/Range
+                </button>
+                <button type="button" data-target="coordinates">
+                    Latitude/Longitude
+                </button>
+            </div>
+
+            <!-- Township/Range Input -->
+            <div class="input-section active" id="township-section">
+                <h3 style="color: #095256; margin-bottom: 15px;">Alberta Township/Range</h3>
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="township">Township Number</label>
+                        <input type="number" id="township" name="township" 
+                               placeholder="e.g., 49" min="1" max="126">
+                    </div>
+                    <div class="form-field">
+                        <label for="range">Range Number</label>
+                        <input type="number" id="range" name="range" 
+                               placeholder="e.g., 25" min="1" max="34">
+                    </div>
+                    <div class="form-field">
+                        <label for="meridian">Meridian</label>
+                        <select id="meridian" name="meridian">
+                            <option value="4th">4th Meridian</option>
+                            <option value="5th">5th Meridian</option>
+                            <option value="6th">6th Meridian</option>
+                        </select>
+                    </div>
+                </div>
+                <p style="color: #666; font-size: 0.9rem; margin-top: 10px;">
+                    📌 Example: Lethbridge area is Township 9, Range 22, 4th Meridian
+                </p>
+            </div>
+
+            <!-- Lat/Lon Input -->
+            <div class="input-section" id="coordinates-section">
+                <h3 style="color: #095256; margin-bottom: 15px;">Coordinates</h3>
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="latitude">Latitude</label>
+                        <input type="number" id="latitude" name="latitude" 
+                               step="0.0001" placeholder="e.g., 49.7" 
+                               min="49" max="60">
+                    </div>
+                    <div class="form-field">
+                        <label for="longitude">Longitude</label>
+                        <input type="number" id="longitude" name="longitude" 
+                               step="0.0001" placeholder="e.g., -112.8" 
+                               min="-120" max="-110">
+                    </div>
+                </div>
+                <p style="color: #666; font-size: 0.9rem; margin-top: 10px;">
+                    📌 Example: Lethbridge is 49.6942°N, 112.8328°W (enter as -112.8328)
+                </p>
+            </div>
+
+            <!-- Date Range -->
+            <h3 style="color: #095256; margin: 30px 0 15px 0;">Date Range</h3>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label for="start_date">Start Date</label>
+                    <input type="date" id="start_date" name="start_date" required>
+                </div>
+                <div class="form-field">
+                    <label for="end_date">End Date</label>
+                    <input type="date" id="end_date" name="end_date" required>
+                </div>
+            </div>
+
+            <input type="hidden" name="location_type" id="location_type" value="township">
+
+            <button type="submit" class="submit-btn" style="margin-top: 30px;">
+                🌐 Fetch Weather Data
+            </button>
+
+            <div class="loading" id="loading" style="display: none;">
+                Fetching data from ACIS... This may take a few moments...
+            </div>
+        </form>
+    </div>
+
+    {% if df_preview %}
+    <div style="margin-top: 40px;">
+        <h2 style="color: #095256;">📊 Data Preview (First 10 Days)</h2>
+        <table class="preview-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Tmax (°C)</th>
+                    <th>Tmin (°C)</th>
+                    <th>Solar Rad (MJ/m²/day)</th>
+                    <th>RH (%)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in df_preview %}
+                <tr>
+                    <td>{{ row.Date|date:"Y-m-d" }}</td>
+                    <td>{{ row.Tmax|floatformat:1 }}</td>
+                    <td>{{ row.Tmin|floatformat:1 }}</td>
+                    <td>{{ row.Solar_Radiation|floatformat:1 }}</td>
+                    <td>{{ row.RH|floatformat:0 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="{% url 'et:comparison_with_acis' %}" class="submit-btn" style="display: inline-block; text-decoration: none;">
+                Calculate ET with this Data →
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Location type toggle
+    const toggleButtons = document.querySelectorAll('.location-toggle button');
+    const sections = document.querySelectorAll('.input-section');
+    const locationTypeInput = document.getElementById('location_type');
+    
+    toggleButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const target = this.getAttribute('data-target');
+            
+            // Update button states
+            toggleButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Update section visibility
+            sections.forEach(section => section.classList.remove('active'));
+            document.getElementById(target + '-section').classList.add('active');
+            
+            // Update hidden input
+            locationTypeInput.value = target;
+        });
+    });
+    
+    // Form submission
+    const form = document.getElementById('acisForm');
+    const loading = document.getElementById('loading');
+    
+    form.addEventListener('submit', function() {
+        loading.style.display = 'block';
+    });
+    
+    // Set default dates (last growing season)
+    const today = new Date();
+    const endDate = new Date(today.getFullYear(), 9, 31); // Oct 31
+    const startDate = new Date(today.getFullYear(), 4, 1); // May 1
+    
+    // If we're past Oct 31, use last year
+    if (today > endDate) {
+        endDate.setFullYear(today.getFullYear() - 1);
+        startDate.setFullYear(today.getFullYear() - 1);
+    }
+    
+    document.getElementById('start_date').valueAsDate = startDate;
+    document.getElementById('end_date').valueAsDate = endDate;
+});
+</script>
+{% endblock %}

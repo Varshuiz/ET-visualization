@@ -32,4 +32,8 @@ path('comparison/', views.enhanced_comparison_calculator, name='comparison'),   
     path('methods/', views.method_comparison_info, name='method_info'),
     path('help/', views.help_guide, name='help'),
     path('about/', views.about, name='about'),
+
+
+    path('fetch-data/', views.acis_data_view, name='acis_fetch'),
+    path('comparison-acis/', views.comparison_with_acis, name='comparison_with_acis'),
 ]

@@ -246,6 +246,81 @@
             cursor: pointer;
         }
 
+        /* Unit Toggle Switch Styles */
+        .unit-toggle-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+            padding: 15px;
+            background: linear-gradient(135deg, #e0f2f1, #f1f8f7);
+            border-radius: 15px;
+        }
+
+        .unit-label {
+            font-weight: 600;
+            color: var(--midnight-green);
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+        }
+
+        .unit-label.active {
+            color: var(--teal);
+            transform: scale(1.1);
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, var(--zomp), var(--asparagus));
+            transition: 0.4s;
+            border-radius: 34px;
+            box-shadow: 0 3px 10px rgba(90, 170, 149, 0.3);
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .toggle-switch input:checked + .slider {
+            background: linear-gradient(135deg, var(--teal), var(--midnight-green));
+        }
+
+        .toggle-switch input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .toggle-switch input:focus + .slider {
+            box-shadow: 0 0 1px var(--teal), 0 3px 10px rgba(90, 170, 149, 0.3);
+        }
+
         @media (max-width: 768px) {
             .nav-links {
                 display: none;
@@ -285,6 +360,15 @@
                 display: block;
                 width: 100%;
             }
+
+            .unit-toggle-section {
+                flex-direction: row;
+                padding: 10px;
+            }
+
+            .unit-label {
+                font-size: 1rem;
+            }
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -296,12 +380,8 @@
                 <i class="fas fa-seedling"></i> ET Calculator
             </a>
             <ul class="nav-links" id="navLinks">
-                <li><a href="{% url 'et:enhanced_comparison' %}" {% if request.resolver_match.url_name == 'enhanced_comparison' %}class="active"{% endif %}>
-                    <i class="fas fa-chart-line"></i> All Methods
-                </a></li>
-                <li><a href="{% url 'et:comparison' %}" {% if request.resolver_match.url_name == 'comparison' %}class="active"{% endif %}>
-                    <i class="fas fa-chart-line"></i> Comparison
-                </a></li>
+                <li><a href="{% url 'et:acis_fetch' %}" {% if request.resolver_match.url_name == 'acis_fetch' %}class="active"{% endif %}>
+                    <i class="fas fa-satellite"></i> Fetch Data
                 <li><a href="{% url 'et:priestley_taylor' %}" {% if request.resolver_match.url_name == 'priestley_taylor' %}class="active"{% endif %}>
                     <i class="fas fa-leaf"></i> Priestley-Taylor
                 </a></li>
@@ -337,6 +417,33 @@
             const navLinks = document.getElementById('navLinks');
             navLinks.classList.toggle('active');
         });
+
+        // Unit toggle functionality (global - works on all pages)
+        const unitToggle = document.getElementById('unitToggle');
+        if (unitToggle) {
+            unitToggle.addEventListener('change', function() {
+                const currentUrl = new URL(window.location.href);
+                const newUnit = this.checked ? 'inches' : 'mm';
+                currentUrl.searchParams.set('unit', newUnit);
+                window.location.href = currentUrl.toString();
+            });
+
+            // Update label states
+            const mmLabel = document.querySelector('.unit-label:first-of-type');
+            const inchLabel = document.querySelector('.unit-label:last-of-type');
+            
+            if (mmLabel && inchLabel) {
+                unitToggle.addEventListener('change', function() {
+                    if (this.checked) {
+                        mmLabel.classList.remove('active');
+                        inchLabel.classList.add('active');
+                    } else {
+                        mmLabel.classList.add('active');
+                        inchLabel.classList.remove('active');
+                    }
+                });
+            }
+        }
 
         // File input handling
         const fileInput = document.querySelector('input[type="file"]');

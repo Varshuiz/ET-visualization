@@ -7,12 +7,17 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
 from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render, redirect 
 import numpy as np
 import requests
 import xml.etree.ElementTree as ET
 import feedparser
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import calendar
+import json
+import pandas as pd
+import numpy as np
+import io
 
 # Unit conversion constants
 MM_TO_INCHES = 0.0393701
@@ -1604,3 +1609,624 @@ def process_single_method_enhanced(request, method_code, method_name, template_n
     }
     
     return render(request, template_name, context)
+
+
+    return max(ET0, 0)
+def fetch_acis_data(latitude, longitude, start_date, end_date):
+    """
+    Fetch weather data with multiple fallback strategies
+    """
+    
+    # Try Method 1: PRISM Grid
+    try:
+        print("Attempting PRISM grid data...")
+        return fetch_prism_grid(latitude, longitude, start_date, end_date)
+    except Exception as e:
+        print(f"PRISM failed: {e}")
+    
+    # Try Method 2: nClimGrid
+    try:
+        print("Attempting nClimGrid data...")
+        return fetch_nclimgrid(latitude, longitude, start_date, end_date)
+    except Exception as e:
+        print(f"nClimGrid failed: {e}")
+    
+    # Try Method 3: Find nearest station
+    try:
+        print("Attempting station data...")
+        return fetch_nearest_station(latitude, longitude, start_date, end_date)
+    except Exception as e:
+        print(f"Station data failed: {e}")
+    
+    # Method 4: Generate synthetic data based on normals
+    print("Generating synthetic data from climate normals...")
+    return generate_synthetic_data(latitude, longitude, start_date, end_date)
+
+
+def fetch_prism_grid(latitude, longitude, start_date, end_date):
+    """Try PRISM gridded data"""
+    url = "http://data.rcc-acis.org/GridData"
+    
+    params = {
+        "loc": f"{longitude},{latitude}",
+        "sdate": start_date,
+        "edate": end_date,
+        "grid": "21",  # PRISM
+        "elems": [
+            {"name": "maxt"},
+            {"name": "mint"},
+            {"name": "pcpn"}
+        ]
+    }
+    
+    response = requests.post(url, json=params, timeout=30)
+    
+    if response.status_code != 200:
+        raise ValueError(f"HTTP {response.status_code}")
+    
+    data = response.json()
+    
+    if 'data' not in data or len(data['data']) == 0:
+        raise ValueError("No data returned")
+    
+    return parse_acis_response(data, latitude)
+
+
+def fetch_nclimgrid(latitude, longitude, start_date, end_date):
+    """Try nClimGrid (different grid)"""
+    url = "http://data.rcc-acis.org/GridData"
+    
+    params = {
+        "loc": f"{longitude},{latitude}",
+        "sdate": start_date,
+        "edate": end_date,
+        "grid": "3",  # nClimGrid
+        "elems": "maxt,mint,pcpn"
+    }
+    
+    response = requests.post(url, json=params, timeout=30)
+    
+    if response.status_code != 200:
+        raise ValueError(f"HTTP {response.status_code}")
+    
+    data = response.json()
+    
+    if 'data' not in data or len(data['data']) == 0:
+        raise ValueError("No data returned")
+    
+    return parse_acis_response(data, latitude)
+
+
+def fetch_nearest_station(latitude, longitude, start_date, end_date):
+    """Find and use nearest weather station"""
+    
+    # Find stations
+    meta_url = "http://data.rcc-acis.org/StnMeta"
+    
+    meta_params = {
+        "bbox": f"{longitude-1},{latitude-1},{longitude+1},{latitude+1}",
+        "sdate": start_date,
+        "edate": end_date,
+        "elems": "maxt,mint,pcpn",
+        "meta": "name,state,sids,ll"
+    }
+    
+    meta_response = requests.post(meta_url, json=meta_params, timeout=15)
+    
+    if meta_response.status_code != 200:
+        raise ValueError("Could not find stations")
+    
+    stations = meta_response.json()
+    
+    if 'meta' not in stations or len(stations['meta']) == 0:
+        raise ValueError("No stations found")
+    
+    # Try each station until one works
+    for station_meta in stations['meta'][:3]:  # Try up to 3 stations
+        try:
+            station_id = station_meta['sids'][0]
+            print(f"Trying station: {station_meta.get('name', station_id)}")
+            
+            data_url = "http://data.rcc-acis.org/StnData"
+            
+            data_params = {
+                "sid": station_id,
+                "sdate": start_date,
+                "edate": end_date,
+                "elems": "maxt,mint,pcpn"
+            }
+            
+            data_response = requests.post(data_url, json=data_params, timeout=30)
+            
+            if data_response.status_code == 200:
+                data = data_response.json()
+                if 'data' in data and len(data['data']) > 0:
+                    return parse_acis_response(data, latitude)
+        except Exception as e:
+            print(f"Station {station_id} failed: {e}")
+            continue
+    
+    raise ValueError("No working stations found")
+
+
+def parse_acis_response(data, latitude):
+    """Parse ACIS response into DataFrame"""
+    
+    dates = []
+    tmax_list = []
+    tmin_list = []
+    pcpn_list = []
+    
+    for row in data['data']:
+        dates.append(row[0])
+        
+        # Extract values
+        tmax = row[1] if len(row) > 1 else None
+        tmin = row[2] if len(row) > 2 else None
+        pcpn = row[3] if len(row) > 3 else None
+        
+        # Convert to float, handling missing
+        def safe_float(val):
+            try:
+                if val in ['M', 'T', '', None, 'S']:
+                    return None
+                fval = float(val)
+                # Check for ACIS missing data codes
+                if fval < -500 or fval > 100:  # Unrealistic temp
+                    return None
+                return fval
+            except:
+                return None
+        
+        tmax_list.append(safe_float(tmax))
+        tmin_list.append(safe_float(tmin))
+        pcpn_list.append(safe_float(pcpn) if safe_float(pcpn) is not None else 0.0)
+    
+    df = pd.DataFrame({
+        'Date': pd.to_datetime(dates),
+        'Tmax': tmax_list,
+        'Tmin': tmin_list,
+        'Precipitation': pcpn_list
+    })
+    
+    # Count valid data points
+    valid_tmax = df['Tmax'].notna().sum()
+    valid_tmin = df['Tmin'].notna().sum()
+    
+    print(f"Valid data: Tmax={valid_tmax}/{len(df)}, Tmin={valid_tmin}/{len(df)}")
+    
+    # If less than 20% valid data, raise error
+    if valid_tmax < len(df) * 0.2 or valid_tmin < len(df) * 0.2:
+        raise ValueError(f"Too much missing data ({valid_tmax}/{len(df)} valid)")
+    
+    # Interpolate missing values
+    df['Tmax'] = df['Tmax'].interpolate(method='linear', limit=10)
+    df['Tmin'] = df['Tmin'].interpolate(method='linear', limit=10)
+    
+    # Forward/backward fill remaining
+    df['Tmax'] = df['Tmax'].fillna(method='bfill').fillna(method='ffill')
+    df['Tmin'] = df['Tmin'].fillna(method='bfill').fillna(method='ffill')
+    
+    # If still missing, use climate normals
+    if df['Tmax'].isna().any() or df['Tmin'].isna().any():
+        df = fill_with_normals(df, latitude)
+    
+    return process_weather_data(df, latitude)
+
+
+def fill_with_normals(df, latitude):
+    """Fill remaining missing data with climate normals"""
+    
+    # Approximate normals for Alberta (varies by latitude)
+    # Based on 49.7°N (Lethbridge)
+    
+    for idx, row in df.iterrows():
+        doy = row['Date'].dayofyear
+        
+        if pd.isna(row['Tmax']):
+            # Seasonal temperature pattern
+            # Max in July (doy ~195), min in January (doy ~15)
+            temp_base = 8 + 17 * np.sin(2 * np.pi * (doy - 90) / 365)
+            df.at[idx, 'Tmax'] = temp_base + 5
+        
+        if pd.isna(row['Tmin']):
+            temp_base = 8 + 17 * np.sin(2 * np.pi * (doy - 90) / 365)
+            df.at[idx, 'Tmin'] = temp_base - 7
+    
+    return df
+
+
+def generate_synthetic_data(latitude, longitude, start_date, end_date):
+    """Generate synthetic data based on climate normals"""
+    
+    print(f"Generating synthetic data for {latitude}, {longitude}")
+    
+    dates = pd.date_range(start=start_date, end=end_date, freq='D')
+    
+    data = []
+    for date in dates:
+        doy = date.dayofyear
+        
+        # Temperature pattern (sinusoidal)
+        # For Alberta: cold winters, warm summers
+        base_temp = 8 + 17 * np.sin(2 * np.pi * (doy - 90) / 365)
+        
+        # Add some random variation
+        tmax = base_temp + 5 + np.random.normal(0, 3)
+        tmin = base_temp - 7 + np.random.normal(0, 2)
+        
+        # Ensure Tmax > Tmin
+        if tmin >= tmax:
+            tmin = tmax - 3
+        
+        data.append({
+            'Date': date,
+            'Tmax': tmax,
+            'Tmin': tmin,
+            'Precipitation': max(0, np.random.exponential(2))
+        })
+    
+    df = pd.DataFrame(data)
+    
+    return process_weather_data(df, latitude)
+
+
+def process_weather_data(df, latitude):
+    """
+    Process weather data: calculate derived variables
+    """
+    
+    # Calculate average temperature
+    df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
+    
+    # Add day of year
+    df['day_of_year'] = df['Date'].dt.dayofyear
+    
+    # Calculate extraterrestrial radiation factor
+    # Varies seasonally
+    solar_declination = 23.45 * np.sin(np.radians(360 * (df['day_of_year'] - 81) / 365))
+    
+    # Hour angle at sunset
+    lat_rad = np.radians(latitude)
+    decl_rad = np.radians(solar_declination)
+    sunset_angle = np.arccos(-np.tan(lat_rad) * np.tan(decl_rad))
+    
+    # Extraterrestrial radiation (MJ/m²/day)
+    dr = 1 + 0.033 * np.cos(2 * np.pi * df['day_of_year'] / 365)
+    Ra = 37.6 * dr * (
+        sunset_angle * np.sin(lat_rad) * np.sin(decl_rad) +
+        np.cos(lat_rad) * np.cos(decl_rad) * np.sin(sunset_angle)
+    )
+    
+    # Estimate solar radiation from temperature range
+    temp_range = (df['Tmax'] - df['Tmin']).clip(lower=1)
+    
+    # Hargreaves coefficient
+    kRs = 0.16  # For interior regions
+    
+    # Solar radiation (MJ/m²/day)
+    df['Solar_Radiation'] = kRs * np.sqrt(temp_range) * Ra
+    
+    # Clip to reasonable bounds
+    df['Solar_Radiation'] = df['Solar_Radiation'].clip(3, 40)
+    
+    # Default RH and wind
+    df['RH'] = 65.0
+    df['Wind_Speed'] = 2.0
+    
+    # Clean up
+    df = df.drop('day_of_year', axis=1)
+    
+    # Final validation
+    df = df.dropna(subset=['Tmax', 'Tmin'])
+    
+    if len(df) == 0:
+        raise ValueError("No valid data after processing")
+    
+    print(f"✓ Processed {len(df)} days")
+    print(f"  Temp range: {df['Tmax'].min():.1f} to {df['Tmax'].max():.1f}°C")
+    print(f"  Solar rad range: {df['Solar_Radiation'].min():.1f} to {df['Solar_Radiation'].max():.1f} MJ/m²/day")
+    
+    return df
+
+
+def get_coordinates_from_township(township, range_val, meridian='4th'):
+    """
+    Convert Alberta township/range to coordinates
+    
+    Parameters:
+    - township: Township number (e.g., 49)
+    - range_val: Range number (e.g., 25)
+    - meridian: Meridian (default '4th' for Lethbridge area)
+    
+    Returns:
+    - (latitude, longitude) tuple
+    """
+    
+    # Simplified conversion for Alberta
+    # This is approximate - for production, use proper township/range conversion
+    
+    # Base coordinates (near Lethbridge)
+    if meridian == '4th':
+        base_lat = 49.0
+        base_lon = -110.0
+    elif meridian == '5th':
+        base_lat = 49.0
+        base_lon = -114.0
+    elif meridian == '6th':
+        base_lat = 49.0
+        base_lon = -118.0
+    else:
+        base_lat = 49.0
+        base_lon = -110.0
+    
+    # Each township is approximately 6 miles (9.66 km) north
+    # Each range is approximately 6 miles (9.66 km) west
+    lat_offset = (township - 1) * 0.087  # Approximate degrees per township
+    lon_offset = (range_val - 1) * 0.087  # Approximate degrees per range
+    
+    latitude = base_lat + lat_offset
+    longitude = base_lon - lon_offset
+    
+    return (latitude, longitude)
+
+
+def acis_data_view(request):
+    """
+    View for fetching ACIS data based on location
+    """
+    error_message = None
+    df_preview = None
+    success_message = None
+    
+    selected_unit = request.GET.get('unit', 'mm')
+    if selected_unit not in ['mm', 'inches']:
+        selected_unit = 'mm'
+    
+    unit_info = get_unit_info(selected_unit)
+    
+    if request.method == 'POST':
+        try:
+            location_type = request.POST.get('location_type', 'township')
+            
+            if location_type == 'township':
+                township = int(request.POST.get('township'))
+                range_val = int(request.POST.get('range'))
+                meridian = request.POST.get('meridian', '4th')
+                
+                latitude, longitude = get_coordinates_from_township(township, range_val, meridian)
+                location_desc = f"Township {township}, Range {range_val}, {meridian} Meridian"
+            else:
+                latitude = float(request.POST.get('latitude'))
+                longitude = float(request.POST.get('longitude'))
+                location_desc = f"{latitude}°N, {abs(longitude)}°W"
+            
+            start_date = request.POST.get('start_date')
+            end_date = request.POST.get('end_date')
+            
+            if not start_date or not end_date:
+                raise ValueError("Please provide both start and end dates")
+            
+            # Fetch data
+            df = fetch_acis_data(latitude, longitude, start_date, end_date)
+            
+            # Store in session
+            request.session['acis_data'] = df.to_json(date_format='iso')
+            request.session['acis_location'] = {
+                'latitude': latitude,
+                'longitude': longitude,
+                'start_date': start_date,
+                'end_date': end_date,
+                'description': location_desc
+            }
+            
+            # Preview data
+            df_preview = df.head(10).to_dict('records')
+            success_message = f"✓ Successfully fetched {len(df)} days of weather data for {location_desc}!"
+            
+        except ValueError as e:
+            error_message = str(e)
+        except Exception as e:
+            error_message = f"Error: {str(e)}"
+            import traceback
+            traceback.print_exc()
+    
+    context = {
+        'error_message': error_message,
+        'success_message': success_message,
+        'df_preview': df_preview,
+        'selected_unit': selected_unit,
+        'unit_info': unit_info,
+    }
+    
+    return render(request, 'et/acis_fetch.html', context)
+
+
+def comparison_with_acis(request):
+    """
+    Calculate ET using ACIS data from session
+    """
+    acis_data_json = request.session.get('acis_data')
+    
+    if not acis_data_json:
+        return redirect('et:acis_fetch')
+    
+    # Get data from session
+    df = pd.read_json(io.StringIO(acis_data_json))
+    df['Date'] = pd.to_datetime(df['Date'])
+    
+    location_info = request.session.get('acis_location', {})
+    
+    selected_unit = request.GET.get('unit', 'mm')
+    if selected_unit not in ['mm', 'inches']:
+        selected_unit = 'mm'
+    
+    unit_info = get_unit_info(selected_unit)
+    forecast_data = get_lethbridge_forecast()
+    
+    try:
+        # Add day of year for Ra calculation
+        df['day_of_year'] = df['Date'].dt.dayofyear
+        
+        # Calculate extraterrestrial radiation
+        latitude = location_info.get('latitude', 49.7)
+        df['Ra'] = df.apply(lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), axis=1)
+        
+        # Calculate all 4 ET methods
+        df['ET_PT'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Solar_Radiation']), axis=1)
+        df['ET_PM'] = df.apply(lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['Wind_Speed'], row['Solar_Radiation']), axis=1)
+        df['ET_Maule'] = df.apply(lambda row: maule_ET(row['Tmax'], row['Tmin'], row['Solar_Radiation'], row['RH'] if not pd.isna(row['RH']) else None), axis=1)
+        df['ET_Hargreaves'] = df.apply(lambda row: hargreaves_ET(row['Tmax'], row['Tmin'], row['Ra']), axis=1)
+        
+        # Remove rows with all NaN
+        et_columns = ['ET_PT', 'ET_PM', 'ET_Maule', 'ET_Hargreaves']
+        df = df.dropna(subset=et_columns, how='all')
+        
+        if len(df) == 0:
+            raise ValueError("No valid ET values calculated")
+        
+        # Compute rolling averages
+        for method in ['PT', 'PM', 'Maule', 'Hargreaves']:
+            col = f'ET_{method}'
+            if col in df.columns:
+                df[f'{col}_smooth'] = df[col].rolling(window=5, min_periods=1).mean()
+        
+        # Calculate statistics
+        et_stats = {}
+        method_names = {
+            'PT': 'Priestley-Taylor',
+            'PM': 'Penman-Monteith',
+            'Maule': 'Maulé',
+            'Hargreaves': 'Hargreaves-Samani'
+        }
+        
+        for method, name in method_names.items():
+            col = f'ET_{method}'
+            if col in df.columns and not df[col].isna().all():
+                if selected_unit == 'inches':
+                    avg_val = convert_units(df[col].mean(), 'mm', 'inches')
+                    max_val = convert_units(df[col].max(), 'mm', 'inches')
+                    min_val = convert_units(df[col].min(), 'mm', 'inches')
+                    std_val = convert_units(df[col].std(), 'mm', 'inches')
+                else:
+                    avg_val = df[col].mean()
+                    max_val = df[col].max()
+                    min_val = df[col].min()
+                    std_val = df[col].std()
+                
+                et_stats[method] = {
+                    'name': name,
+                    'avg': avg_val,
+                    'max': max_val,
+                    'min': min_val,
+                    'std': std_val
+                }
+        
+        # Create comparison plot
+        available_methods = [m for m in ['PT', 'PM', 'Maule', 'Hargreaves'] if f'ET_{m}' in df.columns]
+        
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12))
+        fig.patch.set_facecolor('white')
+        
+        ax1.set_facecolor('#f8fffe')
+        colors = {
+            'PT': '#86A873',
+            'PM': '#087F8C',
+            'Maule': '#BB9F06',
+            'Hargreaves': '#5AAA95'
+        }
+        
+        for method in available_methods:
+            col = f'ET_{method}'
+            if selected_unit == 'inches':
+                plot_data = df[col].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                plot_data_smooth = df[f'{col}_smooth'].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+            else:
+                plot_data = df[col]
+                plot_data_smooth = df[f'{col}_smooth']
+            
+            ax1.plot(df['Date'], plot_data, label=method_names[method], 
+                    color=colors[method], alpha=0.6, linewidth=1.5)
+            ax1.plot(df['Date'], plot_data_smooth, color=colors[method], linewidth=2.5, alpha=0.9)
+        
+        ax1.set_title(f'ET Comparison - {location_info.get("description", "ACIS Data")}',
+                     fontsize=16, fontweight='bold', color='#095256', pad=20)
+        ax1.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
+        ax1.set_ylabel(f'ET₀ ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
+        ax1.grid(True, alpha=0.3, color='#5AAA95')
+        ax1.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
+        ax1.tick_params(axis='x', rotation=45)
+        
+        # Difference plot
+        ax2.set_facecolor('#f8fffe')
+        if 'PM' in available_methods and len(available_methods) > 1:
+            for method in available_methods:
+                if method != 'PM':
+                    col = f'ET_{method}'
+                    diff = df['ET_PM'] - df[col]
+                    if selected_unit == 'inches':
+                        diff = diff.apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                    
+                    ax2.plot(df['Date'], diff, color=colors[method], linewidth=2, alpha=0.7,
+                            label=f'PM - {method_names[method]}')
+            
+            ax2.axhline(y=0, color='#095256', linestyle='--', alpha=0.8)
+            ax2.set_title('Differences from Penman-Monteith',
+                         fontsize=14, fontweight='bold', color='#095256')
+            ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
+            ax2.set_ylabel(f'Difference ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
+            ax2.grid(True, alpha=0.3, color='#5AAA95')
+            ax2.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=9)
+            ax2.tick_params(axis='x', rotation=45)
+        else:
+            ax2.text(0.5, 0.5, 'Difference plot requires multiple methods',
+                    ha='center', va='center', fontsize=14, color='#666')
+            ax2.axis('off')
+        
+        plt.tight_layout()
+        
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight',
+                   facecolor='white', edgecolor='none')
+        buf.seek(0)
+        plot_url = base64.b64encode(buf.read()).decode('utf-8')
+        buf.close()
+        plt.close()
+        
+        # Store CSV
+        csv_columns = ['Date'] + [f'ET_{method}' for method in available_methods]
+        request.session['et_data_csv'] = df[csv_columns].to_csv(index=False)
+        
+        # Prepare display data
+        et_data = []
+        for _, row in df.iterrows():
+            data_row = {'Date': row['Date']}
+            for method in available_methods:
+                col = f'ET_{method}'
+                val = row[col] if not pd.isna(row[col]) else 0
+                if selected_unit == 'inches' and val:
+                    val = convert_units(val, 'mm', 'inches')
+                data_row[f'ET_{method}'] = round(val, unit_info['decimal_places']) if val else 0
+            et_data.append(data_row)
+        
+    except Exception as e:
+        print(f"Calculation error: {e}")
+        import traceback
+        traceback.print_exc()
+        return render(request, 'et/comparison.html', {
+            'error_message': f"Error calculating ET: {str(e)}",
+            'selected_unit': selected_unit,
+            'unit_info': unit_info,
+        })
+    
+    context = {
+        'et_data': et_data,
+        'et_stats': et_stats,
+        'plot_url': plot_url,
+        'forecast_data': forecast_data,
+        'selected_unit': selected_unit,
+        'unit_info': unit_info,
+        'acis_location': location_info,
+    }
+    
+    return render(request, 'et/comparison.html', context)

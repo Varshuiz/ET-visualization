@@ -30,6 +30,7 @@ urlpatterns = [
     # Alternative direct access routes
     path('calculator/', include('et.urls')),  # Alternative path
     path('evapotranspiration/', include('et.urls')),  # SEO-friendly path
+    
 ]
 
 # Optional: Add custom error handlers
