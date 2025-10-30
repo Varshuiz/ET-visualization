@@ -1612,6 +1612,327 @@ def process_single_method_enhanced(request, method_code, method_name, template_n
 
 
     return max(ET0, 0)
+
+
+def geocode_location(place_name, province="Alberta", country="Canada"):
+    """
+    Convert place name to coordinates using Nominatim (OpenStreetMap) geocoding
+    Free, no API key required!
+    
+    Parameters:
+    - place_name: Name of the place (e.g., "Lethbridge", "Calgary")
+    - province: Province name (default "Alberta")
+    - country: Country name (default "Canada")
+    
+    Returns:
+    - dict with latitude, longitude, display_name
+    """
+    
+    # Nominatim API (free, no key needed)
+    url = "https://nominatim.openstreetmap.org/search"
+    
+    # Build search query
+    search_query = f"{place_name}, {province}, {country}"
+    
+    params = {
+        'q': search_query,
+        'format': 'json',
+        'limit': 1,
+        'addressdetails': 1
+    }
+    
+    headers = {
+        'User-Agent': 'ET-Calculator/1.0 (Agricultural Research)'
+    }
+    
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            raise ValueError(f"Geocoding failed: HTTP {response.status_code}")
+        
+        results = response.json()
+        
+        if not results or len(results) == 0:
+            raise ValueError(f"Location '{place_name}' not found")
+        
+        result = results[0]
+        
+        return {
+            'latitude': float(result['lat']),
+            'longitude': float(result['lon']),
+            'display_name': result['display_name'],
+            'place_name': place_name
+        }
+        
+    except requests.exceptions.RequestException as e:
+        raise ValueError(f"Geocoding error: {str(e)}")
+    except Exception as e:
+        raise ValueError(f"Error processing location: {str(e)}")
+
+
+def reverse_geocode(latitude, longitude):
+    """
+    Convert coordinates back to place name
+    Useful for displaying location from township/range
+    """
+    
+    url = "https://nominatim.openstreetmap.org/reverse"
+    
+    params = {
+        'lat': latitude,
+        'lon': longitude,
+        'format': 'json',
+        'zoom': 10
+    }
+    
+    headers = {
+        'User-Agent': 'ET-Calculator/1.0 (Agricultural Research)'
+    }
+    
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if 'display_name' in result:
+                return result['display_name']
+        
+        return f"{latitude:.4f}°N, {abs(longitude):.4f}°W"
+        
+    except:
+        return f"{latitude:.4f}°N, {abs(longitude):.4f}°W"
+
+
+# Alberta Cities and Towns Database
+ALBERTA_LOCATIONS = {
+    # Major Cities
+    'Calgary': {'lat': 51.0447, 'lon': -114.0719, 'twp': 24, 'rge': 1, 'mer': '5th'},
+    'Edmonton': {'lat': 53.5461, 'lon': -113.4938, 'twp': 53, 'rge': 25, 'mer': '4th'},
+    'Red Deer': {'lat': 52.2681, 'lon': -113.8111, 'twp': 38, 'rge': 27, 'mer': '4th'},
+    'Lethbridge': {'lat': 49.6942, 'lon': -112.8328, 'twp': 9, 'rge': 22, 'mer': '4th'},
+    'Medicine Hat': {'lat': 50.0417, 'lon': -110.6775, 'twp': 13, 'rge': 6, 'mer': '4th'},
+    'Grande Prairie': {'lat': 55.1707, 'lon': -118.7947, 'twp': 72, 'rge': 6, 'mer': '6th'},
+    'Fort McMurray': {'lat': 56.7267, 'lon': -111.3790, 'twp': 88, 'rge': 9, 'mer': '4th'},
+    
+    # Medium Cities
+    'Airdrie': {'lat': 51.2917, 'lon': -114.0144, 'twp': 26, 'rge': 1, 'mer': '5th'},
+    'St. Albert': {'lat': 53.6303, 'lon': -113.6258, 'twp': 54, 'rge': 25, 'mer': '4th'},
+    'Spruce Grove': {'lat': 53.5450, 'lon': -113.9006, 'twp': 53, 'rge': 26, 'mer': '4th'},
+    'Leduc': {'lat': 53.2594, 'lon': -113.5514, 'twp': 50, 'rge': 25, 'mer': '4th'},
+    'Okotoks': {'lat': 50.7264, 'lon': -113.9764, 'twp': 21, 'rge': 29, 'mer': '4th'},
+    'Cochrane': {'lat': 51.1889, 'lon': -114.4678, 'twp': 25, 'rge': 4, 'mer': '5th'},
+    'Camrose': {'lat': 53.0158, 'lon': -112.8403, 'twp': 47, 'rge': 20, 'mer': '4th'},
+    'Lloydminster': {'lat': 53.2783, 'lon': -110.0050, 'twp': 50, 'rge': 1, 'mer': '4th'},
+    'Brooks': {'lat': 50.5644, 'lon': -111.8986, 'twp': 19, 'rge': 14, 'mer': '4th'},
+    'Wetaskiwin': {'lat': 52.9694, 'lon': -113.3769, 'twp': 46, 'rge': 25, 'mer': '4th'},
+    'Cold Lake': {'lat': 54.4639, 'lon': -110.1817, 'twp': 63, 'rge': 4, 'mer': '4th'},
+    'High River': {'lat': 50.5831, 'lon': -113.8711, 'twp': 19, 'rge': 28, 'mer': '4th'},
+    'Sylvan Lake': {'lat': 52.3083, 'lon': -114.0972, 'twp': 39, 'rge': 1, 'mer': '5th'},
+    'Canmore': {'lat': 51.0892, 'lon': -115.3580, 'twp': 25, 'rge': 10, 'mer': '5th'},
+    'Chestermere': {'lat': 51.0503, 'lon': -113.8236, 'twp': 24, 'rge': 28, 'mer': '4th'},
+    'Strathmore': {'lat': 51.0367, 'lon': -113.3978, 'twp': 24, 'rge': 25, 'mer': '4th'},
+    'Beaumont': {'lat': 53.3572, 'lon': -113.4147, 'twp': 51, 'rge': 24, 'mer': '4th'},
+    'Stony Plain': {'lat': 53.5264, 'lon': -114.0069, 'twp': 53, 'rge': 1, 'mer': '5th'},
+    'Fort Saskatchewan': {'lat': 53.7111, 'lon': -113.2178, 'twp': 55, 'rge': 22, 'mer': '4th'},
+    'Drumheller': {'lat': 51.4631, 'lon': -112.7086, 'twp': 28, 'rge': 19, 'mer': '4th'},
+    'Banff': {'lat': 51.1784, 'lon': -115.5708, 'twp': 25, 'rge': 12, 'mer': '5th'},
+    'Jasper': {'lat': 52.8737, 'lon': -118.0814, 'twp': 46, 'rge': 1, 'mer': '6th'},
+    'Hinton': {'lat': 53.4047, 'lon': -117.5850, 'twp': 52, 'rge': 24, 'mer': '5th'},
+    'Whitecourt': {'lat': 54.1428, 'lon': -115.6833, 'twp': 60, 'rge': 13, 'mer': '5th'},
+    'Slave Lake': {'lat': 55.2817, 'lon': -114.7728, 'twp': 74, 'rge': 10, 'mer': '5th'},
+    'Peace River': {'lat': 56.2297, 'lon': -117.2919, 'twp': 82, 'rge': 22, 'mer': '5th'},
+}
+
+
+def search_alberta_location(query):
+    """
+    Search Alberta locations database with fuzzy matching
+    """
+    query = query.strip().lower()
+    
+    # Exact match
+    for place, data in ALBERTA_LOCATIONS.items():
+        if place.lower() == query:
+            return {
+                'place_name': place,
+                'latitude': data['lat'],
+                'longitude': data['lon'],
+                'township': data.get('twp'),
+                'range': data.get('rge'),
+                'meridian': data.get('mer'),
+                'source': 'database'
+            }
+    
+    # Partial match
+    for place, data in ALBERTA_LOCATIONS.items():
+        if query in place.lower():
+            return {
+                'place_name': place,
+                'latitude': data['lat'],
+                'longitude': data['lon'],
+                'township': data.get('twp'),
+                'range': data.get('rge'),
+                'meridian': data.get('mer'),
+                'source': 'database'
+            }
+    
+    # If not in database, try geocoding
+    try:
+        result = geocode_location(query, "Alberta", "Canada")
+        return {
+            'place_name': query.title(),
+            'latitude': result['latitude'],
+            'longitude': result['longitude'],
+            'township': None,
+            'range': None,
+            'meridian': None,
+            'source': 'geocoding',
+            'display_name': result['display_name']
+        }
+    except:
+        return None
+
+
+# API endpoint for location search autocomplete
+def location_search_api(request):
+    """
+    AJAX endpoint for location search
+    Returns JSON with matching locations
+    """
+    query = request.GET.get('q', '').strip()
+    
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+    
+    results = []
+    query_lower = query.lower()
+    
+    # Search Alberta locations database
+    for place, data in ALBERTA_LOCATIONS.items():
+        if query_lower in place.lower():
+            results.append({
+                'name': place,
+                'display': f"{place} (Twp {data.get('twp')}, Rge {data.get('rge')}, {data.get('mer')} Meridian)",
+                'latitude': data['lat'],
+                'longitude': data['lon'],
+                'township': data.get('twp'),
+                'range': data.get('rge'),
+                'meridian': data.get('mer')
+            })
+    
+    return JsonResponse({'results': results[:10]})  # Limit to 10 results
+
+
+def acis_data_view(request):
+    """
+    View for fetching ACIS data - now with location search!
+    """
+    error_message = None
+    df_preview = None
+    success_message = None
+    location_result = None
+    
+    selected_unit = request.GET.get('unit', 'mm')
+    if selected_unit not in ['mm', 'inches']:
+        selected_unit = 'mm'
+    
+    unit_info = get_unit_info(selected_unit)
+    
+    if request.method == 'POST':
+        try:
+            location_type = request.POST.get('location_type', 'place')
+            
+            # NEW: Place Name Search
+            if location_type == 'place':
+                place_name = request.POST.get('place_name', '').strip()
+                
+                if not place_name:
+                    raise ValueError("Please enter a location name")
+                
+                print(f"Searching for: {place_name}")
+                location_result = search_alberta_location(place_name)
+                
+                if not location_result:
+                    raise ValueError(f"Location '{place_name}' not found. Try 'Calgary', 'Lethbridge', etc.")
+                
+                latitude = location_result['latitude']
+                longitude = location_result['longitude']
+                location_desc = location_result['place_name']
+                
+                # If we have township info, add it
+                if location_result.get('township'):
+                    location_desc += f" (Twp {location_result['township']}, Rge {location_result['range']}, {location_result['meridian']} Meridian)"
+            
+            # Township/Range
+            elif location_type == 'township':
+                township = int(request.POST.get('township'))
+                range_val = int(request.POST.get('range'))
+                meridian = request.POST.get('meridian', '4th')
+                
+                latitude, longitude = get_coordinates_from_township(township, range_val, meridian)
+                location_desc = f"Township {township}, Range {range_val}, {meridian} Meridian"
+                
+                # Try to get place name
+                place_name = reverse_geocode(latitude, longitude)
+                if place_name:
+                    location_desc += f" ({place_name.split(',')[0]})"
+            
+            # Coordinates
+            else:
+                latitude = float(request.POST.get('latitude'))
+                longitude = float(request.POST.get('longitude'))
+                
+                place_name = reverse_geocode(latitude, longitude)
+                location_desc = place_name if place_name else f"{latitude}°N, {abs(longitude)}°W"
+            
+            # Get date range
+            start_date = request.POST.get('start_date')
+            end_date = request.POST.get('end_date')
+            
+            if not start_date or not end_date:
+                raise ValueError("Please provide both start and end dates")
+            
+            print(f"Fetching data for {location_desc}")
+            print(f"Coordinates: {latitude}, {longitude}")
+            print(f"Date range: {start_date} to {end_date}")
+            
+            # Fetch data using robust method
+            df = fetch_acis_data(latitude, longitude, start_date, end_date)
+            
+            # Store in session
+            request.session['acis_data'] = df.to_json(date_format='iso')
+            request.session['acis_location'] = {
+                'latitude': latitude,
+                'longitude': longitude,
+                'start_date': start_date,
+                'end_date': end_date,
+                'description': location_desc
+            }
+            
+            # Preview
+            df_preview = df.head(10).to_dict('records')
+            success_message = f"✓ Successfully fetched {len(df)} days of weather data for {location_desc}!"
+            
+        except ValueError as e:
+            error_message = str(e)
+        except Exception as e:
+            error_message = f"Error: {str(e)}"
+            print(f"Full error: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    context = {
+        'error_message': error_message,
+        'success_message': success_message,
+        'df_preview': df_preview,
+        'location_result': location_result,
+        'selected_unit': selected_unit,
+        'unit_info': unit_info,
+        'popular_locations': list(ALBERTA_LOCATIONS.keys())[:20]  # Top 20 cities
+    }
+    
+    return render(request, 'et/acis_fetch.html', context)
 def fetch_acis_data(latitude, longitude, start_date, end_date):
     """
     Fetch weather data with multiple fallback strategies
@@ -1641,7 +1962,6 @@ def fetch_acis_data(latitude, longitude, start_date, end_date):
     # Method 4: Generate synthetic data based on normals
     print("Generating synthetic data from climate normals...")
     return generate_synthetic_data(latitude, longitude, start_date, end_date)
-
 
 def fetch_prism_grid(latitude, longitude, start_date, end_date):
     """Try PRISM gridded data"""
@@ -1973,11 +2293,12 @@ def get_coordinates_from_township(township, range_val, meridian='4th'):
 
 def acis_data_view(request):
     """
-    View for fetching ACIS data based on location
+    View for fetching ACIS data - with proper error handling for empty fields
     """
     error_message = None
     df_preview = None
     success_message = None
+    location_result = None
     
     selected_unit = request.GET.get('unit', 'mm')
     if selected_unit not in ['mm', 'inches']:
@@ -1987,27 +2308,106 @@ def acis_data_view(request):
     
     if request.method == 'POST':
         try:
-            location_type = request.POST.get('location_type', 'township')
+            location_type = request.POST.get('location_type', 'place')
             
-            if location_type == 'township':
-                township = int(request.POST.get('township'))
-                range_val = int(request.POST.get('range'))
+            # NEW: Place Name Search
+            if location_type == 'place':
+                place_name = request.POST.get('place_name', '').strip()
+                
+                if not place_name:
+                    raise ValueError("Please enter a location name")
+                
+                print(f"Searching for: {place_name}")
+                location_result = search_alberta_location(place_name)
+                
+                if not location_result:
+                    raise ValueError(f"Location '{place_name}' not found. Try 'Calgary', 'Lethbridge', 'Edmonton', etc.")
+                
+                latitude = location_result['latitude']
+                longitude = location_result['longitude']
+                location_desc = location_result['place_name']
+                
+                # If we have township info, add it
+                if location_result.get('township'):
+                    location_desc += f" (Twp {location_result['township']}, Rge {location_result['range']}, {location_result['meridian']} Meridian)"
+            
+            # Township/Range
+            elif location_type == 'township':
+                # FIXED: Check if fields are filled
+                township_str = request.POST.get('township', '').strip()
+                range_str = request.POST.get('range', '').strip()
+                
+                if not township_str or not range_str:
+                    raise ValueError("Please enter both Township and Range numbers")
+                
+                try:
+                    township = int(township_str)
+                    range_val = int(range_str)
+                except ValueError:
+                    raise ValueError("Township and Range must be numbers")
+                
                 meridian = request.POST.get('meridian', '4th')
                 
                 latitude, longitude = get_coordinates_from_township(township, range_val, meridian)
                 location_desc = f"Township {township}, Range {range_val}, {meridian} Meridian"
-            else:
-                latitude = float(request.POST.get('latitude'))
-                longitude = float(request.POST.get('longitude'))
-                location_desc = f"{latitude}°N, {abs(longitude)}°W"
+                
+                # Try to get place name
+                place_name = reverse_geocode(latitude, longitude)
+                if place_name:
+                    location_desc += f" ({place_name.split(',')[0]})"
             
-            start_date = request.POST.get('start_date')
-            end_date = request.POST.get('end_date')
+            # Coordinates
+            else:
+                # FIXED: Check if fields are filled
+                lat_str = request.POST.get('latitude', '').strip()
+                lon_str = request.POST.get('longitude', '').strip()
+                
+                if not lat_str or not lon_str:
+                    raise ValueError("Please enter both latitude and longitude")
+                
+                try:
+                    latitude = float(lat_str)
+                    longitude = float(lon_str)
+                except ValueError:
+                    raise ValueError("Latitude and longitude must be valid numbers")
+                
+                # Validate ranges
+                if not (49 <= latitude <= 60):
+                    raise ValueError("Latitude must be between 49 and 60 for Alberta")
+                if not (-120 <= longitude <= -110):
+                    raise ValueError("Longitude must be between -120 and -110 for Alberta")
+                
+                place_name = reverse_geocode(latitude, longitude)
+                location_desc = place_name if place_name else f"{latitude}°N, {abs(longitude)}°W"
+            
+            # Get date range
+            start_date = request.POST.get('start_date', '').strip()
+            end_date = request.POST.get('end_date', '').strip()
             
             if not start_date or not end_date:
                 raise ValueError("Please provide both start and end dates")
             
-            # Fetch data
+            # Validate dates
+            try:
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+                
+                if end_dt < start_dt:
+                    raise ValueError("End date must be after start date")
+                
+                if (end_dt - start_dt).days > 730:  # 2 years max
+                    raise ValueError("Date range cannot exceed 2 years")
+                
+            except ValueError as e:
+                if "does not match format" in str(e):
+                    raise ValueError("Invalid date format")
+                raise
+            
+            print(f"Fetching data for {location_desc}")
+            print(f"Coordinates: {latitude}, {longitude}")
+            print(f"Date range: {start_date} to {end_date}")
+            
+            # Fetch data using robust method
             df = fetch_acis_data(latitude, longitude, start_date, end_date)
             
             # Store in session
@@ -2020,14 +2420,16 @@ def acis_data_view(request):
                 'description': location_desc
             }
             
-            # Preview data
+            # Preview
             df_preview = df.head(10).to_dict('records')
             success_message = f"✓ Successfully fetched {len(df)} days of weather data for {location_desc}!"
             
         except ValueError as e:
             error_message = str(e)
+            print(f"ValueError: {e}")
         except Exception as e:
-            error_message = f"Error: {str(e)}"
+            error_message = f"Unexpected error: {str(e)}"
+            print(f"Full error: {e}")
             import traceback
             traceback.print_exc()
     
@@ -2035,28 +2437,37 @@ def acis_data_view(request):
         'error_message': error_message,
         'success_message': success_message,
         'df_preview': df_preview,
+        'location_result': location_result,
         'selected_unit': selected_unit,
         'unit_info': unit_info,
+        'popular_locations': list(ALBERTA_LOCATIONS.keys())[:20]  # Top 20 cities
     }
     
     return render(request, 'et/acis_fetch.html', context)
 
-
 def comparison_with_acis(request):
     """
-    Calculate ET using ACIS data from session
+    Enhanced ET calculator with ACIS data - IDENTICAL to enhanced_comparison_calculator
     """
+    et_data = None
+    et_stats = None
+    comparison_stats = None
+    growing_season_stats = None
+    plot_url = None
+    growing_season_plots = None
+    
+    # Get ACIS data from session
     acis_data_json = request.session.get('acis_data')
+    location_info = request.session.get('acis_location', {})
     
     if not acis_data_json:
         return redirect('et:acis_fetch')
     
-    # Get data from session
+    # Convert back to DataFrame
     df = pd.read_json(io.StringIO(acis_data_json))
     df['Date'] = pd.to_datetime(df['Date'])
     
-    location_info = request.session.get('acis_location', {})
-    
+    # Get selected unit
     selected_unit = request.GET.get('unit', 'mm')
     if selected_unit not in ['mm', 'inches']:
         selected_unit = 'mm'
@@ -2065,44 +2476,105 @@ def comparison_with_acis(request):
     forecast_data = get_lethbridge_forecast()
     
     try:
-        # Add day of year for Ra calculation
+        # Add day of year column for radiation calculations
         df['day_of_year'] = df['Date'].dt.dayofyear
         
-        # Calculate extraterrestrial radiation
+        # Get latitude from session
         latitude = location_info.get('latitude', 49.7)
+        
+        # Ensure we have temperature columns
+        if 'Tmax' not in df.columns or 'Tmin' not in df.columns:
+            raise ValueError("Missing temperature data")
+        
+        # Calculate Tavg if not present
+        if 'Tavg' not in df.columns:
+            df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
+        
+        # Assign solar radiation
+        if 'Solar_Radiation' in df.columns:
+            df['Rs'] = df['Solar_Radiation']
+        else:
+            # Estimate if not available
+            df['Rs'] = (df['Tmax'] - df['Tmin']) * 0.16 * np.sqrt(12)
+        
+        # Assign wind speed
+        if 'Wind_Speed' in df.columns:
+            df['u2'] = df['Wind_Speed']
+        else:
+            df['u2'] = 2.0  # Default
+        
+        # Assign relative humidity
+        if 'RH' in df.columns:
+            df['RH'] = df['RH']
+        else:
+            df['RH'] = 65.0  # Default
+        
+        # Calculate extraterrestrial radiation
         df['Ra'] = df.apply(lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), axis=1)
         
-        # Calculate all 4 ET methods
-        df['ET_PT'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Solar_Radiation']), axis=1)
-        df['ET_PM'] = df.apply(lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['Wind_Speed'], row['Solar_Radiation']), axis=1)
-        df['ET_Maule'] = df.apply(lambda row: maule_ET(row['Tmax'], row['Tmin'], row['Solar_Radiation'], row['RH'] if not pd.isna(row['RH']) else None), axis=1)
-        df['ET_Hargreaves'] = df.apply(lambda row: hargreaves_ET(row['Tmax'], row['Tmin'], row['Ra']), axis=1)
+        # Calculate ET using all four methods - with proper error handling
+        # Priestley-Taylor
+        try:
+            df['ET_PT'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Rs']), axis=1)
+        except Exception as e:
+            print(f"PT calculation failed: {e}")
+            df['ET_PT'] = np.nan
         
-        # Remove rows with all NaN
+        # Penman-Monteith
+        try:
+            df['ET_PM'] = df.apply(lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs']), axis=1)
+        except Exception as e:
+            print(f"PM calculation failed: {e}")
+            df['ET_PM'] = np.nan
+        
+        # Maulé
+        try:
+            df['ET_Maule'] = df.apply(
+                lambda row: maule_ET(
+                    row['Tmax'], 
+                    row['Tmin'], 
+                    row['Rs'], 
+                    row['RH'] if not pd.isna(row['RH']) else None
+                ), 
+                axis=1
+            )
+        except Exception as e:
+            print(f"Maule calculation failed: {e}")
+            df['ET_Maule'] = np.nan
+        
+        # Hargreaves
+        try:
+            df['ET_Hargreaves'] = df.apply(lambda row: hargreaves_ET(row['Tmax'], row['Tmin'], row['Ra']), axis=1)
+        except Exception as e:
+            print(f"Hargreaves calculation failed: {e}")
+            df['ET_Hargreaves'] = np.nan
+        
+        # Remove rows with ALL NaN ET values
         et_columns = ['ET_PT', 'ET_PM', 'ET_Maule', 'ET_Hargreaves']
         df = df.dropna(subset=et_columns, how='all')
         
         if len(df) == 0:
-            raise ValueError("No valid ET values calculated")
+            raise ValueError("No valid ET values could be calculated for any method")
         
-        # Compute rolling averages
+        # Compute rolling averages for smoothing
         for method in ['PT', 'PM', 'Maule', 'Hargreaves']:
             col = f'ET_{method}'
             if col in df.columns:
                 df[f'{col}_smooth'] = df[col].rolling(window=5, min_periods=1).mean()
         
-        # Calculate statistics
+        # Calculate statistics for all methods with unit conversion
         et_stats = {}
         method_names = {
             'PT': 'Priestley-Taylor',
-            'PM': 'Penman-Monteith',
-            'Maule': 'Maulé',
+            'PM': 'Penman-Monteith', 
+            'Maule': 'Maulé',  
             'Hargreaves': 'Hargreaves-Samani'
         }
         
         for method, name in method_names.items():
             col = f'ET_{method}'
             if col in df.columns and not df[col].isna().all():
+                # Convert values if needed
                 if selected_unit == 'inches':
                     avg_val = convert_units(df[col].mean(), 'mm', 'inches')
                     max_val = convert_units(df[col].max(), 'mm', 'inches')
@@ -2122,22 +2594,58 @@ def comparison_with_acis(request):
                     'std': std_val
                 }
         
-        # Create comparison plot
-        available_methods = [m for m in ['PT', 'PM', 'Maule', 'Hargreaves'] if f'ET_{m}' in df.columns]
+        # Enhanced comparison statistics
+        comparison_stats = {}
+        available_methods = [method for method in ['PT', 'PM', 'Maule', 'Hargreaves'] if f'ET_{method}' in df.columns and not df[f'ET_{method}'].isna().all()]
         
+        if len(available_methods) >= 2:
+            # Calculate correlations between methods
+            et_cols = [f'ET_{method}' for method in available_methods]
+            corr_matrix = df[et_cols].corr()
+            
+            # Store correlation data
+            comparison_stats['correlations'] = {}
+            for i, method1 in enumerate(available_methods):
+                for j, method2 in enumerate(available_methods):
+                    if i < j:  # Only store upper triangle
+                        key = f'{method1} vs {method2}'
+                        comparison_stats['correlations'][key] = corr_matrix.iloc[i, j]
+            
+            # Calculate mean differences (with unit conversion) - only if PM exists
+            if 'PM' in available_methods:
+                for method in available_methods:
+                    if method != 'PM':
+                        diff_mm = (df[f'ET_{method}'] - df['ET_PM']).mean()
+                        if selected_unit == 'inches':
+                            comparison_stats[f'{method}_PM_diff'] = convert_units(diff_mm, 'mm', 'inches')
+                        else:
+                            comparison_stats[f'{method}_PM_diff'] = diff_mm
+        
+        # Calculate growing season statistics for primary method (PM if available, otherwise first available)
+        if 'ET_PM' in df.columns and not df['ET_PM'].isna().all():
+            growing_season_stats = calculate_growing_season_stats(df, 'ET_PM', selected_unit)
+            growing_season_plots = create_growing_season_plots(df, 'ET_PM', selected_unit)
+        elif available_methods:
+            primary_method = available_methods[0]
+            growing_season_stats = calculate_growing_season_stats(df, f'ET_{primary_method}', selected_unit)
+            growing_season_plots = create_growing_season_plots(df, f'ET_{primary_method}', selected_unit)
+        
+        # Create enhanced comparison plot with all available methods
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12))
         fig.patch.set_facecolor('white')
         
+        # Main ET comparison plot
         ax1.set_facecolor('#f8fffe')
         colors = {
             'PT': '#86A873',
-            'PM': '#087F8C',
+            'PM': '#087F8C', 
             'Maule': '#BB9F06',
             'Hargreaves': '#5AAA95'
         }
         
         for method in available_methods:
             col = f'ET_{method}'
+            # Convert data for plotting if needed
             if selected_unit == 'inches':
                 plot_data = df[col].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
                 plot_data_smooth = df[f'{col}_smooth'].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
@@ -2145,11 +2653,15 @@ def comparison_with_acis(request):
                 plot_data = df[col]
                 plot_data_smooth = df[f'{col}_smooth']
             
-            ax1.plot(df['Date'], plot_data, label=method_names[method], 
+            ax1.plot(df['Date'], plot_data, 
+                    label=f'{method_names[method]}', 
                     color=colors[method], alpha=0.6, linewidth=1.5)
-            ax1.plot(df['Date'], plot_data_smooth, color=colors[method], linewidth=2.5, alpha=0.9)
+            ax1.plot(df['Date'], plot_data_smooth, 
+                    color=colors[method], linewidth=2.5, alpha=0.9)
         
-        ax1.set_title(f'ET Comparison - {location_info.get("description", "ACIS Data")}',
+        # Add location info to title
+        location_desc = location_info.get('description', 'ACIS Data')
+        ax1.set_title(f'Evapotranspiration Method Comparison - {location_desc}', 
                      fontsize=16, fontweight='bold', color='#095256', pad=20)
         ax1.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
         ax1.set_ylabel(f'ET₀ ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
@@ -2157,7 +2669,7 @@ def comparison_with_acis(request):
         ax1.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
         ax1.tick_params(axis='x', rotation=45)
         
-        # Difference plot
+        # Method differences from Penman-Monteith (reference) - only if PM exists
         ax2.set_facecolor('#f8fffe')
         if 'PM' in available_methods and len(available_methods) > 1:
             for method in available_methods:
@@ -2167,11 +2679,11 @@ def comparison_with_acis(request):
                     if selected_unit == 'inches':
                         diff = diff.apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
                     
-                    ax2.plot(df['Date'], diff, color=colors[method], linewidth=2, alpha=0.7,
+                    ax2.plot(df['Date'], diff, color=colors[method], linewidth=2, alpha=0.7, 
                             label=f'PM - {method_names[method]}')
             
             ax2.axhline(y=0, color='#095256', linestyle='--', alpha=0.8)
-            ax2.set_title('Differences from Penman-Monteith',
+            ax2.set_title('Differences from Penman-Monteith (Reference Method)', 
                          fontsize=14, fontweight='bold', color='#095256')
             ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
             ax2.set_ylabel(f'Difference ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
@@ -2179,12 +2691,16 @@ def comparison_with_acis(request):
             ax2.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=9)
             ax2.tick_params(axis='x', rotation=45)
         else:
-            ax2.text(0.5, 0.5, 'Difference plot requires multiple methods',
+            # If no PM or only one method, show a message
+            ax2.text(0.5, 0.5, 'Difference plot requires Penman-Monteith method', 
                     ha='center', va='center', fontsize=14, color='#666')
+            ax2.set_xlim(0, 1)
+            ax2.set_ylim(0, 1)
             ax2.axis('off')
         
         plt.tight_layout()
         
+        # Convert plot to base64
         buf = BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight',
                    facecolor='white', edgecolor='none')
@@ -2193,22 +2709,24 @@ def comparison_with_acis(request):
         buf.close()
         plt.close()
         
-        # Store CSV
+        # Store enhanced CSV data in session
         csv_columns = ['Date'] + [f'ET_{method}' for method in available_methods]
         request.session['et_data_csv'] = df[csv_columns].to_csv(index=False)
         
-        # Prepare display data
+        # Prepare data for rendering with unit conversion
         et_data = []
         for _, row in df.iterrows():
             data_row = {'Date': row['Date']}
+            
             for method in available_methods:
                 col = f'ET_{method}'
                 val = row[col] if not pd.isna(row[col]) else 0
                 if selected_unit == 'inches' and val:
                     val = convert_units(val, 'mm', 'inches')
                 data_row[f'ET_{method}'] = round(val, unit_info['decimal_places']) if val else 0
+            
             et_data.append(data_row)
-        
+    
     except Exception as e:
         print(f"Calculation error: {e}")
         import traceback
@@ -2222,7 +2740,10 @@ def comparison_with_acis(request):
     context = {
         'et_data': et_data,
         'et_stats': et_stats,
+        'comparison_stats': comparison_stats,
+        'growing_season_stats': growing_season_stats,
         'plot_url': plot_url,
+        'growing_season_plots': growing_season_plots,
         'forecast_data': forecast_data,
         'selected_unit': selected_unit,
         'unit_info': unit_info,

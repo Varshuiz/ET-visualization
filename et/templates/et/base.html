@@ -246,7 +246,7 @@
             cursor: pointer;
         }
 
-        /* Unit Toggle Switch Styles */
+        /* Unit Toggle Switch Styles - Fixed positioning */
         .unit-toggle-section {
             display: flex;
             align-items: center;
@@ -261,7 +261,7 @@
         .unit-label {
             font-weight: 600;
             color: var(--midnight-green);
-            font-size: 1.1rem;
+            font-size: 1rem;
             transition: all 0.3s ease;
         }
 
@@ -367,7 +367,7 @@
             }
 
             .unit-label {
-                font-size: 1rem;
+                font-size: 0.9rem;
             }
         }
     </style>
@@ -382,6 +382,10 @@
             <ul class="nav-links" id="navLinks">
                 <li><a href="{% url 'et:acis_fetch' %}" {% if request.resolver_match.url_name == 'acis_fetch' %}class="active"{% endif %}>
                     <i class="fas fa-satellite"></i> Fetch Data
+                </a></li>
+                <li><a href="{% url 'et:enhanced_comparison' %}" {% if request.resolver_match.url_name == 'enhanced_comparison' %}class="active"{% endif %}>
+                    <i class="fas fa-chart-line"></i> Compare Methods
+                </a></li>
                 <li><a href="{% url 'et:priestley_taylor' %}" {% if request.resolver_match.url_name == 'priestley_taylor' %}class="active"{% endif %}>
                     <i class="fas fa-leaf"></i> Priestley-Taylor
                 </a></li>
@@ -419,31 +423,40 @@
         });
 
         // Unit toggle functionality (global - works on all pages)
-        const unitToggle = document.getElementById('unitToggle');
-        if (unitToggle) {
-            unitToggle.addEventListener('change', function() {
-                const currentUrl = new URL(window.location.href);
-                const newUnit = this.checked ? 'inches' : 'mm';
-                currentUrl.searchParams.set('unit', newUnit);
-                window.location.href = currentUrl.toString();
-            });
-
-            // Update label states
-            const mmLabel = document.querySelector('.unit-label:first-of-type');
-            const inchLabel = document.querySelector('.unit-label:last-of-type');
+        document.addEventListener('DOMContentLoaded', function() {
+            const unitToggle = document.getElementById('unitToggle');
             
-            if (mmLabel && inchLabel) {
+            if (unitToggle) {
                 unitToggle.addEventListener('change', function() {
-                    if (this.checked) {
-                        mmLabel.classList.remove('active');
-                        inchLabel.classList.add('active');
-                    } else {
-                        mmLabel.classList.add('active');
-                        inchLabel.classList.remove('active');
+                    const currentUrl = new URL(window.location.href);
+                    const newUnit = this.checked ? 'inches' : 'mm';
+                    currentUrl.searchParams.set('unit', newUnit);
+                    
+                    // Show loading state
+                    const toggleSection = document.querySelector('.unit-toggle-section');
+                    if (toggleSection) {
+                        toggleSection.style.opacity = '0.6';
+                        toggleSection.style.pointerEvents = 'none';
                     }
+                    
+                    window.location.href = currentUrl.toString();
                 });
+
+                // Update label states based on current unit
+                const currentUnit = new URLSearchParams(window.location.search).get('unit') || 'mm';
+                const unitLabels = document.querySelectorAll('.unit-label');
+                
+                if (unitLabels.length >= 2) {
+                    if (currentUnit === 'mm') {
+                        unitLabels[0].classList.add('active');
+                        unitLabels[1].classList.remove('active');
+                    } else {
+                        unitLabels[0].classList.remove('active');
+                        unitLabels[1].classList.add('active');
+                    }
+                }
             }
-        }
+        });
 
         // File input handling
         const fileInput = document.querySelector('input[type="file"]');

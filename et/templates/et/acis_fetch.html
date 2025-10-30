@@ -126,8 +126,8 @@
 {% block content %}
 <div class="container">
     <div class="page-header">
-        <h1>🌐 Fetch Weather Data Automatically</h1>
-        <p class="subtitle">Get historical weather data using ACIS (Applied Climate Information System)</p>
+        <h1>🌐 Enter Your Location</h1>
+        <p class="subtitle">Get historical weather data using ACIS (Alberta Climate Information Service)</p>
     </div>
 
     <div class="info-box">
@@ -161,12 +161,45 @@
 
             <!-- Location Type Toggle -->
             <div class="location-toggle">
-                <button type="button" class="active" data-target="township">
+                <button type="button" class="active" data-target="place">
+                    📍 Place Name
+                </button>
+                <button type="button" data-target="township">
                     Alberta Township/Range
                 </button>
                 <button type="button" data-target="coordinates">
                     Latitude/Longitude
                 </button>
+            </div>
+
+            <!-- Place Name Search -->
+            <div class="input-section active" id="place-section">
+                <h3 style="color: #095256; margin-bottom: 15px;">🔍 Search by Location Name</h3>
+                <div class="form-field">
+                    <label for="place_name">Enter City or Town Name</label>
+                    <input type="text" id="place_name" name="place_name" 
+                           placeholder="e.g., Lethbridge, Calgary, Edmonton..."
+                           list="popular_locations"
+                           autocomplete="off">
+                    <datalist id="popular_locations">
+                        {% for location in popular_locations %}
+                        <option value="{{ location }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <p style="color: #666; font-size: 0.9rem; margin-top: 10px;">
+                    💡 Try: Calgary, Lethbridge, Red Deer, Medicine Hat, Brooks, etc.
+                </p>
+                
+                {% if location_result %}
+                <div style="background: #e0f2f1; padding: 15px; border-radius: 10px; margin-top: 15px;">
+                    <strong>📍 Found:</strong> {{ location_result.place_name }}<br>
+                    <small>Coordinates: {{ location_result.latitude|floatformat:4 }}°N, {{ location_result.longitude|floatformat:4 }}°W</small>
+                    {% if location_result.township %}
+                    <br><small>Township {{ location_result.township }}, Range {{ location_result.range }}, {{ location_result.meridian }} Meridian</small>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
 
             <!-- Township/Range Input -->
@@ -232,7 +265,7 @@
                 </div>
             </div>
 
-            <input type="hidden" name="location_type" id="location_type" value="township">
+            <input type="hidden" name="location_type" id="location_type" value="place">
 
             <button type="submit" class="submit-btn" style="margin-top: 30px;">
                 🌐 Fetch Weather Data
