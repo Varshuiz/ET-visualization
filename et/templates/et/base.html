@@ -386,6 +386,9 @@
                 <li><a href="{% url 'et:enhanced_comparison' %}" {% if request.resolver_match.url_name == 'enhanced_comparison' %}class="active"{% endif %}>
                     <i class="fas fa-chart-line"></i> Compare Methods
                 </a></li>
+                <li><a href="{% url 'et:env_canada_forecast' %}" {% if request.resolver_match.url_name == 'env_canada_forecast' %}class="active"{% endif %}>
+                    <i class="fas fa-cloud-sun-rain"></i> View Forecast
+                </a></li>
                 <li><a href="{% url 'et:priestley_taylor' %}" {% if request.resolver_match.url_name == 'priestley_taylor' %}class="active"{% endif %}>
                     <i class="fas fa-leaf"></i> Priestley-Taylor
                 </a></li>

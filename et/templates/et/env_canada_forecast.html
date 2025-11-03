@@ -1,0 +1,576 @@
+{% extends 'et/base.html' %}
+{% load static %}
+
+{% block title %}Environment Canada Forecast{% endblock %}
+
+{% block extra_css %}
+<style>
+    .forecast-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 3px 10px rgba(9, 82, 86, 0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .forecast-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 20px rgba(9, 82, 86, 0.2);
+    }
+
+    .forecast-period {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #087F8C;
+        margin-bottom: 10px;
+    }
+
+    .forecast-date {
+        font-size: 0.95rem;
+        color: #666;
+        margin-bottom: 15px;
+    }
+
+    .forecast-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+
+    .stat-box {
+        background: linear-gradient(135deg, #e0f2f1, #f1f8f7);
+        padding: 12px;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .stat-label {
+        font-size: 0.85rem;
+        color: #666;
+        margin-bottom: 5px;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #095256;
+    }
+
+    .precip-high {
+        background: linear-gradient(135deg, #ffebee, #ffcdd2);
+        color: #c62828;
+    }
+
+    .precip-medium {
+        background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+        color: #e65100;
+    }
+
+    .precip-low {
+        background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+        color: #2e7d32;
+    }
+
+    .forecast-text {
+        background: #f8fffe;
+        padding: 15px;
+        border-left: 4px solid #5AAA95;
+        border-radius: 5px;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: #333;
+    }
+
+    .summary-box {
+        background: linear-gradient(135deg, #087F8C, #5AAA95);
+        color: white;
+        padding: 25px;
+        border-radius: 12px;
+        margin-bottom: 30px;
+        text-align: center;
+    }
+
+    .summary-box h2 {
+        margin: 0 0 10px 0;
+        font-size: 2rem;
+    }
+
+    .summary-box p {
+        margin: 5px 0;
+        font-size: 1.1rem;
+    }
+
+    .city-selector {
+        background: white;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 3px 10px rgba(9, 82, 86, 0.1);
+        margin-bottom: 30px;
+    }
+
+    .period-selector {
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 3px 10px rgba(9, 82, 86, 0.1);
+        margin-bottom: 30px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        flex-wrap: wrap;
+    }
+
+    .period-selector label {
+        font-weight: 600;
+        color: #095256;
+        font-size: 1.1rem;
+    }
+
+    .period-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .period-btn {
+        padding: 10px 20px;
+        background: #e0f2f1;
+        border: 2px solid #087F8C;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-weight: 600;
+        color: #087F8C;
+    }
+
+    .period-btn:hover {
+        background: #087F8C;
+        color: white;
+        transform: translateY(-2px);
+    }
+
+    .period-btn.selected {
+        background: #087F8C;
+        color: white;
+    }
+
+    /* Dropdown/Autocomplete Styles */
+    .city-input-wrapper {
+        position: relative;
+        margin-bottom: 20px;
+    }
+
+    .city-input {
+        width: 100%;
+        padding: 15px 20px;
+        font-size: 1.1rem;
+        border: 2px solid #e0f2f1;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+        background: white;
+    }
+
+    .city-input:focus {
+        outline: none;
+        border-color: #087F8C;
+        box-shadow: 0 0 0 3px rgba(8, 127, 140, 0.1);
+    }
+
+    .city-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        max-height: 400px;
+        overflow-y: auto;
+        background: white;
+        border: 2px solid #087F8C;
+        border-radius: 10px;
+        margin-top: 5px;
+        box-shadow: 0 5px 20px rgba(9, 82, 86, 0.2);
+        z-index: 1000;
+        display: none;
+    }
+
+    .city-dropdown.active {
+        display: block;
+    }
+
+    .city-dropdown-section {
+        padding: 10px 0;
+        border-bottom: 1px solid #e0f2f1;
+    }
+
+    .city-dropdown-section:last-child {
+        border-bottom: none;
+    }
+
+    .city-dropdown-header {
+        padding: 8px 15px;
+        font-weight: 700;
+        color: #095256;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        background: #f8fffe;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .city-dropdown-item {
+        padding: 12px 20px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+        color: #095256;
+    }
+
+    .city-dropdown-item:hover {
+        background: #e0f2f1;
+    }
+
+    .city-dropdown-item.selected {
+        background: #087F8C;
+        color: white;
+        font-weight: 600;
+    }
+
+    .city-dropdown-item.hidden {
+        display: none;
+    }
+
+    .form-controls {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .submit-btn-small {
+        background: linear-gradient(135deg, #5AAA95, #86A873);
+        color: white;
+        padding: 12px 30px;
+        border: none;
+        border-radius: 50px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 3px 10px rgba(90, 170, 149, 0.3);
+    }
+
+    .submit-btn-small:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(90, 170, 149, 0.4);
+    }
+
+    @media (max-width: 768px) {
+        .form-controls {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .submit-btn-small {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1>🌧️ Environment Canada Weather Forecast</h1>
+        <p class="subtitle">Official precipitation forecast for Alberta cities</p>
+    </div>
+
+    {% if error_message %}
+    <div class="error-message">
+        ❌ {{ error_message }}
+    </div>
+    {% endif %}
+
+    <!-- Period Selector -->
+    <div class="period-selector">
+        <label>📅 Forecast Period:</label>
+        <div class="period-buttons">
+            <button type="button" class="period-btn {% if selected_days == 3 %}selected{% endif %}" 
+                    onclick="selectPeriod(3)">
+                3 Days
+            </button>
+            <button type="button" class="period-btn {% if selected_days == 5 %}selected{% endif %}" 
+                    onclick="selectPeriod(5)">
+                5 Days
+            </button>
+            <button type="button" class="period-btn {% if selected_days == 7 %}selected{% endif %}" 
+                    onclick="selectPeriod(7)">
+                7 Days
+            </button>
+            <button type="button" class="period-btn {% if selected_days == 10 %}selected{% endif %}" 
+                    onclick="selectPeriod(10)">
+                10 Days
+            </button>
+            <button type="button" class="period-btn {% if selected_days == 14 %}selected{% endif %}" 
+                    onclick="selectPeriod(14)">
+                14 Days
+            </button>
+        </div>
+    </div>
+
+    <!-- City Selector with Dropdown -->
+    <div class="city-selector">
+        <h3 style="color: #095256; margin-bottom: 15px;">📍 Select a City ({{ available_cities|length }} cities available)</h3>
+        
+        <form method="post" id="forecastForm">
+            {% csrf_token %}
+            <input type="hidden" name="city_name" id="city_name_input" value="{{ city_name }}">
+            <input type="hidden" name="days" id="days_input" value="{{ selected_days }}">
+            
+            <div class="form-controls">
+                <div class="city-input-wrapper" style="flex: 1; min-width: 300px;">
+                    <input 
+                        type="text" 
+                        class="city-input" 
+                        id="citySearchInput" 
+                        placeholder="🔍 Search or select a city..."
+                        value="{{ city_name }}"
+                        autocomplete="off"
+                        onfocus="showDropdown()"
+                    >
+                    
+                    <div class="city-dropdown" id="cityDropdown">
+                        {% for region, cities in cities_by_region.items %}
+                        <div class="city-dropdown-section">
+                            <div class="city-dropdown-header">{{ region }}</div>
+                            {% for city in cities %}
+                            <div class="city-dropdown-item {% if city == city_name %}selected{% endif %}" 
+                                 data-city="{{ city }}"
+                                 data-region="{{ region }}"
+                                 onclick="selectCity('{{ city }}')">
+                                {{ city }}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <button type="submit" class="submit-btn-small" id="submitBtn">
+                    <i class="fas fa-search"></i> Get Forecast
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {% if df_forecast %}
+    <!-- Summary -->
+    <div class="summary-box">
+        <h2>💧 {{ total_precip|floatformat:1 }} mm</h2>
+        <p>Total projected precipitation for {{ city_name }}</p>
+        <p style="font-size: 0.9rem; opacity: 0.9;">Next {{ df_forecast|length }} periods ({{ selected_days }} days)</p>
+    </div>
+
+    <!-- Forecast Cards -->
+    <div>
+        {% for forecast in df_forecast %}
+        <div class="forecast-card">
+            <div class="forecast-period">{{ forecast.Period }}</div>
+            <div class="forecast-date">{{ forecast.Date|date:"l, F d, Y" }}</div>
+            
+            <div class="forecast-stats">
+                <div class="stat-box">
+                    <div class="stat-label">🌡️ High</div>
+                    <div class="stat-value">
+                        {% if forecast.Temp_High is not None %}
+                            {{ forecast.Temp_High|floatformat:0 }}°C
+                        {% else %}
+                            <span style="font-size: 0.9rem; color: #999;">N/A</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-label">❄️ Low</div>
+                    <div class="stat-value">
+                        {% if forecast.Temp_Low is not None %}
+                            {{ forecast.Temp_Low|floatformat:0 }}°C
+                        {% else %}
+                            <span style="font-size: 0.9rem; color: #999;">N/A</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="stat-box {% if forecast.Precipitation_mm >= 10 %}precip-high{% elif forecast.Precipitation_mm >= 3 %}precip-medium{% else %}precip-low{% endif %}">
+                    <div class="stat-label">💧 Precipitation</div>
+                    <div class="stat-value">{{ forecast.Precipitation_mm|floatformat:1 }} mm</div>
+                </div>
+            </div>
+            
+            {% if forecast.Forecast %}
+            <div class="forecast-text">
+                {{ forecast.Forecast|safe }}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Download Button -->
+    <div style="text-align: center; margin-top: 30px;">
+        <button onclick="downloadForecastCSV()" class="submit-btn">
+            📥 Download Forecast as CSV
+        </button>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if df_forecast %}
+{{ df_forecast|json_script:"forecast-data" }}
+{% endif %}
+
+<script>
+// City dropdown functionality
+const cityInput = document.getElementById('citySearchInput');
+const cityDropdown = document.getElementById('cityDropdown');
+const cityNameInput = document.getElementById('city_name_input');
+
+// Show dropdown when input is focused
+function showDropdown() {
+    cityDropdown.classList.add('active');
+    filterCities();
+}
+
+// Hide dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.city-input-wrapper')) {
+        cityDropdown.classList.remove('active');
+    }
+});
+
+// Filter cities as user types
+cityInput.addEventListener('input', function() {
+    filterCities();
+    cityDropdown.classList.add('active');
+});
+
+function filterCities() {
+    const searchValue = cityInput.value.toLowerCase();
+    const sections = cityDropdown.querySelectorAll('.city-dropdown-section');
+    
+    sections.forEach(section => {
+        const items = section.querySelectorAll('.city-dropdown-item');
+        let visibleCount = 0;
+        
+        items.forEach(item => {
+            const cityName = item.getAttribute('data-city').toLowerCase();
+            
+            if (cityName.includes(searchValue)) {
+                item.classList.remove('hidden');
+                visibleCount++;
+            } else {
+                item.classList.add('hidden');
+            }
+        });
+        
+        // Hide section if no items are visible
+        if (visibleCount === 0) {
+            section.style.display = 'none';
+        } else {
+            section.style.display = 'block';
+        }
+    });
+}
+
+function selectCity(cityName) {
+    cityInput.value = cityName;
+    cityNameInput.value = cityName;
+    cityDropdown.classList.remove('active');
+    
+    // Update selected state
+    document.querySelectorAll('.city-dropdown-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    
+    event.target.classList.add('selected');
+    
+    // Auto-submit form
+    document.getElementById('forecastForm').submit();
+}
+
+function selectPeriod(days) {
+    document.getElementById('days_input').value = days;
+    
+    // Update button states
+    document.querySelectorAll('.period-btn').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    event.target.classList.add('selected');
+    
+    // Auto-submit
+    document.getElementById('forecastForm').submit();
+}
+
+function downloadForecastCSV() {
+    const forecastDataElement = document.getElementById('forecast-data');
+    if (!forecastDataElement) {
+        alert('No forecast data available');
+        return;
+    }
+    
+    const forecasts = JSON.parse(forecastDataElement.textContent);
+    
+    let csv = 'Date,Period,High (°C),Low (°C),Precipitation (mm),Forecast\n';
+    
+    forecasts.forEach(f => {
+        const date = new Date(f.Date).toISOString().split('T')[0];
+        const high = f.Temp_High || 'N/A';
+        const low = f.Temp_Low || 'N/A';
+        const precip = (f.Precipitation_mm || 0).toFixed(1);
+        const forecast = (f.Forecast || '').replace(/"/g, '""');
+        
+        csv += `"${date}","${f.Period}","${high}","${low}","${precip}","${forecast}"\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '{{ city_name }}_forecast_' + new Date().toISOString().split('T')[0] + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+
+// Keyboard navigation for dropdown
+cityInput.addEventListener('keydown', function(e) {
+    const visibleItems = Array.from(document.querySelectorAll('.city-dropdown-item:not(.hidden)'));
+    const currentIndex = visibleItems.findIndex(item => item.classList.contains('selected'));
+    
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (currentIndex < visibleItems.length - 1) {
+            if (currentIndex >= 0) visibleItems[currentIndex].classList.remove('selected');
+            visibleItems[currentIndex + 1].classList.add('selected');
+            visibleItems[currentIndex + 1].scrollIntoView({ block: 'nearest' });
+        }
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (currentIndex > 0) {
+            visibleItems[currentIndex].classList.remove('selected');
+            visibleItems[currentIndex - 1].classList.add('selected');
+            visibleItems[currentIndex - 1].scrollIntoView({ block: 'nearest' });
+        }
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (currentIndex >= 0) {
+            const cityName = visibleItems[currentIndex].getAttribute('data-city');
+            selectCity(cityName);
+        }
+    }
+});
+</script>
+{% endblock %}

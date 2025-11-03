@@ -39,5 +39,6 @@ path('comparison/', views.enhanced_comparison_calculator, name='comparison'),   
 
     path('api/location-search/', views.location_search_api, name='location_search_api'),
     path('update-comparison-plot/', views.update_comparison_plot, name='update_comparison_plot'),
+    path('env-canada-forecast/', views.env_canada_forecast_view, name='env_canada_forecast'),
 
 ]

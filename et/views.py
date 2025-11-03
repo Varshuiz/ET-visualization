@@ -18,6 +18,7 @@ import json
 import pandas as pd
 import numpy as np
 import io
+from io import StringIO
 from .alberta_acis_scraper import fetch_alberta_acis_data, AlbertaACISScraper
 
 
@@ -2360,7 +2361,7 @@ def acis_data_view(request):
 
 def comparison_with_acis(request):
     """
-    Enhanced ET calculator with ACIS data - NOW INCLUDING ACIS ET VALUES FOR COMPARISON
+    Enhanced ET calculator with ACIS data - INCLUDING ACIS ET VALUES FOR COMPARISON
     """
     et_data = None
     et_stats = None
@@ -2388,6 +2389,38 @@ def comparison_with_acis(request):
     unit_info = get_unit_info(selected_unit)
     forecast_data = get_lethbridge_forecast()
     
+    # NEW: Fetch Environment Canada forecast
+    env_canada_forecast = None
+    ec_city_name = None
+    try:
+        from .environment_canada_scraper import fetch_env_canada_forecast
+        
+        # Extract city name from location description
+        location_desc = location_info.get('description', '')
+        city_name = location_desc.split('(')[0].strip().split(',')[0]
+        
+        # Common city name mappings
+        city_mapping = {
+            'Twp': 'Calgary',
+            'Township': 'Calgary',
+        }
+        
+        # Use mapped name if needed
+        for key, value in city_mapping.items():
+            if key in city_name:
+                city_name = value
+                break
+        
+        # Fetch forecast
+        ec_df = fetch_env_canada_forecast(city_name, days=5)
+        env_canada_forecast = ec_df.to_dict('records')
+        ec_city_name = city_name
+        
+        print(f"✓ Environment Canada forecast fetched for {city_name}")
+        
+    except Exception as e:
+        print(f"Could not fetch Environment Canada forecast: {e}")
+    
     try:
         # Add day of year column for radiation calculations
         df['day_of_year'] = df['Date'].dt.dayofyear
@@ -2406,57 +2439,73 @@ def comparison_with_acis(request):
         # Assign solar radiation
         if 'Solar_Radiation' in df.columns:
             df['Rs'] = df['Solar_Radiation']
-        else:
+        elif 'Rs' not in df.columns:
             # Estimate if not available
             df['Rs'] = (df['Tmax'] - df['Tmin']) * 0.16 * np.sqrt(12)
         
         # Assign wind speed
         if 'Wind_Speed' in df.columns:
             df['u2'] = df['Wind_Speed']
-        else:
+        elif 'u2' not in df.columns:
             df['u2'] = 2.0  # Default
         
         # Assign relative humidity
-        if 'RH' in df.columns:
-            df['RH'] = df['RH']
-        else:
+        if 'RH' not in df.columns:
             df['RH'] = 65.0  # Default
         
         # Calculate extraterrestrial radiation
-        df['Ra'] = df.apply(lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), axis=1)
+        df['Ra'] = df.apply(
+            lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), 
+            axis=1
+        )
         
-        # Calculate ET using all four methods
-        try:
-            df['ET_PT'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Rs']), axis=1)
-        except Exception as e:
-            print(f"PT calculation failed: {e}")
-            df['ET_PT'] = np.nan
+        # Calculate ET using all four methods (only if not already present)
+        if 'ET_PT' not in df.columns:
+            try:
+                df['ET_PT'] = df.apply(
+                    lambda row: priestley_taylor_ET(row['Tavg'], row['Rs']), 
+                    axis=1
+                )
+            except Exception as e:
+                print(f"PT calculation failed: {e}")
+                df['ET_PT'] = np.nan
         
-        try:
-            df['ET_PM'] = df.apply(lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs']), axis=1)
-        except Exception as e:
-            print(f"PM calculation failed: {e}")
-            df['ET_PM'] = np.nan
+        if 'ET_PM' not in df.columns:
+            try:
+                df['ET_PM'] = df.apply(
+                    lambda row: penman_monteith_ET(
+                        row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs']
+                    ), 
+                    axis=1
+                )
+            except Exception as e:
+                print(f"PM calculation failed: {e}")
+                df['ET_PM'] = np.nan
         
-        try:
-            df['ET_Maule'] = df.apply(
-                lambda row: maule_ET(
-                    row['Tmax'], 
-                    row['Tmin'], 
-                    row['Rs'], 
-                    row['RH'] if not pd.isna(row['RH']) else None
-                ), 
-                axis=1
-            )
-        except Exception as e:
-            print(f"Maule calculation failed: {e}")
-            df['ET_Maule'] = np.nan
+        if 'ET_Maule' not in df.columns:
+            try:
+                df['ET_Maule'] = df.apply(
+                    lambda row: maule_ET(
+                        row['Tmax'], 
+                        row['Tmin'], 
+                        row['Rs'], 
+                        row['RH'] if not pd.isna(row['RH']) else None
+                    ), 
+                    axis=1
+                )
+            except Exception as e:
+                print(f"Maule calculation failed: {e}")
+                df['ET_Maule'] = np.nan
         
-        try:
-            df['ET_Hargreaves'] = df.apply(lambda row: hargreaves_ET(row['Tmax'], row['Tmin'], row['Ra']), axis=1)
-        except Exception as e:
-            print(f"Hargreaves calculation failed: {e}")
-            df['ET_Hargreaves'] = np.nan
+        if 'ET_Hargreaves' not in df.columns:
+            try:
+                df['ET_Hargreaves'] = df.apply(
+                    lambda row: hargreaves_ET(row['Tmax'], row['Tmin'], row['Ra']), 
+                    axis=1
+                )
+            except Exception as e:
+                print(f"Hargreaves calculation failed: {e}")
+                df['ET_Hargreaves'] = np.nan
         
         # KEEP ACIS ET if it exists
         has_acis_et = 'ET_ACIS' in df.columns and df['ET_ACIS'].notna().sum() > 0
@@ -2488,7 +2537,7 @@ def comparison_with_acis(request):
             'PM': 'Penman-Monteith', 
             'Maule': 'Maulé',  
             'Hargreaves': 'Hargreaves-Samani',
-            'ACIS': 'ACIS Reference'  # Add ACIS
+            'ACIS': 'ACIS Reference'
         }
         
         for method, name in method_names.items():
@@ -2516,8 +2565,10 @@ def comparison_with_acis(request):
         
         # Enhanced comparison statistics
         comparison_stats = {}
-        available_methods = [method for method in ['PT', 'PM', 'Maule', 'Hargreaves', 'ACIS'] 
-                           if f'ET_{method}' in df.columns and not df[f'ET_{method}'].isna().all()]
+        available_methods = [
+            method for method in ['PT', 'PM', 'Maule', 'Hargreaves', 'ACIS'] 
+            if f'ET_{method}' in df.columns and not df[f'ET_{method}'].isna().all()
+        ]
         
         if len(available_methods) >= 2:
             # Calculate correlations between methods
@@ -2533,14 +2584,18 @@ def comparison_with_acis(request):
                         comparison_stats['correlations'][key] = corr_matrix.iloc[i, j]
             
             # Calculate mean differences from ACIS if available, otherwise from PM
-            reference_method = 'ACIS' if 'ACIS' in available_methods else ('PM' if 'PM' in available_methods else None)
+            reference_method = 'ACIS' if 'ACIS' in available_methods else (
+                'PM' if 'PM' in available_methods else None
+            )
             
             if reference_method:
                 for method in available_methods:
                     if method != reference_method:
                         diff_mm = (df[f'ET_{method}'] - df[f'ET_{reference_method}']).mean()
                         if selected_unit == 'inches':
-                            comparison_stats[f'{method}_{reference_method}_diff'] = convert_units(diff_mm, 'mm', 'inches')
+                            comparison_stats[f'{method}_{reference_method}_diff'] = convert_units(
+                                diff_mm, 'mm', 'inches'
+                            )
                         else:
                             comparison_stats[f'{method}_{reference_method}_diff'] = diff_mm
         
@@ -2550,10 +2605,14 @@ def comparison_with_acis(request):
             growing_season_plots = create_growing_season_plots(df, 'ET_PM', selected_unit)
         elif available_methods:
             primary_method = available_methods[0]
-            growing_season_stats = calculate_growing_season_stats(df, f'ET_{primary_method}', selected_unit)
-            growing_season_plots = create_growing_season_plots(df, f'ET_{primary_method}', selected_unit)
+            growing_season_stats = calculate_growing_season_stats(
+                df, f'ET_{primary_method}', selected_unit
+            )
+            growing_season_plots = create_growing_season_plots(
+                df, f'ET_{primary_method}', selected_unit
+            )
         
-        # Create enhanced comparison plot with all available methods INCLUDING ACIS
+        # Create enhanced comparison plot
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12))
         fig.patch.set_facecolor('white')
         
@@ -2564,7 +2623,7 @@ def comparison_with_acis(request):
             'PM': '#087F8C', 
             'Maule': '#BB9F06',
             'Hargreaves': '#5AAA95',
-            'ACIS': '#FF6B6B'  # Red color for ACIS
+            'ACIS': '#FF6B6B'
         }
         
         for method in available_methods:
@@ -2573,9 +2632,13 @@ def comparison_with_acis(request):
             
             # Convert data for plotting if needed
             if selected_unit == 'inches':
-                plot_data = df[col].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                plot_data = df[col].apply(
+                    lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x
+                )
                 if smooth_col in df.columns:
-                    plot_data_smooth = df[smooth_col].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                    plot_data_smooth = df[smooth_col].apply(
+                        lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x
+                    )
                 else:
                     plot_data_smooth = plot_data
             else:
@@ -2584,27 +2647,38 @@ def comparison_with_acis(request):
             
             # Use thicker line and different style for ACIS
             if method == 'ACIS':
-                ax1.plot(df['Date'], plot_data_smooth, 
-                        label=f'{method_names[method]}', 
-                        color=colors[method], linewidth=3.5, alpha=1.0, linestyle='--')
+                ax1.plot(
+                    df['Date'], plot_data_smooth, 
+                    label=f'{method_names[method]}', 
+                    color=colors[method], linewidth=3.5, alpha=1.0, linestyle='--'
+                )
             else:
-                ax1.plot(df['Date'], plot_data, 
-                        label=f'{method_names[method]}', 
-                        color=colors[method], alpha=0.6, linewidth=1.5)
-                ax1.plot(df['Date'], plot_data_smooth, 
-                        color=colors[method], linewidth=2.5, alpha=0.9)
+                ax1.plot(
+                    df['Date'], plot_data, 
+                    label=f'{method_names[method]}', 
+                    color=colors[method], alpha=0.6, linewidth=1.5
+                )
+                ax1.plot(
+                    df['Date'], plot_data_smooth, 
+                    color=colors[method], linewidth=2.5, alpha=0.9
+                )
         
         # Add location info to title
         location_desc = location_info.get('description', 'ACIS Data')
-        ax1.set_title(f'Evapotranspiration Method Comparison - {location_desc}', 
-                     fontsize=16, fontweight='bold', color='#095256', pad=20)
+        ax1.set_title(
+            f'Evapotranspiration Method Comparison - {location_desc}', 
+            fontsize=16, fontweight='bold', color='#095256', pad=20
+        )
         ax1.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
-        ax1.set_ylabel(f'ET₀ ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
+        ax1.set_ylabel(
+            f'ET₀ ({unit_info["daily_label"]})', 
+            fontsize=12, fontweight='600', color='#095256'
+        )
         ax1.grid(True, alpha=0.3, color='#5AAA95')
         ax1.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
         ax1.tick_params(axis='x', rotation=45)
         
-        # Method differences from ACIS or Penman-Monteith
+        # Method differences plot
         ax2.set_facecolor('#f8fffe')
         reference_method = 'ACIS' if 'ACIS' in available_methods else 'PM'
         
@@ -2614,23 +2688,34 @@ def comparison_with_acis(request):
                     col = f'ET_{method}'
                     diff = df[f'ET_{reference_method}'] - df[col]
                     if selected_unit == 'inches':
-                        diff = diff.apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                        diff = diff.apply(
+                            lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x
+                        )
                     
-                    ax2.plot(df['Date'], diff, color=colors[method], linewidth=2, alpha=0.7, 
-                            label=f'{method_names[reference_method]} - {method_names[method]}')
+                    ax2.plot(
+                        df['Date'], diff, color=colors[method], linewidth=2, alpha=0.7, 
+                        label=f'{method_names[reference_method]} - {method_names[method]}'
+                    )
             
             ax2.axhline(y=0, color='#095256', linestyle='--', alpha=0.8)
             ref_name = 'ACIS Reference' if reference_method == 'ACIS' else 'Penman-Monteith'
-            ax2.set_title(f'Differences from {ref_name} (Reference Method)', 
-                         fontsize=14, fontweight='bold', color='#095256')
+            ax2.set_title(
+                f'Differences from {ref_name} (Reference Method)', 
+                fontsize=14, fontweight='bold', color='#095256'
+            )
             ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
-            ax2.set_ylabel(f'Difference ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
+            ax2.set_ylabel(
+                f'Difference ({unit_info["daily_label"]})', 
+                fontsize=12, fontweight='600', color='#095256'
+            )
             ax2.grid(True, alpha=0.3, color='#5AAA95')
             ax2.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=9)
             ax2.tick_params(axis='x', rotation=45)
         else:
-            ax2.text(0.5, 0.5, 'Difference plot requires a reference method', 
-                    ha='center', va='center', fontsize=14, color='#666')
+            ax2.text(
+                0.5, 0.5, 'Difference plot requires a reference method', 
+                ha='center', va='center', fontsize=14, color='#666'
+            )
             ax2.set_xlim(0, 1)
             ax2.set_ylim(0, 1)
             ax2.axis('off')
@@ -2639,8 +2724,10 @@ def comparison_with_acis(request):
         
         # Convert plot to base64
         buf = BytesIO()
-        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight',
-                   facecolor='white', edgecolor='none')
+        plt.savefig(
+            buf, format='png', dpi=150, bbox_inches='tight',
+            facecolor='white', edgecolor='none'
+        )
         buf.seek(0)
         plot_url = base64.b64encode(buf.read()).decode('utf-8')
         buf.close()
@@ -2650,7 +2737,7 @@ def comparison_with_acis(request):
         csv_columns = ['Date'] + [f'ET_{method}' for method in available_methods]
         request.session['et_data_csv'] = df[csv_columns].to_csv(index=False)
         
-        # CRITICAL FIX: Store the ET data (not raw weather data) for plot updates
+        # Store the ET data for plot updates
         request.session['acis_data'] = df[csv_columns].to_json(date_format='iso')
         
         # Prepare data for rendering with unit conversion
@@ -2690,10 +2777,11 @@ def comparison_with_acis(request):
         'acis_location': location_info,
         'has_acis_et': has_acis_et,
         'available_methods': available_methods,
+        'env_canada_forecast': env_canada_forecast,
+        'ec_city_name': ec_city_name,
     }
     
     return render(request, 'et/comparison.html', context)
-
 # Add this new view to your views.py
 
 def update_comparison_plot(request):
@@ -2853,3 +2941,209 @@ def update_comparison_plot(request):
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
+    
+
+def combine_day_night_forecasts(df_forecast):
+    """Combine daytime and nighttime forecasts into single daily forecasts"""
+    # Handle None or empty input
+    if df_forecast is None or len(df_forecast) == 0:
+        return []
+    
+    combined = []
+    i = 0
+    
+    while i < len(df_forecast):
+        current = df_forecast[i]
+        
+        # Skip alerts and current conditions
+        period_lower = current['Period'].lower()
+        if 'watch' in period_lower or 'warning' in period_lower or 'current conditions' in period_lower:
+            i += 1
+            continue
+        
+        # Check if this is a daytime forecast (doesn't contain "night")
+        if 'night' not in period_lower:
+            # Look ahead for the corresponding night forecast
+            if i + 1 < len(df_forecast):
+                next_forecast = df_forecast[i + 1]
+                
+                # Check if next entry is the night forecast for the same day
+                if 'night' in next_forecast['Period'].lower():
+                    # Extract day name from period (e.g., "Thursday: Mainly sunny. High 9." -> "Thursday")
+                    day_name = current['Period'].split(':')[0] if ':' in current['Period'] else current['Period'].split('.')[0]
+                    
+                    # Combine day and night descriptions
+                    day_desc = current['Forecast'].split('Forecast issued')[0].strip()
+                    night_desc = next_forecast['Forecast'].split('Forecast issued')[0].strip()
+                    
+                    # Combine them
+                    combined.append({
+                        'Date': current['Date'],
+                        'Period': day_name,  # Just the day name (e.g., "Thursday")
+                        'Temp_High': current['Temp_High'],
+                        'Temp_Low': next_forecast['Temp_Low'],
+                        'Precipitation_mm': current['Precipitation_mm'] + next_forecast['Precipitation_mm'],
+                        'Forecast': f"<strong>Day:</strong> {day_desc}<br><br><strong>Night:</strong> {night_desc}"
+                    })
+                    i += 2  # Skip both day and night entries
+                else:
+                    # Next entry is not night, just add current day
+                    combined.append(current)
+                    i += 1
+            else:
+                # No more entries, just add current
+                combined.append(current)
+                i += 1
+        else:
+            # This is a standalone night forecast (shouldn't happen normally, but handle it)
+            combined.append(current)
+            i += 1
+    
+    return combined
+
+def env_canada_forecast_view(request):
+    """
+    Standalone view to display Environment Canada precipitation forecast
+    """
+    from .environment_canada_scraper import fetch_env_canada_forecast, EnvironmentCanadaScraper
+    import pandas as pd
+    import numpy as np
+    import math
+    
+    error_message = None
+    df_forecast = None
+    city_name = 'Calgary'  # Default
+    selected_days = 5  # Default
+
+    # Get available cities
+    scraper = EnvironmentCanadaScraper()
+    all_cities = sorted(scraper.LOCATION_CODES.keys())
+    
+    # Organize cities by region
+    cities_by_region = {
+        'Major Cities': ['Calgary', 'Edmonton', 'Lethbridge', 'Red Deer', 'Medicine Hat', 
+                        'Grande Prairie', 'Fort McMurray'],
+        'Central Alberta': ['Airdrie', 'St. Albert', 'Spruce Grove', 'Camrose', 'Okotoks', 
+                           'Cochrane', 'Strathmore', 'Leduc', 'Stony Plain', 'Beaumont',
+                           'Fort Saskatchewan', 'Wetaskiwin', 'Sylvan Lake', 'Drumheller',
+                           'Olds', 'Innisfail', 'Ponoka', 'Lacombe', 'Rimbey', 
+                           'Rocky Mountain House'],
+        'Southern Alberta': ['Brooks', 'Taber', 'Vauxhall', 'Coaldale', 'Picture Butte',
+                            'Vulcan', 'Claresholm', 'Pincher Creek', 'Cardston',
+                            'Fort Macleod', 'Blairmore', 'Crowsnest Pass', 'High River'],
+        'Northern Alberta': ['Peace River', 'Slave Lake', 'Whitecourt', 'Hinton', 
+                            'High Level', 'Fort Chipewyan', 'Rainbow Lake', 'Athabasca',
+                            'Barrhead', 'Westlock', 'Mayerthorpe'],
+        'Eastern Alberta': ['Lloydminster', 'Cold Lake', 'Vegreville', 'Vermilion',
+                           'Wainwright', 'Provost', 'Coronation', 'Hanna', 'Oyen',
+                           'Bonnyville', 'St. Paul', 'Lac La Biche'],
+        'Mountain Towns': ['Banff', 'Jasper', 'Canmore'],
+        'West-Central Alberta': ['Edson', 'Drayton Valley'],
+    }
+    
+    # Filter to only include cities that exist in our codes
+    cities_by_region = {
+        region: [city for city in cities if city in scraper.LOCATION_CODES]
+        for region, cities in cities_by_region.items()
+    }
+    
+    if request.method == 'POST':
+        city_name = request.POST.get('city_name', 'Calgary').strip()
+        selected_days = int(request.POST.get('days', 5))
+        
+        try:
+            df = fetch_env_canada_forecast(city_name, selected_days)
+            
+            # DEBUG: Print what we got from scraper
+            print(f"\n{'='*80}")
+            print(f"Raw DataFrame from scraper for {city_name}")
+            print(f"{'='*80}")
+            for idx, row in df.iterrows():
+                print(f"Row {idx}: Period={row['Period']}, High={row['Temp_High']}, Low={row['Temp_Low']}, Type High={type(row['Temp_High'])}, Type Low={type(row['Temp_Low'])}")
+            print(f"{'='*80}\n")
+            
+            # Helper function to safely check and convert temperature values
+            def safe_temp_convert(value):
+                """Convert temperature value to float or None"""
+                # Check if value is None
+                if value is None:
+                    return None
+                
+                # Check if it's a pandas NA
+                if pd.isna(value):
+                    return None
+                
+                # Check if it's a numpy nan
+                if isinstance(value, float):
+                    if math.isnan(value):
+                        return None
+                    else:
+                        return float(value)
+                
+                # Try to convert to float
+                try:
+                    temp_float = float(value)
+                    if math.isnan(temp_float):
+                        return None
+                    return temp_float
+                except (ValueError, TypeError):
+                    return None
+            
+            # Convert to records for template
+            df_forecast = []
+            for idx, row in df.iterrows():
+                temp_high = safe_temp_convert(row['Temp_High'])
+                temp_low = safe_temp_convert(row['Temp_Low'])
+                precip = safe_temp_convert(row['Precipitation_mm'])
+                
+                forecast_dict = {
+                    'Date': row['Date'],
+                    'Period': row['Period'],
+                    'Temp_High': temp_high,
+                    'Temp_Low': temp_low,
+                    'Precipitation_mm': precip if precip is not None else 0.0,
+                    'Forecast': str(row['Forecast']) if row['Forecast'] else ''
+                }
+                
+                # DEBUG: Print converted values
+                print(f"Converted Row {idx}: High={forecast_dict['Temp_High']}, Low={forecast_dict['Temp_Low']}")
+                
+                df_forecast.append(forecast_dict)
+            
+            # Calculate total precipitation
+            total_precip = sum([f['Precipitation_mm'] for f in df_forecast])
+            
+            print(f"\n✓ Created {len(df_forecast)} forecast records")
+            print(f"✓ Total precipitation: {total_precip:.1f} mm\n")
+            if df_forecast:
+                df_forecast_combined = combine_day_night_forecasts(df_forecast)
+            else:
+                df_forecast_combined = []
+            context = {
+                'city_name': city_name,
+                'selected_days': selected_days,
+                'df_forecast': df_forecast,
+                'total_precip': total_precip,
+                'available_cities': all_cities,
+                'cities_by_region': cities_by_region,
+            }
+            
+            return render(request, 'et/env_canada_forecast.html', context)
+            
+        except Exception as e:
+            import traceback
+            print(f"\n{'='*80}")
+            print(f"ERROR in env_canada_forecast_view:")
+            print(traceback.format_exc())
+            print(f"{'='*80}\n")
+            error_message = f"Error fetching forecast: {str(e)}"
+
+    context = {
+        'error_message': error_message,
+        'city_name': city_name,
+        'selected_days': selected_days,
+        'available_cities': all_cities,
+        'cities_by_region': cities_by_region,
+    }
+    
+    return render(request, 'et/env_canada_forecast.html', context)
