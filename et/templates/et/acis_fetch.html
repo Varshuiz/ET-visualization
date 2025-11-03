@@ -1,14 +1,16 @@
 {% extends 'et/base.html' %}
 
-{% block title %}Fetch Weather Data - ACIS{% endblock %}
+{% block title %}Fetch Weather Data - Alberta ACIS{% endblock %}
 
 {% block extra_css %}
 <style>
+    
     .location-toggle {
         display: flex;
         gap: 10px;
         margin-bottom: 20px;
         justify-content: center;
+        flex-wrap: wrap;
     }
 
     .location-toggle button {
@@ -86,6 +88,67 @@
         margin-bottom: 10px;
     }
 
+
+
+    .method-comparison {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+    }
+
+    .method-card {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        border: 2px solid transparent;
+        transition: all 0.3s ease;
+    }
+
+    .method-card.best {
+        border-color: #28a745;
+        background: #f0fff4;
+    }
+
+    .method-card.good {
+        border-color: #5AAA95;
+        background: #f8fffd;
+    }
+
+    .method-card.caution {
+        border-color: #ffc107;
+        background: #fffef5;
+    }
+
+    .method-card h4 {
+        margin: 0 0 8px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .badge {
+        font-size: 0.75rem;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-weight: 600;
+    }
+
+    .badge.best {
+        background: #28a745;
+        color: white;
+    }
+
+    .badge.good {
+        background: #5AAA95;
+        color: white;
+    }
+
+    .badge.caution {
+        background: #ffc107;
+        color: #333;
+    }
+
     .preview-table {
         width: 100%;
         border-collapse: collapse;
@@ -119,6 +182,42 @@
         padding: 15px;
         border-radius: 10px;
         margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .station-info {
+        background: #e3f2fd;
+        border-left: 4px solid #2196F3;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 15px 0;
+    }
+
+    .station-info strong {
+        color: #1976D2;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 20px;
+        background: #fff3cd;
+        border-radius: 10px;
+        margin-top: 20px;
+        font-weight: 600;
+        color: #856404;
+    }
+
+    .loading::after {
+        content: '...';
+        animation: dots 1.5s steps(4, end) infinite;
+    }
+
+    @keyframes dots {
+        0%, 20% { content: '.'; }
+        40% { content: '..'; }
+        60%, 100% { content: '...'; }
     }
 </style>
 {% endblock %}
@@ -126,21 +225,31 @@
 {% block content %}
 <div class="container">
     <div class="page-header">
-        <h1>🌐 Enter Your Location</h1>
-        <p class="subtitle">Get historical weather data using ACIS (Alberta Climate Information Service)</p>
+        <h1>🌐 Fetch Weather Data from Alberta ACIS</h1>
+        <p class="subtitle">Get historical weather data with Reference Evapotranspiration</p>
     </div>
 
     <div class="info-box">
-        <h3>📍 About ACIS Data</h3>
+        <h3>📍 About Alberta ACIS Data</h3>
         <p>
-            ACIS provides high-quality gridded weather data for North America. 
-            You can fetch historical weather data by township/range (Alberta system) 
-            or by latitude/longitude coordinates.
+            The <strong>Alberta Climate Information Service (ACIS)</strong> provides high-quality weather data 
+            from agricultural weather stations across Alberta. This tool automatically fetches:
         </p>
-        <p style="margin-top: 10px;">
-            <strong>Available data:</strong> Temperature (max/min/avg), Solar Radiation, 
-            Relative Humidity, and Precipitation
+        <ul style="margin-top: 10px; margin-left: 20px;">
+            <li>✅ <strong>Temperature</strong> (max/min/average)</li>
+            <li>✅ <strong>Precipitation</strong> (daily rainfall)</li>
+            <li>✅ <strong>Relative Humidity</strong> (for accurate calculations)</li>
+            <li>✅ <strong>Wind Speed</strong> (at 10m height, converted to 2m)</li>
+            <li>✅ <strong>Reference ET</strong> (official ACIS calculation for comparison)</li>
+        </ul>
+        <p style="margin-top: 10px; color: #666;">
+            <strong>Note:</strong> Agricultural stations (AGDM) like Brooks, Vauxhall, and Taber 
+            have the most complete datasets including Reference ET.
         </p>
+    </div>
+
+
+        </div>
     </div>
 
     {% if error_message %}
@@ -151,7 +260,8 @@
 
     {% if success_message %}
     <div class="success-message">
-        ✓ {{ success_message }}
+        <span style="font-size: 1.5rem;">✓</span>
+        <span>{{ success_message }}</span>
     </div>
     {% endif %}
 
@@ -165,10 +275,10 @@
                     📍 Place Name
                 </button>
                 <button type="button" data-target="township">
-                    Alberta Township/Range
+                    🗺️ Township/Range
                 </button>
                 <button type="button" data-target="coordinates">
-                    Latitude/Longitude
+                    🧭 Coordinates
                 </button>
             </div>
 
@@ -178,7 +288,7 @@
                 <div class="form-field">
                     <label for="place_name">Enter City or Town Name</label>
                     <input type="text" id="place_name" name="place_name" 
-                           placeholder="e.g., Lethbridge, Calgary, Edmonton..."
+                           placeholder="e.g., Brooks, Vauxhall, Lethbridge..."
                            list="popular_locations"
                            autocomplete="off">
                     <datalist id="popular_locations">
@@ -187,13 +297,10 @@
                         {% endfor %}
                     </datalist>
                 </div>
-                <p style="color: #666; font-size: 0.9rem; margin-top: 10px;">
-                    💡 Try: Calgary, Lethbridge, Red Deer, Medicine Hat, Brooks, etc.
-                </p>
-                
+        
                 {% if location_result %}
-                <div style="background: #e0f2f1; padding: 15px; border-radius: 10px; margin-top: 15px;">
-                    <strong>📍 Found:</strong> {{ location_result.place_name }}<br>
+                <div class="station-info">
+                    <strong>📍 Location Found:</strong> {{ location_result.place_name }}<br>
                     <small>Coordinates: {{ location_result.latitude|floatformat:4 }}°N, {{ location_result.longitude|floatformat:4 }}°W</small>
                     {% if location_result.township %}
                     <br><small>Township {{ location_result.township }}, Range {{ location_result.range }}, {{ location_result.meridian }} Meridian</small>
@@ -203,57 +310,63 @@
             </div>
 
             <!-- Township/Range Input -->
-            <div class="input-section active" id="township-section">
-                <h3 style="color: #095256; margin-bottom: 15px;">Alberta Township/Range</h3>
+            <div class="input-section" id="township-section">
+                <h3 style="color: #095256; margin-bottom: 15px;">🗺️ Alberta Township/Range System</h3>
                 <div class="form-grid">
                     <div class="form-field">
                         <label for="township">Township Number</label>
                         <input type="number" id="township" name="township" 
-                               placeholder="e.g., 49" min="1" max="126">
+                               placeholder="e.g., 19" min="1" max="126">
                     </div>
                     <div class="form-field">
                         <label for="range">Range Number</label>
                         <input type="number" id="range" name="range" 
-                               placeholder="e.g., 25" min="1" max="34">
+                               placeholder="e.g., 14" min="1" max="34">
                     </div>
                     <div class="form-field">
                         <label for="meridian">Meridian</label>
                         <select id="meridian" name="meridian">
-                            <option value="4th">4th Meridian</option>
-                            <option value="5th">5th Meridian</option>
-                            <option value="6th">6th Meridian</option>
+                            <option value="4th">4th Meridian (Western Alberta)</option>
+                            <option value="5th">5th Meridian (Central Alberta)</option>
+                            <option value="6th">6th Meridian (Eastern Alberta)</option>
                         </select>
                     </div>
                 </div>
-                <p style="color: #666; font-size: 0.9rem; margin-top: 10px;">
-                    📌 Example: Lethbridge area is Township 9, Range 22, 4th Meridian
-                </p>
+                <div style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 0.9rem;">
+                    <strong>📌 Examples:</strong><br>
+                    • Brooks: Township 19, Range 14, 4th Meridian<br>
+                    • Lethbridge: Township 9, Range 22, 4th Meridian<br>
+                    • Calgary: Township 24, Range 1, 5th Meridian
+                </div>
             </div>
 
             <!-- Lat/Lon Input -->
             <div class="input-section" id="coordinates-section">
-                <h3 style="color: #095256; margin-bottom: 15px;">Coordinates</h3>
+                <h3 style="color: #095256; margin-bottom: 15px;">🧭 Geographic Coordinates</h3>
                 <div class="form-grid">
                     <div class="form-field">
-                        <label for="latitude">Latitude</label>
+                        <label for="latitude">Latitude (49-60°N)</label>
                         <input type="number" id="latitude" name="latitude" 
-                               step="0.0001" placeholder="e.g., 49.7" 
+                               step="0.0001" placeholder="e.g., 50.5644" 
                                min="49" max="60">
                     </div>
                     <div class="form-field">
-                        <label for="longitude">Longitude</label>
+                        <label for="longitude">Longitude (-120 to -110°W)</label>
                         <input type="number" id="longitude" name="longitude" 
-                               step="0.0001" placeholder="e.g., -112.8" 
+                               step="0.0001" placeholder="e.g., -111.8986" 
                                min="-120" max="-110">
                     </div>
                 </div>
-                <p style="color: #666; font-size: 0.9rem; margin-top: 10px;">
-                    📌 Example: Lethbridge is 49.6942°N, 112.8328°W (enter as -112.8328)
-                </p>
+                <div style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 0.9rem;">
+                    <strong>📌 Examples:</strong><br>
+                    • Brooks: 50.5644°N, -111.8986°W<br>
+                    • Lethbridge: 49.6942°N, -112.8328°W<br>
+                    • Calgary: 51.0486°N, -114.0708°W
+                </div>
             </div>
 
             <!-- Date Range -->
-            <h3 style="color: #095256; margin: 30px 0 15px 0;">Date Range</h3>
+            <h3 style="color: #095256; margin: 30px 0 15px 0;">📅 Date Range</h3>
             <div class="form-grid">
                 <div class="form-field">
                     <label for="start_date">Start Date</label>
@@ -264,15 +377,22 @@
                     <input type="date" id="end_date" name="end_date" required>
                 </div>
             </div>
+            <div style="background: #fff3cd; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 0.85rem;">
+                <strong>⏱️ Note:</strong> Maximum 2 years of data per request. 
+                Growing season (May-October) recommended for ET calculations.
+            </div>
 
             <input type="hidden" name="location_type" id="location_type" value="place">
 
             <button type="submit" class="submit-btn" style="margin-top: 30px;">
-                🌐 Fetch Weather Data
+                🌐 Fetch Weather Data from Alberta ACIS
             </button>
 
             <div class="loading" id="loading" style="display: none;">
-                Fetching data from ACIS... This may take a few moments...
+                <div>🔄 Fetching data from Alberta ACIS</div>
+                <div style="font-size: 0.9rem; margin-top: 10px; font-weight: normal;">
+                    This may take 10-30 seconds...
+                </div>
             </div>
         </form>
     </div>
@@ -286,8 +406,10 @@
                     <th>Date</th>
                     <th>Tmax (°C)</th>
                     <th>Tmin (°C)</th>
-                    <th>Solar Rad (MJ/m²/day)</th>
+                    <th>Precip (mm)</th>
                     <th>RH (%)</th>
+                    <th>Wind (m/s)</th>
+                    <th>ET ACIS (mm)</th>
                 </tr>
             </thead>
             <tbody>
@@ -296,8 +418,10 @@
                     <td>{{ row.Date|date:"Y-m-d" }}</td>
                     <td>{{ row.Tmax|floatformat:1 }}</td>
                     <td>{{ row.Tmin|floatformat:1 }}</td>
-                    <td>{{ row.Solar_Radiation|floatformat:1 }}</td>
-                    <td>{{ row.RH|floatformat:0 }}</td>
+                    <td>{{ row.Precipitation|floatformat:1|default:"--" }}</td>
+                    <td>{{ row.RH|floatformat:0|default:"--" }}</td>
+                    <td>{{ row.Wind_Speed|floatformat:1|default:"--" }}</td>
+                    <td><strong>{{ row.ET_ACIS|floatformat:2|default:"--" }}</strong></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -305,7 +429,7 @@
         
         <div style="text-align: center; margin-top: 30px;">
             <a href="{% url 'et:comparison_with_acis' %}" class="submit-btn" style="display: inline-block; text-decoration: none;">
-                Calculate ET with this Data →
+                📈 Calculate & Compare ET Methods →
             </a>
         </div>
     </div>
@@ -346,16 +470,12 @@ document.addEventListener('DOMContentLoaded', function() {
         loading.style.display = 'block';
     });
     
-    // Set default dates (last growing season)
+    // Set default dates to last growing season (June)
     const today = new Date();
-    const endDate = new Date(today.getFullYear(), 9, 31); // Oct 31
-    const startDate = new Date(today.getFullYear(), 4, 1); // May 1
+    const year = today.getMonth() < 6 ? today.getFullYear() - 1 : today.getFullYear();
     
-    // If we're past Oct 31, use last year
-    if (today > endDate) {
-        endDate.setFullYear(today.getFullYear() - 1);
-        startDate.setFullYear(today.getFullYear() - 1);
-    }
+    const startDate = new Date(year, 5, 1); // June 1
+    const endDate = new Date(year, 5, 10); // June 10
     
     document.getElementById('start_date').valueAsDate = startDate;
     document.getElementById('end_date').valueAsDate = endDate;

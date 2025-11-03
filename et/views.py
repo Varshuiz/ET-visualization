@@ -18,6 +18,8 @@ import json
 import pandas as pd
 import numpy as np
 import io
+from .alberta_acis_scraper import fetch_alberta_acis_data, AlbertaACISScraper
+
 
 # Unit conversion constants
 MM_TO_INCHES = 0.0393701
@@ -1826,12 +1828,13 @@ def location_search_api(request):
 
 def acis_data_view(request):
     """
-    View for fetching ACIS data - now with location search!
+    View for fetching ACIS data - NOW WITH WEB SCRAPING from Alberta ACIS!
     """
     error_message = None
     df_preview = None
     success_message = None
     location_result = None
+    scraping = False
     
     selected_unit = request.GET.get('unit', 'mm')
     if selected_unit not in ['mm', 'inches']:
@@ -1843,7 +1846,30 @@ def acis_data_view(request):
         try:
             location_type = request.POST.get('location_type', 'place')
             
-            # NEW: Place Name Search
+            # Get date range first
+            start_date = request.POST.get('start_date', '').strip()
+            end_date = request.POST.get('end_date', '').strip()
+            
+            if not start_date or not end_date:
+                raise ValueError("Please provide both start and end dates")
+            
+            # Validate dates
+            try:
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+                
+                if end_dt < start_dt:
+                    raise ValueError("End date must be after start date")
+                
+                if (end_dt - start_dt).days > 730:  # 2 years max
+                    raise ValueError("Date range cannot exceed 2 years")
+                
+            except ValueError as e:
+                if "does not match format" in str(e):
+                    raise ValueError("Invalid date format")
+                raise
+            
+            # Determine location
             if location_type == 'place':
                 place_name = request.POST.get('place_name', '').strip()
                 
@@ -1858,66 +1884,174 @@ def acis_data_view(request):
                 
                 latitude = location_result['latitude']
                 longitude = location_result['longitude']
+                station_name = location_result['place_name']
                 location_desc = location_result['place_name']
                 
-                # If we have township info, add it
                 if location_result.get('township'):
                     location_desc += f" (Twp {location_result['township']}, Rge {location_result['range']}, {location_result['meridian']} Meridian)"
             
-            # Township/Range
             elif location_type == 'township':
-                township = int(request.POST.get('township'))
-                range_val = int(request.POST.get('range'))
+                township_str = request.POST.get('township', '').strip()
+                range_str = request.POST.get('range', '').strip()
+                
+                if not township_str or not range_str:
+                    raise ValueError("Please enter both Township and Range numbers")
+                
+                try:
+                    township = int(township_str)
+                    range_val = int(range_str)
+                except ValueError:
+                    raise ValueError("Township and Range must be numbers")
+                
                 meridian = request.POST.get('meridian', '4th')
                 
                 latitude, longitude = get_coordinates_from_township(township, range_val, meridian)
-                location_desc = f"Township {township}, Range {range_val}, {meridian} Meridian"
                 
-                # Try to get place name
-                place_name = reverse_geocode(latitude, longitude)
-                if place_name:
-                    location_desc += f" ({place_name.split(',')[0]})"
+                # Find nearest station
+                station_result = find_nearest_alberta_station(latitude, longitude)
+                if station_result:
+                    station_name = station_result['name']
+                    location_desc = f"Township {township}, Range {range_val}, {meridian} Meridian (Nearest: {station_name})"
+                else:
+                    raise ValueError("No weather station found near this location")
             
-            # Coordinates
-            else:
-                latitude = float(request.POST.get('latitude'))
-                longitude = float(request.POST.get('longitude'))
+            else:  # coordinates
+                lat_str = request.POST.get('latitude', '').strip()
+                lon_str = request.POST.get('longitude', '').strip()
                 
-                place_name = reverse_geocode(latitude, longitude)
-                location_desc = place_name if place_name else f"{latitude}°N, {abs(longitude)}°W"
+                if not lat_str or not lon_str:
+                    raise ValueError("Please enter both latitude and longitude")
+                
+                try:
+                    latitude = float(lat_str)
+                    longitude = float(lon_str)
+                except ValueError:
+                    raise ValueError("Latitude and longitude must be valid numbers")
+                
+                if not (49 <= latitude <= 60):
+                    raise ValueError("Latitude must be between 49 and 60 for Alberta")
+                if not (-120 <= longitude <= -110):
+                    raise ValueError("Longitude must be between -120 and -110 for Alberta")
+                
+                # Find nearest station
+                station_result = find_nearest_alberta_station(latitude, longitude)
+                if station_result:
+                    station_name = station_result['name']
+                    location_desc = f"{latitude}°N, {abs(longitude)}°W (Nearest: {station_name})"
+                else:
+                    raise ValueError("No weather station found near this location")
             
-            # Get date range
-            start_date = request.POST.get('start_date')
-            end_date = request.POST.get('end_date')
-            
-            if not start_date or not end_date:
-                raise ValueError("Please provide both start and end dates")
-            
-            print(f"Fetching data for {location_desc}")
-            print(f"Coordinates: {latitude}, {longitude}")
+            print(f"\n{'='*60}")
+            print(f"FETCHING DATA FROM ALBERTA ACIS")
+            print(f"{'='*60}")
+            print(f"Location: {location_desc}")
+            print(f"Station: {station_name}")
             print(f"Date range: {start_date} to {end_date}")
+            print(f"{'='*60}\n")
             
-            # Fetch data using robust method
-            df = fetch_acis_data(latitude, longitude, start_date, end_date)
+            # Set scraping flag
+            scraping = True
             
-            # Store in session
-            request.session['acis_data'] = df.to_json(date_format='iso')
-            request.session['acis_location'] = {
-                'latitude': latitude,
-                'longitude': longitude,
-                'start_date': start_date,
-                'end_date': end_date,
-                'description': location_desc
-            }
-            
-            # Preview
-            df_preview = df.head(10).to_dict('records')
-            success_message = f"✓ Successfully fetched {len(df)} days of weather data for {location_desc}!"
-            
+            # Fetch data using web scraper
+            try:
+                df = fetch_alberta_acis_data(station_name, start_date, end_date)
+                
+                # Validate data
+                if df is None or len(df) == 0:
+                    raise ValueError("No data returned from Alberta ACIS")
+                
+                # Check if we have ET data
+                has_et = 'ET_ACIS' in df.columns and df['ET_ACIS'].notna().sum() > 0
+                
+                if not has_et:
+                    print("⚠ Warning: Reference ET not found in data")
+                    print(f"Available columns: {df.columns.tolist()}")
+                
+                # Ensure we have required columns
+                required_cols = ['Date', 'Tmax', 'Tmin']
+                missing_cols = [col for col in required_cols if col not in df.columns]
+                
+                if missing_cols:
+                    raise ValueError(f"Missing required columns: {missing_cols}")
+                
+                # Calculate derived variables
+                if 'Tavg' not in df.columns:
+                    df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
+                
+                # Add day of year for radiation calculations
+                df['day_of_year'] = df['Date'].dt.dayofyear
+                
+                # Calculate extraterrestrial radiation
+                df['Ra'] = df.apply(
+                    lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), 
+                    axis=1
+                )
+                
+                # Estimate solar radiation if not provided
+                if 'Solar_Radiation' not in df.columns:
+                    temp_range = (df['Tmax'] - df['Tmin']).clip(lower=1)
+                    kRs = 0.16
+                    df['Solar_Radiation'] = kRs * np.sqrt(temp_range) * df['Ra']
+                    df['Solar_Radiation'] = df['Solar_Radiation'].clip(3, 40)
+                
+                df['Rs'] = df['Solar_Radiation']
+                
+                # Add defaults for RH and wind if not present
+                if 'RH' not in df.columns:
+                    df['RH'] = 65.0
+                if 'Wind_Speed' not in df.columns:
+                    df['Wind_Speed'] = 2.0
+                
+                df['u2'] = df['Wind_Speed']
+                
+                # Clean up
+                df = df.drop('day_of_year', axis=1, errors='ignore')
+                
+                print(f"\n✓ Successfully fetched {len(df)} days of data")
+                print(f"  Temperature range: {df['Tmax'].min():.1f}°C to {df['Tmax'].max():.1f}°C")
+                
+                if has_et:
+                    et_valid = df['ET_ACIS'].notna().sum()
+                    print(f"  Reference ET: {et_valid} valid values")
+                    print(f"  ET range: {df['ET_ACIS'].min():.2f} to {df['ET_ACIS'].max():.2f} mm/day")
+                
+                # Store in session
+                request.session['acis_data'] = df.to_json(date_format='iso')
+                request.session['acis_location'] = {
+                    'latitude': latitude,
+                    'longitude': longitude,
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'description': location_desc,
+                    'station': station_name
+                }
+                
+                # Preview
+                df_preview = df.head(10).to_dict('records')
+                success_message = f"✓ Successfully fetched {len(df)} days of weather data from Alberta ACIS!"
+                
+                if has_et:
+                    success_message += f" Including {et_valid} days of Reference ET values."
+                
+            except Exception as scrape_error:
+                print(f"\n✗ Web scraping failed: {scrape_error}")
+                print("\nFalling back to manual CSV upload...")
+                
+                error_message = (
+                    f"Automatic data fetch failed: {str(scrape_error)}\n\n"
+                    f"Please manually download data from Alberta ACIS:\n"
+                    f"1. Go to https://acis.alberta.ca/acis/weather-data-viewer.jsp\n"
+                    f"2. Select station: {station_name}\n"
+                    f"3. Date range: {start_date} to {end_date}\n"
+                    f"4. Ensure 'Reference ET' is selected\n"
+                    f"5. Download CSV and upload it below"
+                )
+                
         except ValueError as e:
             error_message = str(e)
+            print(f"ValueError: {e}")
         except Exception as e:
-            error_message = f"Error: {str(e)}"
+            error_message = f"Unexpected error: {str(e)}"
             print(f"Full error: {e}")
             import traceback
             traceback.print_exc()
@@ -1929,326 +2063,60 @@ def acis_data_view(request):
         'location_result': location_result,
         'selected_unit': selected_unit,
         'unit_info': unit_info,
-        'popular_locations': list(ALBERTA_LOCATIONS.keys())[:20]  # Top 20 cities
+        'popular_locations': list(ALBERTA_LOCATIONS.keys())[:20],
+        'scraping': scraping
     }
     
     return render(request, 'et/acis_fetch.html', context)
-def fetch_acis_data(latitude, longitude, start_date, end_date):
+
+
+def find_nearest_alberta_station(latitude, longitude):
     """
-    Fetch weather data with multiple fallback strategies
+    Find nearest Alberta ACIS weather station to given coordinates
     """
     
-    # Try Method 1: PRISM Grid
-    try:
-        print("Attempting PRISM grid data...")
-        return fetch_prism_grid(latitude, longitude, start_date, end_date)
-    except Exception as e:
-        print(f"PRISM failed: {e}")
-    
-    # Try Method 2: nClimGrid
-    try:
-        print("Attempting nClimGrid data...")
-        return fetch_nclimgrid(latitude, longitude, start_date, end_date)
-    except Exception as e:
-        print(f"nClimGrid failed: {e}")
-    
-    # Try Method 3: Find nearest station
-    try:
-        print("Attempting station data...")
-        return fetch_nearest_station(latitude, longitude, start_date, end_date)
-    except Exception as e:
-        print(f"Station data failed: {e}")
-    
-    # Method 4: Generate synthetic data based on normals
-    print("Generating synthetic data from climate normals...")
-    return generate_synthetic_data(latitude, longitude, start_date, end_date)
-
-def fetch_prism_grid(latitude, longitude, start_date, end_date):
-    """Try PRISM gridded data"""
-    url = "http://data.rcc-acis.org/GridData"
-    
-    params = {
-        "loc": f"{longitude},{latitude}",
-        "sdate": start_date,
-        "edate": end_date,
-        "grid": "21",  # PRISM
-        "elems": [
-            {"name": "maxt"},
-            {"name": "mint"},
-            {"name": "pcpn"}
-        ]
+    # Alberta ACIS weather stations with coordinates
+    ALBERTA_STATIONS_COORDS = {
+        'Lethbridge': {'lat': 49.6942, 'lon': -112.8328},
+        'Calgary': {'lat': 51.1139, 'lon': -114.0203},
+        'Edmonton': {'lat': 53.3097, 'lon': -113.5800},
+        'Red Deer': {'lat': 52.1822, 'lon': -113.8939},
+        'Medicine Hat': {'lat': 50.0189, 'lon': -110.7208},
+        'Brooks': {'lat': 50.5644, 'lon': -111.8986},
+        'Vauxhall': {'lat': 50.0500, 'lon': -112.1333},
+        'Taber': {'lat': 49.7833, 'lon': -112.1500},
+        'Grande Prairie': {'lat': 55.1796, 'lon': -118.8850},
+        'Fort McMurray': {'lat': 56.6532, 'lon': -111.2217},
     }
     
-    response = requests.post(url, json=params, timeout=30)
+    from math import radians, cos, sin, asin, sqrt
     
-    if response.status_code != 200:
-        raise ValueError(f"HTTP {response.status_code}")
+    def haversine(lon1, lat1, lon2, lat2):
+        """Calculate distance between two points on Earth (km)"""
+        lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+        dlon = lon2 - lon1
+        dlat = lat2 - lat1
+        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+        c = 2 * asin(sqrt(a))
+        km = 6371 * c
+        return km
     
-    data = response.json()
+    nearest = None
+    min_distance = float('inf')
     
-    if 'data' not in data or len(data['data']) == 0:
-        raise ValueError("No data returned")
-    
-    return parse_acis_response(data, latitude)
-
-
-def fetch_nclimgrid(latitude, longitude, start_date, end_date):
-    """Try nClimGrid (different grid)"""
-    url = "http://data.rcc-acis.org/GridData"
-    
-    params = {
-        "loc": f"{longitude},{latitude}",
-        "sdate": start_date,
-        "edate": end_date,
-        "grid": "3",  # nClimGrid
-        "elems": "maxt,mint,pcpn"
-    }
-    
-    response = requests.post(url, json=params, timeout=30)
-    
-    if response.status_code != 200:
-        raise ValueError(f"HTTP {response.status_code}")
-    
-    data = response.json()
-    
-    if 'data' not in data or len(data['data']) == 0:
-        raise ValueError("No data returned")
-    
-    return parse_acis_response(data, latitude)
-
-
-def fetch_nearest_station(latitude, longitude, start_date, end_date):
-    """Find and use nearest weather station"""
-    
-    # Find stations
-    meta_url = "http://data.rcc-acis.org/StnMeta"
-    
-    meta_params = {
-        "bbox": f"{longitude-1},{latitude-1},{longitude+1},{latitude+1}",
-        "sdate": start_date,
-        "edate": end_date,
-        "elems": "maxt,mint,pcpn",
-        "meta": "name,state,sids,ll"
-    }
-    
-    meta_response = requests.post(meta_url, json=meta_params, timeout=15)
-    
-    if meta_response.status_code != 200:
-        raise ValueError("Could not find stations")
-    
-    stations = meta_response.json()
-    
-    if 'meta' not in stations or len(stations['meta']) == 0:
-        raise ValueError("No stations found")
-    
-    # Try each station until one works
-    for station_meta in stations['meta'][:3]:  # Try up to 3 stations
-        try:
-            station_id = station_meta['sids'][0]
-            print(f"Trying station: {station_meta.get('name', station_id)}")
-            
-            data_url = "http://data.rcc-acis.org/StnData"
-            
-            data_params = {
-                "sid": station_id,
-                "sdate": start_date,
-                "edate": end_date,
-                "elems": "maxt,mint,pcpn"
+    for station_name, coords in ALBERTA_STATIONS_COORDS.items():
+        distance = haversine(longitude, latitude, coords['lon'], coords['lat'])
+        
+        if distance < min_distance:
+            min_distance = distance
+            nearest = {
+                'name': station_name,
+                'latitude': coords['lat'],
+                'longitude': coords['lon'],
+                'distance': distance
             }
-            
-            data_response = requests.post(data_url, json=data_params, timeout=30)
-            
-            if data_response.status_code == 200:
-                data = data_response.json()
-                if 'data' in data and len(data['data']) > 0:
-                    return parse_acis_response(data, latitude)
-        except Exception as e:
-            print(f"Station {station_id} failed: {e}")
-            continue
     
-    raise ValueError("No working stations found")
-
-
-def parse_acis_response(data, latitude):
-    """Parse ACIS response into DataFrame"""
-    
-    dates = []
-    tmax_list = []
-    tmin_list = []
-    pcpn_list = []
-    
-    for row in data['data']:
-        dates.append(row[0])
-        
-        # Extract values
-        tmax = row[1] if len(row) > 1 else None
-        tmin = row[2] if len(row) > 2 else None
-        pcpn = row[3] if len(row) > 3 else None
-        
-        # Convert to float, handling missing
-        def safe_float(val):
-            try:
-                if val in ['M', 'T', '', None, 'S']:
-                    return None
-                fval = float(val)
-                # Check for ACIS missing data codes
-                if fval < -500 or fval > 100:  # Unrealistic temp
-                    return None
-                return fval
-            except:
-                return None
-        
-        tmax_list.append(safe_float(tmax))
-        tmin_list.append(safe_float(tmin))
-        pcpn_list.append(safe_float(pcpn) if safe_float(pcpn) is not None else 0.0)
-    
-    df = pd.DataFrame({
-        'Date': pd.to_datetime(dates),
-        'Tmax': tmax_list,
-        'Tmin': tmin_list,
-        'Precipitation': pcpn_list
-    })
-    
-    # Count valid data points
-    valid_tmax = df['Tmax'].notna().sum()
-    valid_tmin = df['Tmin'].notna().sum()
-    
-    print(f"Valid data: Tmax={valid_tmax}/{len(df)}, Tmin={valid_tmin}/{len(df)}")
-    
-    # If less than 20% valid data, raise error
-    if valid_tmax < len(df) * 0.2 or valid_tmin < len(df) * 0.2:
-        raise ValueError(f"Too much missing data ({valid_tmax}/{len(df)} valid)")
-    
-    # Interpolate missing values
-    df['Tmax'] = df['Tmax'].interpolate(method='linear', limit=10)
-    df['Tmin'] = df['Tmin'].interpolate(method='linear', limit=10)
-    
-    # Forward/backward fill remaining
-    df['Tmax'] = df['Tmax'].fillna(method='bfill').fillna(method='ffill')
-    df['Tmin'] = df['Tmin'].fillna(method='bfill').fillna(method='ffill')
-    
-    # If still missing, use climate normals
-    if df['Tmax'].isna().any() or df['Tmin'].isna().any():
-        df = fill_with_normals(df, latitude)
-    
-    return process_weather_data(df, latitude)
-
-
-def fill_with_normals(df, latitude):
-    """Fill remaining missing data with climate normals"""
-    
-    # Approximate normals for Alberta (varies by latitude)
-    # Based on 49.7°N (Lethbridge)
-    
-    for idx, row in df.iterrows():
-        doy = row['Date'].dayofyear
-        
-        if pd.isna(row['Tmax']):
-            # Seasonal temperature pattern
-            # Max in July (doy ~195), min in January (doy ~15)
-            temp_base = 8 + 17 * np.sin(2 * np.pi * (doy - 90) / 365)
-            df.at[idx, 'Tmax'] = temp_base + 5
-        
-        if pd.isna(row['Tmin']):
-            temp_base = 8 + 17 * np.sin(2 * np.pi * (doy - 90) / 365)
-            df.at[idx, 'Tmin'] = temp_base - 7
-    
-    return df
-
-
-def generate_synthetic_data(latitude, longitude, start_date, end_date):
-    """Generate synthetic data based on climate normals"""
-    
-    print(f"Generating synthetic data for {latitude}, {longitude}")
-    
-    dates = pd.date_range(start=start_date, end=end_date, freq='D')
-    
-    data = []
-    for date in dates:
-        doy = date.dayofyear
-        
-        # Temperature pattern (sinusoidal)
-        # For Alberta: cold winters, warm summers
-        base_temp = 8 + 17 * np.sin(2 * np.pi * (doy - 90) / 365)
-        
-        # Add some random variation
-        tmax = base_temp + 5 + np.random.normal(0, 3)
-        tmin = base_temp - 7 + np.random.normal(0, 2)
-        
-        # Ensure Tmax > Tmin
-        if tmin >= tmax:
-            tmin = tmax - 3
-        
-        data.append({
-            'Date': date,
-            'Tmax': tmax,
-            'Tmin': tmin,
-            'Precipitation': max(0, np.random.exponential(2))
-        })
-    
-    df = pd.DataFrame(data)
-    
-    return process_weather_data(df, latitude)
-
-
-def process_weather_data(df, latitude):
-    """
-    Process weather data: calculate derived variables
-    """
-    
-    # Calculate average temperature
-    df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
-    
-    # Add day of year
-    df['day_of_year'] = df['Date'].dt.dayofyear
-    
-    # Calculate extraterrestrial radiation factor
-    # Varies seasonally
-    solar_declination = 23.45 * np.sin(np.radians(360 * (df['day_of_year'] - 81) / 365))
-    
-    # Hour angle at sunset
-    lat_rad = np.radians(latitude)
-    decl_rad = np.radians(solar_declination)
-    sunset_angle = np.arccos(-np.tan(lat_rad) * np.tan(decl_rad))
-    
-    # Extraterrestrial radiation (MJ/m²/day)
-    dr = 1 + 0.033 * np.cos(2 * np.pi * df['day_of_year'] / 365)
-    Ra = 37.6 * dr * (
-        sunset_angle * np.sin(lat_rad) * np.sin(decl_rad) +
-        np.cos(lat_rad) * np.cos(decl_rad) * np.sin(sunset_angle)
-    )
-    
-    # Estimate solar radiation from temperature range
-    temp_range = (df['Tmax'] - df['Tmin']).clip(lower=1)
-    
-    # Hargreaves coefficient
-    kRs = 0.16  # For interior regions
-    
-    # Solar radiation (MJ/m²/day)
-    df['Solar_Radiation'] = kRs * np.sqrt(temp_range) * Ra
-    
-    # Clip to reasonable bounds
-    df['Solar_Radiation'] = df['Solar_Radiation'].clip(3, 40)
-    
-    # Default RH and wind
-    df['RH'] = 65.0
-    df['Wind_Speed'] = 2.0
-    
-    # Clean up
-    df = df.drop('day_of_year', axis=1)
-    
-    # Final validation
-    df = df.dropna(subset=['Tmax', 'Tmin'])
-    
-    if len(df) == 0:
-        raise ValueError("No valid data after processing")
-    
-    print(f"✓ Processed {len(df)} days")
-    print(f"  Temp range: {df['Tmax'].min():.1f} to {df['Tmax'].max():.1f}°C")
-    print(f"  Solar rad range: {df['Solar_Radiation'].min():.1f} to {df['Solar_Radiation'].max():.1f} MJ/m²/day")
-    
-    return df
-
+    return nearest
 
 def get_coordinates_from_township(township, range_val, meridian='4th'):
     """
@@ -2407,8 +2275,53 @@ def acis_data_view(request):
             print(f"Coordinates: {latitude}, {longitude}")
             print(f"Date range: {start_date} to {end_date}")
             
-            # Fetch data using robust method
-            df = fetch_acis_data(latitude, longitude, start_date, end_date)
+            # Find nearest Alberta ACIS station
+            station_result = find_nearest_alberta_station(latitude, longitude)
+            
+            if not station_result:
+                raise ValueError("No Alberta ACIS weather station found near this location")
+            
+            station_name = station_result['name']
+            print(f"Using nearest station: {station_name} ({station_result['distance']:.1f} km away)")
+            
+            # Fetch data from Alberta ACIS using web scraper
+            df = fetch_alberta_acis_data(station_name, start_date, end_date)
+            
+            # Add calculated columns for ET methods
+            if 'Tavg' not in df.columns:
+                df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
+            
+            # Add day of year for radiation calculations
+            df['day_of_year'] = df['Date'].dt.dayofyear
+            
+            # Calculate extraterrestrial radiation
+            df['Ra'] = df.apply(
+                lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), 
+                axis=1
+            )
+            
+            # Estimate solar radiation if not provided
+            if 'Solar_Radiation' not in df.columns:
+                temp_range = (df['Tmax'] - df['Tmin']).clip(lower=1)
+                kRs = 0.16
+                df['Solar_Radiation'] = kRs * np.sqrt(temp_range) * df['Ra']
+                df['Solar_Radiation'] = df['Solar_Radiation'].clip(3, 40)
+            
+            df['Rs'] = df['Solar_Radiation']
+            
+            # Add defaults for RH and wind if not present
+            if 'RH' not in df.columns:
+                df['RH'] = 65.0
+            if 'Wind_Speed' not in df.columns:
+                df['Wind_Speed'] = 2.0
+            
+            df['u2'] = df['Wind_Speed']
+            
+            # Clean up
+            df = df.drop('day_of_year', axis=1, errors='ignore')
+            
+            # Update location description to include station
+            location_desc = f"{location_desc} (Station: {station_name})"
             
             # Store in session
             request.session['acis_data'] = df.to_json(date_format='iso')
@@ -2447,7 +2360,7 @@ def acis_data_view(request):
 
 def comparison_with_acis(request):
     """
-    Enhanced ET calculator with ACIS data - IDENTICAL to enhanced_comparison_calculator
+    Enhanced ET calculator with ACIS data - NOW INCLUDING ACIS ET VALUES FOR COMPARISON
     """
     et_data = None
     et_stats = None
@@ -2512,22 +2425,19 @@ def comparison_with_acis(request):
         # Calculate extraterrestrial radiation
         df['Ra'] = df.apply(lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), axis=1)
         
-        # Calculate ET using all four methods - with proper error handling
-        # Priestley-Taylor
+        # Calculate ET using all four methods
         try:
             df['ET_PT'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Rs']), axis=1)
         except Exception as e:
             print(f"PT calculation failed: {e}")
             df['ET_PT'] = np.nan
         
-        # Penman-Monteith
         try:
             df['ET_PM'] = df.apply(lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs']), axis=1)
         except Exception as e:
             print(f"PM calculation failed: {e}")
             df['ET_PM'] = np.nan
         
-        # Maulé
         try:
             df['ET_Maule'] = df.apply(
                 lambda row: maule_ET(
@@ -2542,15 +2452,20 @@ def comparison_with_acis(request):
             print(f"Maule calculation failed: {e}")
             df['ET_Maule'] = np.nan
         
-        # Hargreaves
         try:
             df['ET_Hargreaves'] = df.apply(lambda row: hargreaves_ET(row['Tmax'], row['Tmin'], row['Ra']), axis=1)
         except Exception as e:
             print(f"Hargreaves calculation failed: {e}")
             df['ET_Hargreaves'] = np.nan
         
-        # Remove rows with ALL NaN ET values
+        # KEEP ACIS ET if it exists
+        has_acis_et = 'ET_ACIS' in df.columns and df['ET_ACIS'].notna().sum() > 0
+        
+        # Remove rows with ALL NaN ET values (but keep ACIS ET)
         et_columns = ['ET_PT', 'ET_PM', 'ET_Maule', 'ET_Hargreaves']
+        if has_acis_et:
+            et_columns.append('ET_ACIS')
+        
         df = df.dropna(subset=et_columns, how='all')
         
         if len(df) == 0:
@@ -2562,13 +2477,18 @@ def comparison_with_acis(request):
             if col in df.columns:
                 df[f'{col}_smooth'] = df[col].rolling(window=5, min_periods=1).mean()
         
+        # Also smooth ACIS ET if available
+        if has_acis_et:
+            df['ET_ACIS_smooth'] = df['ET_ACIS'].rolling(window=5, min_periods=1).mean()
+        
         # Calculate statistics for all methods with unit conversion
         et_stats = {}
         method_names = {
             'PT': 'Priestley-Taylor',
             'PM': 'Penman-Monteith', 
             'Maule': 'Maulé',  
-            'Hargreaves': 'Hargreaves-Samani'
+            'Hargreaves': 'Hargreaves-Samani',
+            'ACIS': 'ACIS Reference'  # Add ACIS
         }
         
         for method, name in method_names.items():
@@ -2596,7 +2516,8 @@ def comparison_with_acis(request):
         
         # Enhanced comparison statistics
         comparison_stats = {}
-        available_methods = [method for method in ['PT', 'PM', 'Maule', 'Hargreaves'] if f'ET_{method}' in df.columns and not df[f'ET_{method}'].isna().all()]
+        available_methods = [method for method in ['PT', 'PM', 'Maule', 'Hargreaves', 'ACIS'] 
+                           if f'ET_{method}' in df.columns and not df[f'ET_{method}'].isna().all()]
         
         if len(available_methods) >= 2:
             # Calculate correlations between methods
@@ -2611,17 +2532,19 @@ def comparison_with_acis(request):
                         key = f'{method1} vs {method2}'
                         comparison_stats['correlations'][key] = corr_matrix.iloc[i, j]
             
-            # Calculate mean differences (with unit conversion) - only if PM exists
-            if 'PM' in available_methods:
+            # Calculate mean differences from ACIS if available, otherwise from PM
+            reference_method = 'ACIS' if 'ACIS' in available_methods else ('PM' if 'PM' in available_methods else None)
+            
+            if reference_method:
                 for method in available_methods:
-                    if method != 'PM':
-                        diff_mm = (df[f'ET_{method}'] - df['ET_PM']).mean()
+                    if method != reference_method:
+                        diff_mm = (df[f'ET_{method}'] - df[f'ET_{reference_method}']).mean()
                         if selected_unit == 'inches':
-                            comparison_stats[f'{method}_PM_diff'] = convert_units(diff_mm, 'mm', 'inches')
+                            comparison_stats[f'{method}_{reference_method}_diff'] = convert_units(diff_mm, 'mm', 'inches')
                         else:
-                            comparison_stats[f'{method}_PM_diff'] = diff_mm
+                            comparison_stats[f'{method}_{reference_method}_diff'] = diff_mm
         
-        # Calculate growing season statistics for primary method (PM if available, otherwise first available)
+        # Calculate growing season statistics for primary method
         if 'ET_PM' in df.columns and not df['ET_PM'].isna().all():
             growing_season_stats = calculate_growing_season_stats(df, 'ET_PM', selected_unit)
             growing_season_plots = create_growing_season_plots(df, 'ET_PM', selected_unit)
@@ -2630,7 +2553,7 @@ def comparison_with_acis(request):
             growing_season_stats = calculate_growing_season_stats(df, f'ET_{primary_method}', selected_unit)
             growing_season_plots = create_growing_season_plots(df, f'ET_{primary_method}', selected_unit)
         
-        # Create enhanced comparison plot with all available methods
+        # Create enhanced comparison plot with all available methods INCLUDING ACIS
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12))
         fig.patch.set_facecolor('white')
         
@@ -2640,24 +2563,36 @@ def comparison_with_acis(request):
             'PT': '#86A873',
             'PM': '#087F8C', 
             'Maule': '#BB9F06',
-            'Hargreaves': '#5AAA95'
+            'Hargreaves': '#5AAA95',
+            'ACIS': '#FF6B6B'  # Red color for ACIS
         }
         
         for method in available_methods:
             col = f'ET_{method}'
+            smooth_col = f'{col}_smooth'
+            
             # Convert data for plotting if needed
             if selected_unit == 'inches':
                 plot_data = df[col].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
-                plot_data_smooth = df[f'{col}_smooth'].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                if smooth_col in df.columns:
+                    plot_data_smooth = df[smooth_col].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                else:
+                    plot_data_smooth = plot_data
             else:
                 plot_data = df[col]
-                plot_data_smooth = df[f'{col}_smooth']
+                plot_data_smooth = df[smooth_col] if smooth_col in df.columns else plot_data
             
-            ax1.plot(df['Date'], plot_data, 
-                    label=f'{method_names[method]}', 
-                    color=colors[method], alpha=0.6, linewidth=1.5)
-            ax1.plot(df['Date'], plot_data_smooth, 
-                    color=colors[method], linewidth=2.5, alpha=0.9)
+            # Use thicker line and different style for ACIS
+            if method == 'ACIS':
+                ax1.plot(df['Date'], plot_data_smooth, 
+                        label=f'{method_names[method]}', 
+                        color=colors[method], linewidth=3.5, alpha=1.0, linestyle='--')
+            else:
+                ax1.plot(df['Date'], plot_data, 
+                        label=f'{method_names[method]}', 
+                        color=colors[method], alpha=0.6, linewidth=1.5)
+                ax1.plot(df['Date'], plot_data_smooth, 
+                        color=colors[method], linewidth=2.5, alpha=0.9)
         
         # Add location info to title
         location_desc = location_info.get('description', 'ACIS Data')
@@ -2669,21 +2604,24 @@ def comparison_with_acis(request):
         ax1.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
         ax1.tick_params(axis='x', rotation=45)
         
-        # Method differences from Penman-Monteith (reference) - only if PM exists
+        # Method differences from ACIS or Penman-Monteith
         ax2.set_facecolor('#f8fffe')
-        if 'PM' in available_methods and len(available_methods) > 1:
+        reference_method = 'ACIS' if 'ACIS' in available_methods else 'PM'
+        
+        if reference_method in available_methods and len(available_methods) > 1:
             for method in available_methods:
-                if method != 'PM':
+                if method != reference_method:
                     col = f'ET_{method}'
-                    diff = df['ET_PM'] - df[col]
+                    diff = df[f'ET_{reference_method}'] - df[col]
                     if selected_unit == 'inches':
                         diff = diff.apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
                     
                     ax2.plot(df['Date'], diff, color=colors[method], linewidth=2, alpha=0.7, 
-                            label=f'PM - {method_names[method]}')
+                            label=f'{method_names[reference_method]} - {method_names[method]}')
             
             ax2.axhline(y=0, color='#095256', linestyle='--', alpha=0.8)
-            ax2.set_title('Differences from Penman-Monteith (Reference Method)', 
+            ref_name = 'ACIS Reference' if reference_method == 'ACIS' else 'Penman-Monteith'
+            ax2.set_title(f'Differences from {ref_name} (Reference Method)', 
                          fontsize=14, fontweight='bold', color='#095256')
             ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
             ax2.set_ylabel(f'Difference ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
@@ -2691,8 +2629,7 @@ def comparison_with_acis(request):
             ax2.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=9)
             ax2.tick_params(axis='x', rotation=45)
         else:
-            # If no PM or only one method, show a message
-            ax2.text(0.5, 0.5, 'Difference plot requires Penman-Monteith method', 
+            ax2.text(0.5, 0.5, 'Difference plot requires a reference method', 
                     ha='center', va='center', fontsize=14, color='#666')
             ax2.set_xlim(0, 1)
             ax2.set_ylim(0, 1)
@@ -2712,6 +2649,9 @@ def comparison_with_acis(request):
         # Store enhanced CSV data in session
         csv_columns = ['Date'] + [f'ET_{method}' for method in available_methods]
         request.session['et_data_csv'] = df[csv_columns].to_csv(index=False)
+        
+        # CRITICAL FIX: Store the ET data (not raw weather data) for plot updates
+        request.session['acis_data'] = df[csv_columns].to_json(date_format='iso')
         
         # Prepare data for rendering with unit conversion
         et_data = []
@@ -2748,6 +2688,168 @@ def comparison_with_acis(request):
         'selected_unit': selected_unit,
         'unit_info': unit_info,
         'acis_location': location_info,
+        'has_acis_et': has_acis_et,
+        'available_methods': available_methods,
     }
     
     return render(request, 'et/comparison.html', context)
+
+# Add this new view to your views.py
+
+def update_comparison_plot(request):
+    """
+    API endpoint to generate plot with only selected methods
+    Called when user toggles checkboxes
+    """
+    try:
+        # Get selected methods from request
+        selected_methods = request.GET.getlist('methods')
+        selected_unit = request.GET.get('unit', 'mm')
+        
+        if not selected_methods:
+            return JsonResponse({'error': 'No methods selected'}, status=400)
+        
+        unit_info = get_unit_info(selected_unit)
+        
+        # Get data from session - CRITICAL: Use the correct session key
+        acis_data_json = request.session.get('acis_data')
+        et_data_csv = request.session.get('et_data_csv')
+        
+        if not acis_data_json and not et_data_csv:
+            return JsonResponse({'error': 'No data in session'}, status=400)
+        
+        # Load data
+        if acis_data_json:
+            df = pd.read_json(io.StringIO(acis_data_json))
+        elif et_data_csv:
+            df = pd.read_csv(io.StringIO(et_data_csv))
+        else:
+            return JsonResponse({'error': 'No data available'}, status=400)
+        
+        df['Date'] = pd.to_datetime(df['Date'])
+        
+        # CRITICAL FIX: Check what columns actually exist in the dataframe
+        print(f"DEBUG: DataFrame columns: {df.columns.tolist()}")
+        print(f"DEBUG: Requested methods: {selected_methods}")
+        
+        # Filter to only include selected methods that exist
+        available_et_cols = []
+        available_methods = []
+        for method in selected_methods:
+            col_name = f'ET_{method}'
+            if col_name in df.columns:
+                available_et_cols.append(col_name)
+                available_methods.append(method)
+        
+        print(f"DEBUG: Available ET columns: {available_et_cols}")
+        print(f"DEBUG: Available methods: {available_methods}")
+        
+        if not available_et_cols:
+            # Return detailed error about what's missing
+            existing_cols = [col for col in df.columns if col.startswith('ET_')]
+            return JsonResponse({
+                'error': 'Selected methods not found in data',
+                'requested': selected_methods,
+                'available_columns': existing_cols,
+                'all_columns': df.columns.tolist()
+            }, status=400)
+        
+        # Create plot with selected methods
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12))
+        fig.patch.set_facecolor('white')
+        
+        # Main ET comparison plot
+        ax1.set_facecolor('#f8fffe')
+        
+        colors = {
+            'PT': '#86A873',
+            'PM': '#087F8C', 
+            'Maule': '#BB9F06',
+            'Hargreaves': '#5AAA95',
+            'ACIS': '#FF6B6B'
+        }
+        
+        method_names = {
+            'PT': 'Priestley-Taylor',
+            'PM': 'Penman-Monteith', 
+            'Maule': 'Maulé',  
+            'Hargreaves': 'Hargreaves-Samani',
+            'ACIS': 'ACIS Reference'
+        }
+        
+        # Plot each selected method
+        for method in available_methods:
+            col = f'ET_{method}'
+            if col in df.columns:
+                # Apply unit conversion if needed
+                values = df[col].copy()
+                if selected_unit == 'inches':
+                    values = values.apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                
+                # Plot with appropriate style
+                if method == 'ACIS':
+                    ax1.plot(df['Date'], values, color=colors[method], linewidth=3, 
+                            linestyle='--', alpha=0.9, label=method_names[method], zorder=10)
+                else:
+                    ax1.plot(df['Date'], values, color=colors[method], linewidth=2, 
+                            alpha=0.7, label=method_names[method])
+        
+        ax1.set_title('ET Method Comparison', fontsize=16, fontweight='bold', color='#095256')
+        ax1.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
+        ax1.set_ylabel(f'ET ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
+        ax1.grid(True, alpha=0.3, color='#5AAA95')
+        ax1.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
+        ax1.tick_params(axis='x', rotation=45)
+        
+        # Difference plot
+        if len(available_methods) > 1:
+            # Use ACIS as reference if available, otherwise PM
+            reference_method = 'ACIS' if 'ACIS' in available_methods else ('PM' if 'PM' in available_methods else available_methods[0])
+            
+            for method in available_methods:
+                if method != reference_method:
+                    col = f'ET_{method}'
+                    if col in df.columns and f'ET_{reference_method}' in df.columns:
+                        diff = df[f'ET_{reference_method}'] - df[col]
+                        if selected_unit == 'inches':
+                            diff = diff.apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                        
+                        ax2.plot(df['Date'], diff, color=colors.get(method, '#666'), linewidth=2, alpha=0.7, 
+                                label=f'{method_names[reference_method]} - {method_names[method]}')
+            
+            ax2.axhline(y=0, color='#095256', linestyle='--', alpha=0.8)
+            ax2.set_title(f'Differences from {method_names[reference_method]} (Reference)', 
+                         fontsize=14, fontweight='bold', color='#095256')
+            ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
+            ax2.set_ylabel(f'Difference ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
+            ax2.grid(True, alpha=0.3, color='#5AAA95')
+            ax2.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=9)
+            ax2.tick_params(axis='x', rotation=45)
+        else:
+            ax2.text(0.5, 0.5, 'Select multiple methods to see differences', 
+                    ha='center', va='center', fontsize=14, color='#666')
+            ax2.set_xlim(0, 1)
+            ax2.set_ylim(0, 1)
+            ax2.axis('off')
+        
+        plt.tight_layout()
+        
+        # Convert plot to base64
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight',
+                   facecolor='white', edgecolor='none')
+        buf.seek(0)
+        plot_url = base64.b64encode(buf.read()).decode('utf-8')
+        buf.close()
+        plt.close()
+        
+        return JsonResponse({
+            'plot_url': plot_url,
+            'selected_methods': selected_methods
+        })
+        
+    except Exception as e:
+        print(f"Error updating plot: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': str(e)}, status=500)

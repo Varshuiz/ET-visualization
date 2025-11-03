@@ -36,6 +36,12 @@
         border-color: #5AAA95;
     }
 
+    /* NEW: ACIS card styling */
+    .method-card.acis {
+        border-color: #FF6B6B;
+        border-width: 3px;
+    }
+
     .method-card:hover {
         transform: translateY(-3px);
         box-shadow: 0 10px 30px rgba(9, 82, 86, 0.2);
@@ -73,6 +79,11 @@
 
     .hargreaves .method-icon {
         background: #5AAA95;
+    }
+
+    /* NEW: ACIS icon */
+    .acis .method-icon {
+        background: #FF6B6B;
     }
 
     .method-title {
@@ -179,9 +190,20 @@
         font-weight: 600;
     }
 
+    /* NEW: ACIS column header */
+    .data-table th.acis-header {
+        background: linear-gradient(135deg, #FF6B6B, #FF8E8E);
+    }
+
     .data-table td {
         padding: 12px 15px;
         border-bottom: 1px solid #e0f2f1;
+    }
+
+    /* NEW: ACIS column cells */
+    .data-table td.acis-cell {
+        background: #fff5f5;
+        font-weight: bold;
     }
 
     .data-table tbody tr:hover {
@@ -203,20 +225,109 @@
         cursor: pointer;
         transition: all 0.3s ease;
         box-shadow: 0 5px 15px rgba(8, 127, 140, 0.3);
+        text-decoration: none;
+        display: inline-block;
     }
 
     .download-btn:hover {
         transform: translateY(-2px);
         box-shadow: 0 8px 25px rgba(8, 127, 140, 0.4);
     }
+
+    /* NEW: Interactive checkboxes styling */
+    .method-checkboxes {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 3px 10px rgba(9, 82, 86, 0.1);
+        margin: 20px 0;
+        text-align: center;
+    }
+    
+    .method-checkboxes h4 {
+        color: #095256;
+        margin-bottom: 15px;
+        font-size: 1.1rem;
+    }
+    
+    .checkbox-group {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 20px;
+    }
+    
+    .checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 15px;
+        background: #f8fffe;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    
+    .checkbox-item:hover {
+        background: #e0f2f1;
+        border-color: #5AAA95;
+    }
+    
+    .checkbox-item input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+    
+    .checkbox-item label {
+        cursor: pointer;
+        font-weight: 600;
+        color: #095256;
+        margin: 0;
+    }
+    
+    /* Color indicators for checkboxes */
+    .checkbox-item.pt { border-left: 4px solid #86A873; }
+    .checkbox-item.pm { border-left: 4px solid #087F8C; }
+    .checkbox-item.maule { border-left: 4px solid #BB9F06; }
+    .checkbox-item.hargreaves { border-left: 4px solid #5AAA95; }
+    .checkbox-item.acis { border-left: 4px solid #FF6B6B; }
+    
+    /* Select All button */
+    .select-all-btn {
+        padding: 8px 20px;
+        background: #087F8C;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        margin-bottom: 15px;
+        transition: all 0.3s ease;
+    }
+    
+    .select-all-btn:hover {
+        background: #095256;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(8, 127, 140, 0.3);
+    }
+
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container">
     <div class="page-header">
-        <h1>🌾ET Methods Comparison</h1>
-        <p class="subtitle">Compare All Four ET Calculation Methods</p>
+        <h1>🌾 ET Methods Comparison</h1>
+        {% if acis_location %}
+        <p class="subtitle">Comparing ET calculation methods for {{ acis_location.description }}</p>
+        <p style="color: #fff; font-size: 0.9rem; opacity: 0.9;">
+            Data period: {{ acis_location.start_date }} to {{ acis_location.end_date }}
+        </p>
+        {% else %}
+        <p class="subtitle">Compare All ET Calculation Methods</p>
+        {% endif %}
     </div>
 
     <!-- Unit Toggle Section -->
@@ -229,7 +340,8 @@
         <span class="unit-label {% if selected_unit == 'inches' %}active{% endif %}">inches</span>
     </div>
 
-    <!-- File Upload Form -->
+    <!-- File Upload Form (only show if no data) -->
+    {% if not et_data %}
     <div class="upload-card">
         <form method="post" enctype="multipart/form-data" id="uploadForm">
             {% csrf_token %}
@@ -243,7 +355,7 @@
                     <br>
                     <strong>Optional columns:</strong> Solar Radiation, Wind Speed, Relative Humidity
                     <br>
-                    <small>All four methods will calculate with available data</small>
+                    <small>All methods will calculate with available data</small>
                 </div>
             </div>
             {% if error_message %}
@@ -259,6 +371,7 @@
             </div>
         </form>
     </div>
+    {% endif %}
 
     {% if et_data %}
     <div class="results-section">
@@ -284,14 +397,6 @@
                     <span class="stat-value">{{ et_stats.PT.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span>
                 </div>
             </div>
-            {% else %}
-            <div class="method-card priestley-taylor" style="opacity: 0.6;">
-                <div class="method-header">
-                    <div class="method-icon">PT</div>
-                    <div class="method-title">Priestley-Taylor</div>
-                </div>
-                <p style="color: #666; font-style: italic;">Data insufficient. Needs: Temperature + Solar Radiation</p>
-            </div>
             {% endif %}
 
             {% if et_stats.PM %}
@@ -312,14 +417,6 @@
                     <span class="stat-label">Minimum:</span>
                     <span class="stat-value">{{ et_stats.PM.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span>
                 </div>
-            </div>
-            {% else %}
-            <div class="method-card penman-monteith" style="opacity: 0.6;">
-                <div class="method-header">
-                    <div class="method-icon">PM</div>
-                    <div class="method-title">Penman-Monteith</div>
-                </div>
-                <p style="color: #666; font-style: italic;">Data insufficient. Needs: Temperature + Solar Radiation + Wind + Humidity</p>
             </div>
             {% endif %}
 
@@ -342,14 +439,6 @@
                     <span class="stat-value">{{ et_stats.Maule.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span>
                 </div>
             </div>
-            {% else %}
-            <div class="method-card maule" style="opacity: 0.6;">
-                <div class="method-header">
-                    <div class="method-icon">M</div>
-                    <div class="method-title">Maulé</div>
-                </div>
-                <p style="color: #666; font-style: italic;">Data insufficient. Needs: Temperature + Solar Radiation (optional: Humidity)</p>
-            </div>
             {% endif %}
 
             {% if et_stats.Hargreaves %}
@@ -371,13 +460,30 @@
                     <span class="stat-value">{{ et_stats.Hargreaves.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span>
                 </div>
             </div>
-            {% else %}
-            <div class="method-card hargreaves" style="opacity: 0.6;">
+            {% endif %}
+
+            <!-- NEW: ACIS Reference Card -->
+            {% if et_stats.ACIS %}
+            <div class="method-card acis">
                 <div class="method-header">
-                    <div class="method-icon">H</div>
-                    <div class="method-title">Hargreaves-Samani</div>
+                    <div class="method-icon">⭐</div>
+                    <div class="method-title">ACIS Reference</div>
                 </div>
-                <p style="color: #666; font-style: italic;">Data insufficient. Needs: Tmax + Tmin only</p>
+                <div class="stat-item">
+                    <span class="stat-label">Average ET:</span>
+                    <span class="stat-value">{{ et_stats.ACIS.avg|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Maximum:</span>
+                    <span class="stat-value">{{ et_stats.ACIS.max|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Minimum:</span>
+                    <span class="stat-value">{{ et_stats.ACIS.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span>
+                </div>
+                <div style="margin-top: 10px; padding: 8px; background: #fff5f5; border-radius: 5px; font-size: 0.9rem; color: #666;">
+                    🌐 Official ACIS Data
+                </div>
             </div>
             {% endif %}
         </div>
@@ -411,11 +517,60 @@
         </div>
         {% endif %}
 
-        <!-- Visualization -->
+        <!-- Visualization with Interactive Checkboxes -->
         {% if plot_url %}
         <div class="plot-container">
             <h2 style="color: #095256; margin-bottom: 20px;">📈 ET Comparison Visualization</h2>
-            <img src="data:image/png;base64,{{ plot_url }}" alt="ET Comparison Plot">
+            <img id="comparisonPlot" src="data:image/png;base64,{{ plot_url }}" alt="ET Comparison Plot">
+            
+            <!-- NEW: Interactive Checkboxes -->
+            <div class="method-checkboxes">
+                <button class="select-all-btn" onclick="toggleAllMethods()">
+                    Toggle All Methods
+                </button>
+                
+                <h4>🎛️ Select Methods to Display</h4>
+                <div class="checkbox-group">
+                    {% if 'PT' in available_methods %}
+                    <div class="checkbox-item pt">
+                        <input type="checkbox" id="show-pt" checked onchange="updatePlot()">
+                        <label for="show-pt">Priestley-Taylor</label>
+                    </div>
+                    {% endif %}
+                    
+                    {% if 'PM' in available_methods %}
+                    <div class="checkbox-item pm">
+                        <input type="checkbox" id="show-pm" checked onchange="updatePlot()">
+                        <label for="show-pm">Penman-Monteith</label>
+                    </div>
+                    {% endif %}
+                    
+                    {% if 'Maule' in available_methods %}
+                    <div class="checkbox-item maule">
+                        <input type="checkbox" id="show-maule" checked onchange="updatePlot()">
+                        <label for="show-maule">Maulé</label>
+                    </div>
+                    {% endif %}
+                    
+                    {% if 'Hargreaves' in available_methods %}
+                    <div class="checkbox-item hargreaves">
+                        <input type="checkbox" id="show-hargreaves" checked onchange="updatePlot()">
+                        <label for="show-hargreaves">Hargreaves-Samani</label>
+                    </div>
+                    {% endif %}
+                    
+                    {% if 'ACIS' in available_methods %}
+                    <div class="checkbox-item acis">
+                        <input type="checkbox" id="show-acis" checked onchange="updatePlot()">
+                        <label for="show-acis">ACIS Reference ⭐</label>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <p style="color: #666; margin-top: 15px; font-size: 0.9rem;">
+                    💡 Tip: Uncheck methods to hide them from the plot and compare specific methods
+                </p>
+            </div>
         </div>
         {% endif %}
 
@@ -434,17 +589,20 @@
                 <thead>
                     <tr>
                         <th>Date</th>
-                        {% if et_data.0.ET_PT %}
+                        {% if 'PT' in available_methods %}
                         <th>Priestley-Taylor<br>({{ unit_info.daily_label }})</th>
                         {% endif %}
-                        {% if et_data.0.ET_PM %}
+                        {% if 'PM' in available_methods %}
                         <th>Penman-Monteith<br>({{ unit_info.daily_label }})</th>
                         {% endif %}
-                        {% if et_data.0.ET_Maule %}
+                        {% if 'Maule' in available_methods %}
                         <th>Maulé<br>({{ unit_info.daily_label }})</th>
                         {% endif %}
-                        {% if et_data.0.ET_Hargreaves %}
+                        {% if 'Hargreaves' in available_methods %}
                         <th>Hargreaves<br>({{ unit_info.daily_label }})</th>
+                        {% endif %}
+                        {% if 'ACIS' in available_methods %}
+                        <th class="acis-header">ACIS Reference ⭐<br>({{ unit_info.daily_label }})</th>
                         {% endif %}
                     </tr>
                 </thead>
@@ -452,17 +610,20 @@
                     {% for row in et_data|slice:":20" %}
                     <tr>
                         <td>{{ row.Date|date:"Y-m-d" }}</td>
-                        {% if row.ET_PT %}
-                        <td>{{ row.ET_PT }}</td>
+                        {% if 'PT' in available_methods %}
+                        <td>{{ row.ET_PT|floatformat:unit_info.decimal_places }}</td>
                         {% endif %}
-                        {% if row.ET_PM %}
-                        <td>{{ row.ET_PM }}</td>
+                        {% if 'PM' in available_methods %}
+                        <td>{{ row.ET_PM|floatformat:unit_info.decimal_places }}</td>
                         {% endif %}
-                        {% if row.ET_Maule %}
-                        <td>{{ row.ET_Maule }}</td>
+                        {% if 'Maule' in available_methods %}
+                        <td>{{ row.ET_Maule|floatformat:unit_info.decimal_places }}</td>
                         {% endif %}
-                        {% if row.ET_Hargreaves %}
-                        <td>{{ row.ET_Hargreaves }}</td>
+                        {% if 'Hargreaves' in available_methods %}
+                        <td>{{ row.ET_Hargreaves|floatformat:unit_info.decimal_places }}</td>
+                        {% endif %}
+                        {% if 'ACIS' in available_methods %}
+                        <td class="acis-cell">{{ row.ET_ACIS|floatformat:unit_info.decimal_places }}</td>
                         {% endif %}
                     </tr>
                     {% endfor %}
@@ -527,5 +688,87 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 500);
     }
 });
+
+// NEW: Interactive checkbox functions
+function toggleAllMethods() {
+    const checkboxes = document.querySelectorAll('.method-checkboxes input[type="checkbox"]');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    
+    checkboxes.forEach(cb => {
+        cb.checked = !allChecked;
+    });
+    
+    updatePlot();
+}
+
+function updatePlot() {
+    // Get selected methods
+    const selectedMethods = [];
+    
+    // Check each method checkbox - safely handle null elements
+    const ptCheckbox = document.getElementById('show-pt');
+    if (ptCheckbox?.checked) {
+        selectedMethods.push('PT');
+    }
+    
+    const pmCheckbox = document.getElementById('show-pm');
+    if (pmCheckbox?.checked) {
+        selectedMethods.push('PM');
+    }
+    
+    const mauleCheckbox = document.getElementById('show-maule');
+    if (mauleCheckbox?.checked) {
+        selectedMethods.push('Maule');
+    }
+    
+    const hargreavesCheckbox = document.getElementById('show-hargreaves');
+    if (hargreavesCheckbox?.checked) {
+        selectedMethods.push('Hargreaves');
+    }
+    
+    const acisCheckbox = document.getElementById('show-acis');
+    if (acisCheckbox?.checked) {
+        selectedMethods.push('ACIS');
+    }
+    
+    // If no methods selected, show message
+    if (selectedMethods.length === 0) {
+        alert('Please select at least one method to display');
+        return;
+    }
+    
+    // Build query parameters
+    const params = new URLSearchParams();
+    params.append('unit', '{{ selected_unit }}');
+    selectedMethods.forEach(method => {
+        params.append('methods', method);
+    });
+    
+    // Show loading
+    const plotImg = document.getElementById('comparisonPlot');
+    if (!plotImg) return;
+    
+    plotImg.style.opacity = '0.5';
+    plotImg.style.transition = 'opacity 0.3s';
+    
+    // Fetch updated plot
+    fetch('{% url "et:update_comparison_plot" %}?' + params.toString())
+        .then(response => response.json())
+        .then(data => {
+            if (data.plot_url) {
+                plotImg.src = 'data:image/png;base64,' + data.plot_url;
+                plotImg.style.opacity = '1';
+            } else if (data.error) {
+                console.error('Server error:', data.error);
+                alert('Error updating plot: ' + data.error);
+                plotImg.style.opacity = '1';
+            }
+        })
+        .catch(error => {
+            console.error('Error updating plot:', error);
+            alert('Failed to update plot. Please try again.');
+            plotImg.style.opacity = '1';
+        });
+}
 </script>
 {% endblock %}

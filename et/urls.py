@@ -38,5 +38,6 @@ path('comparison/', views.enhanced_comparison_calculator, name='comparison'),   
     path('comparison-acis/', views.comparison_with_acis, name='comparison_with_acis'),
 
     path('api/location-search/', views.location_search_api, name='location_search_api'),
+    path('update-comparison-plot/', views.update_comparison_plot, name='update_comparison_plot'),
 
 ]
