@@ -368,7 +368,7 @@
     <div class="summary-box">
         <h2>💧 {{ total_precip|floatformat:1 }} mm</h2>
         <p>Total projected precipitation for {{ city_name }}</p>
-        <p style="font-size: 0.9rem; opacity: 0.9;">Next {{ df_forecast|length }} periods ({{ selected_days }} days)</p>
+        <p style="font-size: 0.9rem; opacity: 0.9;">Next {{ df_forecast|length }} days</p>
     </div>
 
     <!-- Forecast Cards -->
@@ -385,7 +385,7 @@
                         {% if forecast.Temp_High is not None %}
                             {{ forecast.Temp_High|floatformat:0 }}°C
                         {% else %}
-                            <span style="font-size: 0.9rem; color: #999;">N/A</span>
+                            <span style="font-size: 0.85rem; color: #999;">Not Available</span>
                         {% endif %}
                     </div>
                 </div>
@@ -396,7 +396,7 @@
                         {% if forecast.Temp_Low is not None %}
                             {{ forecast.Temp_Low|floatformat:0 }}°C
                         {% else %}
-                            <span style="font-size: 0.9rem; color: #999;">N/A</span>
+                            <span style="font-size: 0.85rem; color: #999;">Not Available</span>
                         {% endif %}
                     </div>
                 </div>
@@ -526,8 +526,8 @@ function downloadForecastCSV() {
     
     forecasts.forEach(f => {
         const date = new Date(f.Date).toISOString().split('T')[0];
-        const high = f.Temp_High || 'N/A';
-        const low = f.Temp_Low || 'N/A';
+        const high = f.Temp_High !== null ? f.Temp_High : 'Not Available';
+        const low = f.Temp_Low !== null ? f.Temp_Low : 'Not Available';
         const precip = (f.Precipitation_mm || 0).toFixed(1);
         const forecast = (f.Forecast || '').replace(/"/g, '""');
         

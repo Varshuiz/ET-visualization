@@ -15,14 +15,6 @@ class EnvironmentCanadaScraper:
     Scraper for Environment Canada weather forecasts using RSS feeds
     """
     
-    # Major Alberta cities and their RSS codes
-    # environment_canada_scraper.py - Update the LOCATION_CODES dictionary
-
-class EnvironmentCanadaScraper:
-    """
-    Scraper for Environment Canada weather forecasts using RSS feeds
-    """
-    
     # Comprehensive list of Alberta cities with Environment Canada RSS codes
     LOCATION_CODES = {
         # Major Cities
@@ -166,17 +158,35 @@ class EnvironmentCanadaScraper:
             # Find all forecast entries
             entries = root.findall('.//atom:entry', ns)
             
-            print(f"   Found {len(entries)} forecast entries")
+            print(f"   Found {len(entries)} total RSS entries")
             
             forecast_data = []
             
-            for entry in entries[:days]:
+            # Filter to only actual forecast periods - get more than needed
+            for entry in entries:
                 title = entry.find('atom:title', ns)
                 summary = entry.find('atom:summary', ns)
                 
                 if title is not None and summary is not None:
                     period = title.text
                     forecast = summary.text
+                    
+                    # Skip non-forecast entries
+                    skip_keywords = [
+                        'current conditions',
+                        'observed at',
+                        'warnings',
+                        'watches',
+                        'statements',
+                        'advisories',
+                        'ended:',
+                        'weather shortcuts'
+                    ]
+                    
+                    period_lower = period.lower()
+                    if any(keyword in period_lower for keyword in skip_keywords):
+                        print(f"   ⏭️  Skipping: {period}")
+                        continue
                     
                     # Extract data
                     temp_high, temp_low = self._extract_temperatures(forecast)
@@ -196,15 +206,10 @@ class EnvironmentCanadaScraper:
             if forecast_data:
                 df = pd.DataFrame(forecast_data)
                 
-                # Add dates (starting from today)
-                today = datetime.now()
-                dates = [today + timedelta(days=i) for i in range(len(df))]
-                df['Date'] = dates
+                # Group by day
+                df = self._group_by_day(df, days)
                 
-                # Reorder columns
-                df = df[['Date', 'Period', 'Temp_High', 'Temp_Low', 'Precipitation_mm', 'Forecast']]
-                
-                print(f"\n   ✅ Successfully fetched {len(df)} forecast periods\n")
+                print(f"\n   ✅ Successfully fetched {len(df)} daily forecasts\n")
                 
                 return df
             else:
@@ -213,6 +218,77 @@ class EnvironmentCanadaScraper:
         except Exception as e:
             print(f"   ❌ Error: {e}\n")
             raise ValueError(f"Failed to fetch forecast: {e}")
+    
+    def _group_by_day(self, df, max_days=5):
+        """
+        Group day and night forecasts into single daily records
+        High = daytime temp, Low = nighttime temp
+        """
+        today = datetime.now()
+        daily_data = {}  # Use dict to group by day name
+        
+        for idx, row in df.iterrows():
+            period = row['Period'].lower()
+            
+            # Determine if this is a night or day forecast
+            is_night = 'night' in period or 'tonight' in period
+            
+            # Extract day name from period
+            day_match = re.search(r'(monday|tuesday|wednesday|thursday|friday|saturday|sunday)', period, re.IGNORECASE)
+            
+            # Handle "Tonight" separately
+            if 'tonight' in period:
+                day_name = 'Tonight'
+            elif day_match:
+                day_name = day_match.group(1).title()
+            else:
+                continue  # Skip if we can't identify the day
+            
+            # Initialize day if not exists
+            if day_name not in daily_data:
+                daily_data[day_name] = {
+                    'day_name': day_name,
+                    'temp_high': None,
+                    'temp_low': None,
+                    'precipitation': 0.0,
+                    'forecast_parts': []
+                }
+            
+            # Add data based on whether it's day or night
+            if is_night:
+                # Night forecast provides the LOW temperature
+                if row['Temp_Low'] is not None:
+                    daily_data[day_name]['temp_low'] = row['Temp_Low']
+            else:
+                # Day forecast provides the HIGH temperature
+                if row['Temp_High'] is not None:
+                    daily_data[day_name]['temp_high'] = row['Temp_High']
+            
+            # Accumulate precipitation from both day and night
+            daily_data[day_name]['precipitation'] += row['Precipitation_mm']
+            daily_data[day_name]['forecast_parts'].append(row['Forecast'])
+        
+        # Convert to list and limit to max_days
+        daily_forecasts = list(daily_data.values())[:max_days]
+        
+        # Convert to DataFrame with dates
+        result_data = []
+        for i, day_data in enumerate(daily_forecasts):
+            date = today + timedelta(days=i)
+            
+            # Combine forecast parts into one description
+            combined_forecast = ' '.join(day_data['forecast_parts'])
+            
+            result_data.append({
+                'Date': date,
+                'Period': day_data['day_name'],
+                'Temp_High': day_data['temp_high'],
+                'Temp_Low': day_data['temp_low'],
+                'Precipitation_mm': day_data['precipitation'],
+                'Forecast': combined_forecast
+            })
+        
+        return pd.DataFrame(result_data)
         
 
     def debug_forecast(self, city_name='Calgary', days=5):
@@ -235,7 +311,7 @@ class EnvironmentCanadaScraper:
             
             entries = root.findall('.//atom:entry', ns)
             
-            for i, entry in enumerate(entries[:days], 1):
+            for i, entry in enumerate(entries[:15], 1):  # Show more entries
                 title = entry.find('atom:title', ns)
                 summary = entry.find('atom:summary', ns)
                 
@@ -247,7 +323,7 @@ class EnvironmentCanadaScraper:
                     print(f"TITLE: {title.text}")
                 
                 if summary is not None:
-                    print(f"\nFULL TEXT:\n{summary.text}")
+                    print(f"\nFULL TEXT:\n{summary.text[:200]}...")
                 
                 # Try extraction
                 if summary is not None:
@@ -332,42 +408,93 @@ class EnvironmentCanadaScraper:
         
         text_lower = text.lower()
         
-        # HIGH TEMPERATURE PATTERNS
-        # Pattern 1: "High plus X"
-        match = re.search(r'high\s+plus\s+(\d+)', text_lower)
-        if match:
-            temp_high = float(match.group(1))
+        # Helper function to convert word numbers to float
+        def word_to_number(word):
+            word_map = {
+                'zero': 0,
+                'one': 1,
+                'two': 2,
+                'three': 3,
+                'four': 4,
+                'five': 5,
+                'six': 6,
+                'seven': 7,
+                'eight': 8,
+                'nine': 9,
+                'ten': 10,
+                'eleven': 11,
+                'twelve': 12,
+                'thirteen': 13,
+                'fourteen': 14,
+                'fifteen': 15,
+                'sixteen': 16,
+                'seventeen': 17,
+                'eighteen': 18,
+                'nineteen': 19,
+                'twenty': 20,
+                'thirty': 30,
+                'forty': 40,
+                'fifty': 50
+            }
+            return word_map.get(word, None)
         
-        # Pattern 2: "High minus X"
+        # HIGH TEMPERATURE PATTERNS
+        # Pattern 1: "High zero"
+        match = re.search(r'high\s+(zero|one|two|three|four|five|six|seven|eight|nine|ten)', text_lower)
+        if match:
+            temp_high = word_to_number(match.group(1))
+        
+        # Pattern 2: "High plus X"
+        if temp_high is None:
+            match = re.search(r'high\s+plus\s+(\d+)', text_lower)
+            if match:
+                temp_high = float(match.group(1))
+        
+        # Pattern 3: "High minus X"
         if temp_high is None:
             match = re.search(r'high\s+minus\s+(\d+)', text_lower)
             if match:
                 temp_high = -float(match.group(1))
         
-        # Pattern 3: "High X" (plain number)
+        # Pattern 4: "High X" (plain number)
         if temp_high is None:
             match = re.search(r'high\s+(\d+)', text_lower)
             if match:
                 temp_high = float(match.group(1))
         
         # LOW TEMPERATURE PATTERNS
-        # Pattern 1: "Low plus X"
-        match = re.search(r'low\s+plus\s+(\d+)', text_lower)
+        # Pattern 1: "Low zero"
+        match = re.search(r'low\s+(zero|one|two|three|four|five|six|seven|eight|nine|ten)', text_lower)
         if match:
-            temp_low = float(match.group(1))
+            temp_low = word_to_number(match.group(1))
         
-        # Pattern 2: "Low minus X"
+        # Pattern 2: "Low plus X"
+        if temp_low is None:
+            match = re.search(r'low\s+plus\s+(\d+)', text_lower)
+            if match:
+                temp_low = float(match.group(1))
+        
+        # Pattern 3: "Low minus X"
         if temp_low is None:
             match = re.search(r'low\s+minus\s+(\d+)', text_lower)
             if match:
                 temp_low = -float(match.group(1))
         
-        # Pattern 3: "Low X" (plain number - assume negative if no plus/minus)
+        # Pattern 4: "Low X" (plain number)
         if temp_low is None:
             match = re.search(r'low\s+(\d+)', text_lower)
             if match:
-                # When just "Low X" with no plus/minus, it's typically negative in Canadian winter
-                # but we'll leave it positive and let context determine
+                temp_low = float(match.group(1))
+        
+        # Pattern 5: "Temperature rising to minus X" or "Temperature rising to plus X"
+        if temp_low is None:
+            match = re.search(r'temperature\s+rising\s+to\s+minus\s+(\d+)', text_lower)
+            if match:
+                temp_low = -float(match.group(1))
+        
+        if temp_low is None:
+            match = re.search(r'temperature\s+rising\s+to\s+plus\s+(\d+)', text_lower)
+            if match:
                 temp_low = float(match.group(1))
         
         return temp_high, temp_low

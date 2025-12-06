@@ -28,6 +28,7 @@ class AlbertaACISScraper:
         'Vauxhall': 'Vauxhall AGDM',
         'Grande Prairie': 'Grande Prairie A',
         'Fort McMurray': 'Fort McMurray A',
+        'Medicine Lake Auto': 'Medicine Lake Auto',
     }
     
     def __init__(self, headless=True):
@@ -369,3 +370,27 @@ if __name__ == "__main__":
         
     except Exception as e:
         print(f"\n✗ Error: {e}")
+
+
+def get_all_acis_stations(self):
+    """Get list of all available ACIS stations"""
+    if not self.driver:
+        self.setup_driver()
+    
+    url = "https://acis.alberta.ca/acis/weather-data-viewer.jsp"
+    self.driver.get(url)
+    
+    wait = WebDriverWait(self.driver, 20)
+    station_select = wait.until(
+        EC.presence_of_element_located((By.ID, "acis_stations"))
+    )
+    
+    select = Select(station_select)
+    stations = []
+    
+    for option in select.options:
+        station_name = option.text.strip()
+        if station_name and station_name != "Select Station":
+            stations.append(station_name)
+    
+    return sorted(stations)

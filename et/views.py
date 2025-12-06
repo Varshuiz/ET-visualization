@@ -1717,6 +1717,8 @@ ALBERTA_LOCATIONS = {
     'Medicine Hat': {'lat': 50.0417, 'lon': -110.6775, 'twp': 13, 'rge': 6, 'mer': '4th'},
     'Grande Prairie': {'lat': 55.1707, 'lon': -118.7947, 'twp': 72, 'rge': 6, 'mer': '6th'},
     'Fort McMurray': {'lat': 56.7267, 'lon': -111.3790, 'twp': 88, 'rge': 9, 'mer': '4th'},
+    'Medicine Lake Auto': {'lat': 54.0181, 'lon': 	-112.9767, 'twp': 52, 'rge': 3, 'mer': '5th'},
+
     
     # Medium Cities
     'Airdrie': {'lat': 51.2917, 'lon': -114.0144, 'twp': 26, 'rge': 1, 'mer': '5th'},
@@ -1751,10 +1753,11 @@ ALBERTA_LOCATIONS = {
 def search_alberta_location(query):
     """
     Search Alberta locations database with fuzzy matching
+    Falls back to allowing any station name for ACIS scraper
     """
     query = query.strip().lower()
     
-    # Exact match
+    # Exact match in database
     for place, data in ALBERTA_LOCATIONS.items():
         if place.lower() == query:
             return {
@@ -1767,7 +1770,7 @@ def search_alberta_location(query):
                 'source': 'database'
             }
     
-    # Partial match
+    # Partial match in database
     for place, data in ALBERTA_LOCATIONS.items():
         if query in place.lower():
             return {
@@ -1780,23 +1783,18 @@ def search_alberta_location(query):
                 'source': 'database'
             }
     
-    # If not in database, try geocoding
-    try:
-        result = geocode_location(query, "Alberta", "Canada")
-        return {
-            'place_name': query.title(),
-            'latitude': result['latitude'],
-            'longitude': result['longitude'],
-            'township': None,
-            'range': None,
-            'meridian': None,
-            'source': 'geocoding',
-            'display_name': result['display_name']
-        }
-    except:
-        return None
-
-
+    # NEW: If not in database, treat it as a direct ACIS station name
+    # Return generic Alberta coordinates - the scraper will find the station
+    return {
+        'place_name': query.title(),
+        'latitude': 53.5,  # Central Alberta
+        'longitude': -114.0,
+        'township': None,
+        'range': None,
+        'meridian': None,
+        'source': 'station_name',
+        'is_direct_station': True
+    }
 # API endpoint for location search autocomplete
 def location_search_api(request):
     """
@@ -2083,6 +2081,7 @@ def find_nearest_alberta_station(latitude, longitude):
         'Edmonton': {'lat': 53.3097, 'lon': -113.5800},
         'Red Deer': {'lat': 52.1822, 'lon': -113.8939},
         'Medicine Hat': {'lat': 50.0189, 'lon': -110.7208},
+        'Medicine Lake Auto': {'lat': 54.0181, 'lon': -112.9767},
         'Brooks': {'lat': 50.5644, 'lon': -111.8986},
         'Vauxhall': {'lat': 50.0500, 'lon': -112.1333},
         'Taber': {'lat': 49.7833, 'lon': -112.1500},
@@ -2160,204 +2159,34 @@ def get_coordinates_from_township(township, range_val, meridian='4th'):
     return (latitude, longitude)
 
 
-def acis_data_view(request):
-    """
-    View for fetching ACIS data - with proper error handling for empty fields
-    """
-    error_message = None
-    df_preview = None
-    success_message = None
-    location_result = None
+    if location_type == 'place':
+        place_name = request.POST.get('place_name', '').strip()
     
-    selected_unit = request.GET.get('unit', 'mm')
-    if selected_unit not in ['mm', 'inches']:
-        selected_unit = 'mm'
+    if not place_name:
+        raise ValueError("Please enter a location name")
     
-    unit_info = get_unit_info(selected_unit)
+    print(f"Searching for: {place_name}")
+    location_result = search_alberta_location(place_name)
     
-    if request.method == 'POST':
-        try:
-            location_type = request.POST.get('location_type', 'place')
-            
-            # NEW: Place Name Search
-            if location_type == 'place':
-                place_name = request.POST.get('place_name', '').strip()
-                
-                if not place_name:
-                    raise ValueError("Please enter a location name")
-                
-                print(f"Searching for: {place_name}")
-                location_result = search_alberta_location(place_name)
-                
-                if not location_result:
-                    raise ValueError(f"Location '{place_name}' not found. Try 'Calgary', 'Lethbridge', 'Edmonton', etc.")
-                
-                latitude = location_result['latitude']
-                longitude = location_result['longitude']
-                location_desc = location_result['place_name']
-                
-                # If we have township info, add it
-                if location_result.get('township'):
-                    location_desc += f" (Twp {location_result['township']}, Rge {location_result['range']}, {location_result['meridian']} Meridian)"
-            
-            # Township/Range
-            elif location_type == 'township':
-                # FIXED: Check if fields are filled
-                township_str = request.POST.get('township', '').strip()
-                range_str = request.POST.get('range', '').strip()
-                
-                if not township_str or not range_str:
-                    raise ValueError("Please enter both Township and Range numbers")
-                
-                try:
-                    township = int(township_str)
-                    range_val = int(range_str)
-                except ValueError:
-                    raise ValueError("Township and Range must be numbers")
-                
-                meridian = request.POST.get('meridian', '4th')
-                
-                latitude, longitude = get_coordinates_from_township(township, range_val, meridian)
-                location_desc = f"Township {township}, Range {range_val}, {meridian} Meridian"
-                
-                # Try to get place name
-                place_name = reverse_geocode(latitude, longitude)
-                if place_name:
-                    location_desc += f" ({place_name.split(',')[0]})"
-            
-            # Coordinates
-            else:
-                # FIXED: Check if fields are filled
-                lat_str = request.POST.get('latitude', '').strip()
-                lon_str = request.POST.get('longitude', '').strip()
-                
-                if not lat_str or not lon_str:
-                    raise ValueError("Please enter both latitude and longitude")
-                
-                try:
-                    latitude = float(lat_str)
-                    longitude = float(lon_str)
-                except ValueError:
-                    raise ValueError("Latitude and longitude must be valid numbers")
-                
-                # Validate ranges
-                if not (49 <= latitude <= 60):
-                    raise ValueError("Latitude must be between 49 and 60 for Alberta")
-                if not (-120 <= longitude <= -110):
-                    raise ValueError("Longitude must be between -120 and -110 for Alberta")
-                
-                place_name = reverse_geocode(latitude, longitude)
-                location_desc = place_name if place_name else f"{latitude}°N, {abs(longitude)}°W"
-            
-            # Get date range
-            start_date = request.POST.get('start_date', '').strip()
-            end_date = request.POST.get('end_date', '').strip()
-            
-            if not start_date or not end_date:
-                raise ValueError("Please provide both start and end dates")
-            
-            # Validate dates
-            try:
-                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
-                
-                if end_dt < start_dt:
-                    raise ValueError("End date must be after start date")
-                
-                if (end_dt - start_dt).days > 730:  # 2 years max
-                    raise ValueError("Date range cannot exceed 2 years")
-                
-            except ValueError as e:
-                if "does not match format" in str(e):
-                    raise ValueError("Invalid date format")
-                raise
-            
-            print(f"Fetching data for {location_desc}")
-            print(f"Coordinates: {latitude}, {longitude}")
-            print(f"Date range: {start_date} to {end_date}")
-            
-            # Find nearest Alberta ACIS station
-            station_result = find_nearest_alberta_station(latitude, longitude)
-            
-            if not station_result:
-                raise ValueError("No Alberta ACIS weather station found near this location")
-            
-            station_name = station_result['name']
-            print(f"Using nearest station: {station_name} ({station_result['distance']:.1f} km away)")
-            
-            # Fetch data from Alberta ACIS using web scraper
-            df = fetch_alberta_acis_data(station_name, start_date, end_date)
-            
-            # Add calculated columns for ET methods
-            if 'Tavg' not in df.columns:
-                df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
-            
-            # Add day of year for radiation calculations
-            df['day_of_year'] = df['Date'].dt.dayofyear
-            
-            # Calculate extraterrestrial radiation
-            df['Ra'] = df.apply(
-                lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), 
-                axis=1
-            )
-            
-            # Estimate solar radiation if not provided
-            if 'Solar_Radiation' not in df.columns:
-                temp_range = (df['Tmax'] - df['Tmin']).clip(lower=1)
-                kRs = 0.16
-                df['Solar_Radiation'] = kRs * np.sqrt(temp_range) * df['Ra']
-                df['Solar_Radiation'] = df['Solar_Radiation'].clip(3, 40)
-            
-            df['Rs'] = df['Solar_Radiation']
-            
-            # Add defaults for RH and wind if not present
-            if 'RH' not in df.columns:
-                df['RH'] = 65.0
-            if 'Wind_Speed' not in df.columns:
-                df['Wind_Speed'] = 2.0
-            
-            df['u2'] = df['Wind_Speed']
-            
-            # Clean up
-            df = df.drop('day_of_year', axis=1, errors='ignore')
-            
-            # Update location description to include station
-            location_desc = f"{location_desc} (Station: {station_name})"
-            
-            # Store in session
-            request.session['acis_data'] = df.to_json(date_format='iso')
-            request.session['acis_location'] = {
-                'latitude': latitude,
-                'longitude': longitude,
-                'start_date': start_date,
-                'end_date': end_date,
-                'description': location_desc
-            }
-            
-            # Preview
-            df_preview = df.head(10).to_dict('records')
-            success_message = f"✓ Successfully fetched {len(df)} days of weather data for {location_desc}!"
-            
-        except ValueError as e:
-            error_message = str(e)
-            print(f"ValueError: {e}")
-        except Exception as e:
-            error_message = f"Unexpected error: {str(e)}"
-            print(f"Full error: {e}")
-            import traceback
-            traceback.print_exc()
+    if not location_result:
+        raise ValueError(f"Location '{place_name}' not found")
     
-    context = {
-        'error_message': error_message,
-        'success_message': success_message,
-        'df_preview': df_preview,
-        'location_result': location_result,
-        'selected_unit': selected_unit,
-        'unit_info': unit_info,
-        'popular_locations': list(ALBERTA_LOCATIONS.keys())[:20]  # Top 20 cities
-    }
-    
-    return render(request, 'et/acis_fetch.html', context)
+    # NEW: Check if this is a direct station name
+    if location_result.get('is_direct_station'):
+        # User typed a station name directly
+        latitude = location_result['latitude']
+        longitude = location_result['longitude']
+        station_name = place_name  # Use the exact name they typed
+        location_desc = f"{place_name} (Station)"
+    else:
+        # Found in our database
+        latitude = location_result['latitude']
+        longitude = location_result['longitude']
+        station_name = location_result['place_name']
+        location_desc = location_result['place_name']
+        
+        if location_result.get('township'):
+            location_desc += f" (Twp {location_result['township']}, Rge {location_result['range']}, {location_result['meridian']} Meridian)"
 
 def comparison_with_acis(request):
     """

@@ -88,8 +88,6 @@
         margin-bottom: 10px;
     }
 
-
-
     .method-comparison {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -219,6 +217,22 @@
         40% { content: '..'; }
         60%, 100% { content: '...'; }
     }
+
+    .station-examples {
+        background: #e8f5e9;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 15px;
+        font-size: 0.9rem;
+        border-left: 4px solid #4CAF50;
+    }
+
+    .station-grid {
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 8px;
+    }
 </style>
 {% endblock %}
 
@@ -242,14 +256,7 @@
             <li>✅ <strong>Wind Speed</strong> (at 10m height, converted to 2m)</li>
             <li>✅ <strong>Reference ET</strong> (official ACIS calculation for comparison)</li>
         </ul>
-        <p style="margin-top: 10px; color: #666;">
-            <strong>Note:</strong> Agricultural stations (AGDM) like Brooks, Vauxhall, and Taber 
-            have the most complete datasets including Reference ET.
-        </p>
-    </div>
-
-
-        </div>
+       
     </div>
 
     {% if error_message %}
@@ -272,7 +279,7 @@
             <!-- Location Type Toggle -->
             <div class="location-toggle">
                 <button type="button" class="active" data-target="place">
-                    📍 Place Name
+                    📍 Station/Place Name
                 </button>
                 <button type="button" data-target="township">
                     🗺️ Township/Range
@@ -284,11 +291,11 @@
 
             <!-- Place Name Search -->
             <div class="input-section active" id="place-section">
-                <h3 style="color: #095256; margin-bottom: 15px;">🔍 Search by Location Name</h3>
+                <h3 style="color: #095256; margin-bottom: 15px;">🔍 Search by Location or Station Name</h3>
                 <div class="form-field">
-                    <label for="place_name">Enter City or Town Name</label>
+                    <label for="place_name">Enter City, Town, or ACIS Station Name</label>
                     <input type="text" id="place_name" name="place_name" 
-                           placeholder="e.g., Brooks, Vauxhall, Lethbridge..."
+                           placeholder="e.g., Calgary, Radway LITE, Medicine Lake Auto, Brooks AGDM..."
                            list="popular_locations"
                            autocomplete="off">
                     <datalist id="popular_locations">
@@ -296,7 +303,13 @@
                         <option value="{{ location }}">
                         {% endfor %}
                     </datalist>
+                    <small style="color: #666; margin-top: 8px; display: block;">
+                        💡 <strong>Tip:</strong> You can enter any city name (e.g., "Calgary", "Lethbridge") 
+                        OR the exact ACIS station name (e.g., "Radway LITE", "Medicine Lake Auto", "Brooks AGDM").
+                        Stations ending in "LITE", "Auto", or "AGDM" typically have Reference ET data.
+                    </small>
                 </div>
+                
         
                 {% if location_result %}
                 <div class="station-info">
