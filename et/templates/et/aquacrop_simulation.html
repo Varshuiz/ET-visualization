@@ -1,0 +1,503 @@
+{% extends 'et/base.html' %}
+{% load static %}
+
+{% block title %}AquaCrop Crop Simulation{% endblock %}
+
+{% block extra_css %}
+<style>
+    .simulation-form {
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 3px 10px rgba(9, 82, 86, 0.1);
+        margin-bottom: 30px;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-group label {
+        font-weight: 600;
+        color: #095256;
+        margin-bottom: 8px;
+        font-size: 0.95rem;
+    }
+
+    .form-group select,
+    .form-group input[type="text"],
+    .form-group input[type="date"],
+    .form-group input[type="file"] {
+        padding: 12px 15px;
+        border: 2px solid #e0f2f1;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+    }
+
+    .form-group select:focus,
+    .form-group input:focus {
+        outline: none;
+        border-color: #087F8C;
+        box-shadow: 0 0 0 3px rgba(8, 127, 140, 0.1);
+    }
+
+    .file-upload-area {
+        border: 2px dashed #087F8C;
+        border-radius: 8px;
+        padding: 30px;
+        text-align: center;
+        background: #f8fffe;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .file-upload-area:hover {
+        background: #e0f2f1;
+        transform: scale(1.02);
+    }
+
+    .file-upload-area input[type="file"] {
+        display: none;
+    }
+
+    .results-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .result-card {
+        background: linear-gradient(135deg, #087F8C, #5AAA95);
+        color: white;
+        padding: 25px;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 3px 10px rgba(8, 127, 140, 0.3);
+        transition: transform 0.3s ease;
+    }
+
+    .result-card:hover {
+        transform: translateY(-5px);
+    }
+
+    .result-card h3 {
+        margin: 0 0 10px 0;
+        font-size: 2rem;
+        font-weight: 700;
+    }
+
+    .result-card p {
+        margin: 0;
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+
+    .result-card.secondary {
+        background: linear-gradient(135deg, #5AAA95, #86A873);
+    }
+
+    .chart-container {
+        background: white;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 3px 10px rgba(9, 82, 86, 0.1);
+        margin-bottom: 30px;
+    }
+
+    .chart-container h3 {
+        color: #095256;
+        margin-bottom: 20px;
+        font-size: 1.3rem;
+    }
+
+    .info-box {
+        background: linear-gradient(135deg, #e0f2f1, #f1f8f7);
+        padding: 20px;
+        border-left: 4px solid #087F8C;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+
+    .info-box h4 {
+        color: #087F8C;
+        margin: 0 0 10px 0;
+    }
+
+    .info-box ul {
+        margin: 10px 0;
+        padding-left: 20px;
+    }
+
+    .info-box li {
+        margin: 5px 0;
+        color: #333;
+    }
+
+    canvas {
+        max-width: 100%;
+        height: 400px !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1>🌾 AquaCrop Crop Simulation</h1>
+        <p class="subtitle">Simulate crop growth, water use, and yield predictions</p>
+    </div>
+
+    {% if error_message %}
+    <div class="error-message">
+        ❌ {{ error_message }}
+    </div>
+    {% endif %}
+
+    <!-- Information Box -->
+    <div class="info-box">
+        <h4>📘 About AquaCrop</h4>
+        <p>AquaCrop is FAO's crop water productivity model that simulates yield response to water. It helps farmers and researchers:</p>
+        <ul>
+            <li>Predict crop yields under different water conditions</li>
+            <li>Optimize irrigation schedules to save water</li>
+            <li>Compare rainfed vs irrigated production</li>
+            <li>Understand crop water stress and its impact on yield</li>
+        </ul>
+    </div>
+
+    <!-- Simulation Form -->
+    <div class="simulation-form">
+        <h3 style="color: #095256; margin-bottom: 20px;">⚙️ Simulation Parameters</h3>
+        
+        <form method="post" enctype="multipart/form-data" id="simulationForm">
+            {% csrf_token %}
+            
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>🌾 Select Crop</label>
+                    <select name="crop" id="crop">
+                        {% for crop in crops %}
+                        <option value="{{ crop }}" {% if selected_crop == crop %}selected{% endif %}>
+                            {{ crop }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>🏞️ Soil Type</label>
+                    <select name="soil" id="soil">
+                        {% for soil in soil_types %}
+                        <option value="{{ soil }}" {% if selected_soil == soil %}selected{% endif %}>
+                            {{ soil }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>💧 Irrigation Strategy</label>
+                    <select name="irrigation" id="irrigation">
+                        {% for value, label in irrigation_methods %}
+                        <option value="{{ value }}" {% if selected_irrigation == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>📅 Start Date</label>
+                    <input type="text" name="start_date" value="{{ start_date|default:'2024/05/01' }}" 
+                           placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}">
+                </div>
+                
+                <div class="form-group">
+                    <label>📅 End Date</label>
+                    <input type="text" name="end_date" value="{{ end_date|default:'2024/09/01' }}" 
+                           placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}">
+                </div>
+            </div>
+            
+            <!-- Weather Data Upload -->
+            <div class="form-group" style="margin-top: 20px;">
+                <label>📊 Weather Data (Optional)</label>
+                <div class="file-upload-area" onclick="document.getElementById('weather_file').click()">
+                    <p style="margin: 0; color: #087F8C; font-size: 1.1rem;">
+                        📁 Click to upload weather data (CSV or Excel)
+                    </p>
+                    <p style="margin: 10px 0 0 0; color: #666; font-size: 0.9rem;">
+                        Required columns: Date, MinTemp, MaxTemp, Precipitation, ReferenceET
+                    </p>
+                    <input type="file" name="weather_file" id="weather_file" accept=".csv,.xlsx,.xls">
+                </div>
+                <p style="margin-top: 10px; color: #666; font-size: 0.85rem;">
+                    💡 If no file is uploaded, sample weather data will be generated
+                </p>
+            </div>
+            
+            <button type="submit" class="submit-btn" style="margin-top: 20px;">
+                🚀 Run Simulation
+            </button>
+        </form>
+    </div>
+
+    {% if has_results %}
+    <!-- Results Summary -->
+    <h2 style="color: #095256; margin-bottom: 20px;">📊 Simulation Results</h2>
+    
+    <div class="results-summary">
+        <div class="result-card">
+            <h3>{{ results.yield_fresh|floatformat:1 }}</h3>
+            <p>tonnes/ha</p>
+            <p style="margin-top: 5px; font-weight: 600;">Fresh Yield</p>
+        </div>
+        
+        <div class="result-card">
+            <h3>{{ results.biomass|floatformat:1 }}</h3>
+            <p>tonnes/ha</p>
+            <p style="margin-top: 5px; font-weight: 600;">Total Biomass</p>
+        </div>
+        
+        <div class="result-card secondary">
+            <h3>{{ results.total_et|floatformat:0 }}</h3>
+            <p>mm</p>
+            <p style="margin-top: 5px; font-weight: 600;">Total Water Use (ET)</p>
+        </div>
+        
+        <div class="result-card secondary">
+            <h3>{{ results.water_productivity|floatformat:2 }}</h3>
+            <p>kg/m³</p>
+            <p style="margin-top: 5px; font-weight: 600;">Water Productivity</p>
+        </div>
+        
+        <div class="result-card secondary">
+            <h3>{{ results.total_irrigation|floatformat:0 }}</h3>
+            <p>mm</p>
+            <p style="margin-top: 5px; font-weight: 600;">Total Irrigation</p>
+        </div>
+        
+        <div class="result-card">
+            <h3>{{ results.canopy_cover_max|floatformat:0 }}%</h3>
+            <p>maximum</p>
+            <p style="margin-top: 5px; font-weight: 600;">Canopy Cover</p>
+        </div>
+    </div>
+
+    <!-- Growth Chart -->
+    <div class="chart-container">
+        <h3>📈 Crop Growth Over Time</h3>
+        <canvas id="growthChart"></canvas>
+    </div>
+
+    <!-- Water Balance Chart -->
+    <div class="chart-container">
+        <h3>💧 Water Balance</h3>
+        <canvas id="waterBalanceChart"></canvas>
+    </div>
+
+    <!-- Download Button -->
+    <div style="text-align: center; margin-top: 30px;">
+        <button onclick="downloadResults()" class="submit-btn">
+            📥 Download Results as CSV
+        </button>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js for visualizations -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+{% if has_results %}
+{{ results.growth_chart|json_script:"growth-data" }}
+{{ results.water_balance_chart|json_script:"water-balance-data" }}
+
+<script>
+// Get chart data
+const growthData = JSON.parse(document.getElementById('growth-data').textContent);
+const waterBalanceData = JSON.parse(document.getElementById('water-balance-data').textContent);
+
+// Growth Chart
+const growthCtx = document.getElementById('growthChart').getContext('2d');
+new Chart(growthCtx, {
+    type: 'line',
+    data: {
+        labels: growthData.dates,
+        datasets: [
+            {
+                label: 'Canopy Cover (%)',
+                data: growthData.canopy_cover,
+                borderColor: '#087F8C',
+                backgroundColor: 'rgba(8, 127, 140, 0.1)',
+                yAxisID: 'y',
+                tension: 0.4
+            },
+            {
+                label: 'Biomass (tonnes/ha)',
+                data: growthData.biomass,
+                borderColor: '#5AAA95',
+                backgroundColor: 'rgba(90, 170, 149, 0.1)',
+                yAxisID: 'y1',
+                tension: 0.4
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+            mode: 'index',
+            intersect: false,
+        },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top'
+            }
+        },
+        scales: {
+            y: {
+                type: 'linear',
+                display: true,
+                position: 'left',
+                title: {
+                    display: true,
+                    text: 'Canopy Cover (%)'
+                }
+            },
+            y1: {
+                type: 'linear',
+                display: true,
+                position: 'right',
+                title: {
+                    display: true,
+                    text: 'Biomass (tonnes/ha)'
+                },
+                grid: {
+                    drawOnChartArea: false,
+                }
+            }
+        }
+    }
+});
+
+// Water Balance Chart
+const waterCtx = document.getElementById('waterBalanceChart').getContext('2d');
+new Chart(waterCtx, {
+    type: 'bar',
+    data: {
+        labels: waterBalanceData.dates,
+        datasets: [
+            {
+                label: 'Precipitation',
+                data: waterBalanceData.precipitation,
+                backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                stack: 'inputs'
+            },
+            {
+                label: 'Irrigation',
+                data: waterBalanceData.irrigation,
+                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                stack: 'inputs'
+            },
+            {
+                label: 'Transpiration',
+                data: waterBalanceData.transpiration,
+                backgroundColor: 'rgba(245, 158, 11, 0.7)',
+                stack: 'outputs'
+            },
+            {
+                label: 'Evaporation',
+                data: waterBalanceData.evaporation,
+                backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                stack: 'outputs'
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top'
+            }
+        },
+        scales: {
+            x: {
+                stacked: false
+            },
+            y: {
+                stacked: false,
+                title: {
+                    display: true,
+                    text: 'Water (mm/day)'
+                }
+            }
+        }
+    }
+});
+
+// Download results function
+function downloadResults() {
+    const crop = '{{ selected_crop }}';
+    const soil = '{{ selected_soil }}';
+    const irrigation = '{{ selected_irrigation }}';
+    
+    let csv = 'AquaCrop Simulation Results\n\n';
+    csv += 'Parameter,Value\n';
+    csv += `Crop,${crop}\n`;
+    csv += `Soil Type,${soil}\n`;
+    csv += `Irrigation Strategy,${irrigation}\n`;
+    csv += `Start Date,{{ start_date }}\n`;
+    csv += `End Date,{{ end_date }}\n\n`;
+    
+    csv += 'Results,\n';
+    csv += 'Fresh Yield (tonnes/ha),{{ results.yield_fresh|floatformat:2 }}\n';
+    csv += 'Biomass (tonnes/ha),{{ results.biomass|floatformat:2 }}\n';
+    csv += 'Total Water Use (mm),{{ results.total_et|floatformat:1 }}\n';
+    csv += 'Total Irrigation (mm),{{ results.total_irrigation|floatformat:1 }}\n';
+    csv += 'Water Productivity (kg/m³),{{ results.water_productivity|floatformat:2 }}\n';
+    csv += 'Max Canopy Cover (%),{{ results.canopy_cover_max|floatformat:1 }}\n\n';
+    
+    csv += 'Daily Growth Data\n';
+    csv += 'Date,Canopy Cover (%),Biomass (tonnes/ha)\n';
+    for (let i = 0; i < growthData.dates.length; i++) {
+        csv += `${growthData.dates[i]},${growthData.canopy_cover[i].toFixed(1)},${growthData.biomass[i].toFixed(2)}\n`;
+    }
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AquaCrop_${crop}_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+</script>
+{% endif %}
+
+<script>
+// Display selected file name
+document.getElementById('weather_file').addEventListener('change', function(e) {
+    const fileName = e.target.files[0]?.name || 'No file selected';
+    const uploadArea = document.querySelector('.file-upload-area p');
+    uploadArea.textContent = `📄 ${fileName}`;
+    uploadArea.style.color = '#5AAA95';
+});
+</script>
+{% endblock %}

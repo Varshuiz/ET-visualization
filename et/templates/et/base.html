@@ -132,6 +132,13 @@
             margin: 0 auto;
         }
 
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
         .file-upload-wrapper {
             position: relative;
             display: inline-block;
@@ -388,6 +395,9 @@
                 </a></li>
                 <li><a href="{% url 'et:env_canada_forecast' %}" {% if request.resolver_match.url_name == 'env_canada_forecast' %}class="active"{% endif %}>
                     <i class="fas fa-cloud-sun-rain"></i> View Forecast
+                </a></li>
+                <li><a href="{% url 'et:aquacrop_simulation' %}" {% if request.resolver_match.url_name == 'aquacrop_simulation' %}class="active"{% endif %}>
+                    <i class="fas fa-seedling"></i> AquaCrop
                 </a></li>
                 <li><a href="{% url 'et:priestley_taylor' %}" {% if request.resolver_match.url_name == 'priestley_taylor' %}class="active"{% endif %}>
                     <i class="fas fa-leaf"></i> Priestley-Taylor
