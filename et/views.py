@@ -3,6 +3,8 @@ import io
 from django.shortcuts import render
 from .forms import UploadFileForm
 from math import exp
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
@@ -25,6 +27,7 @@ from django.http import JsonResponse
 import pandas as pd
 import json
 from .aquacrop_simulator import AquaCropSimulator, run_aquacrop_simulation
+
 
 
 # Unit conversion constants

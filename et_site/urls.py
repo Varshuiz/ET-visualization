@@ -1,3 +1,4 @@
+
 """
 URL configuration for et_site project.
 
@@ -25,7 +26,7 @@ urlpatterns = [
     path('et/', include('et.urls')),
     
     # Redirect root to ET comparison calculator (main page)
-    path('', RedirectView.as_view(url='/et/comparison/', permanent=False)),
+    path('', RedirectView.as_view(url='/et/fetch-data/', permanent=False)),
     
     # Alternative direct access routes
     path('calculator/', include('et.urls')),  # Alternative path
