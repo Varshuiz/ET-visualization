@@ -3,6 +3,8 @@ import io
 from django.shortcuts import render
 from .forms import UploadFileForm
 from math import exp
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
@@ -20,6 +22,12 @@ import numpy as np
 import io
 from io import StringIO
 from .alberta_acis_scraper import fetch_alberta_acis_data, AlbertaACISScraper
+from django.shortcuts import render
+from django.http import JsonResponse
+import pandas as pd
+import json
+from .aquacrop_simulator import AquaCropSimulator, run_aquacrop_simulation
+
 
 
 # Unit conversion constants
@@ -2976,3 +2984,108 @@ def env_canada_forecast_view(request):
     }
     
     return render(request, 'et/env_canada_forecast.html', context)
+
+def aquacrop_simulation(request):
+    """
+    View for AquaCrop crop growth simulation
+    """
+    
+    context = {
+        'crops': list(AquaCropSimulator.AVAILABLE_CROPS.keys()),
+        'soil_types': list(AquaCropSimulator.SOIL_TYPES.keys()),
+        'irrigation_methods': [
+            ('rainfed', 'Rainfed (No Irrigation)'),
+            ('full', 'Full Irrigation (80% SMT)'),
+            ('deficit', 'Deficit Irrigation (60% SMT)'),
+        ],
+    }
+    
+    if request.method == 'POST':
+        try:
+            # Get form data
+            crop = request.POST.get('crop', 'Wheat')
+            soil = request.POST.get('soil', 'Loam')
+            irrigation = request.POST.get('irrigation', 'rainfed')
+            start_date = request.POST.get('start_date', '2024-05-01')
+            end_date = request.POST.get('end_date', '2024-09-01')
+            
+            # Handle weather data upload
+            weather_df = None
+            if 'weather_file' in request.FILES:
+                file = request.FILES['weather_file']
+                
+                if file.name.endswith('.csv'):
+                    weather_df = pd.read_csv(file)
+                elif file.name.endswith(('.xlsx', '.xls')):
+                    weather_df = pd.read_excel(file)
+                else:
+                    context['error_message'] = "Please upload a CSV or Excel file"
+                    return render(request, 'et/aquacrop_simulation.html', context)
+            
+            # Run simulation
+            results = run_aquacrop_simulation(
+                crop=crop,
+                soil=soil,
+                start_date=start_date,
+                end_date=end_date,
+                irrigation=irrigation,
+                weather_df=weather_df
+            )
+            
+            # Add results to context
+            context.update({
+                'results': results,
+                'selected_crop': crop,
+                'selected_soil': soil,
+                'selected_irrigation': irrigation,
+                'start_date': start_date,
+                'end_date': end_date,
+                'has_results': True,
+            })
+            
+        except Exception as e:
+            context['error_message'] = f"Simulation error: {str(e)}"
+    
+    return render(request, 'et/aquacrop_simulation.html', context)
+
+
+def aquacrop_api(request):
+    """
+    API endpoint for AquaCrop simulations
+    Returns JSON results
+    """
+    
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            
+            results = run_aquacrop_simulation(
+                crop=data.get('crop', 'Wheat'),
+                soil=data.get('soil', 'Loam'),
+                start_date=data.get('start_date', '2024/05/01'),
+                end_date=data.get('end_date', '2024/09/01'),
+                irrigation=data.get('irrigation', 'rainfed'),
+            )
+            
+            # Convert DataFrames to JSON-serializable format
+            results_json = {
+                'yield_fresh': float(results['yield_fresh']),
+                'biomass': float(results['biomass']),
+                'total_irrigation': float(results['total_irrigation']),
+                'total_et': float(results['total_et']),
+                'water_productivity': float(results['water_productivity']),
+                'canopy_cover_max': float(results['canopy_cover_max']),
+                'growth_chart': results.get('growth_chart'),
+                'water_balance_chart': results.get('water_balance_chart'),
+            }
+            
+            return JsonResponse({'success': True, 'results': results_json})
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'POST request required'})
+
+
+
+
