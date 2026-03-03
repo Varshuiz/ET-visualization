@@ -27,6 +27,13 @@ from django.http import JsonResponse
 import pandas as pd
 import json
 from .aquacrop_simulator import AquaCropSimulator, run_aquacrop_simulation
+from .aquacrop_aggregation import (
+    aggregate_aquacrop_timeseries,
+    plot_aquacrop_timeseries,
+    compute_yield_tha,
+    build_yield_comparison_chart,
+    format_yield_table,
+)
 
 
 
@@ -3003,6 +3010,7 @@ def aquacrop_simulation(request):
     if request.method == 'POST':
         try:
             # Get form data
+            timestep = request.POST.get('timestep', 'weekly')
             crop = request.POST.get('crop', 'Wheat')
             soil = request.POST.get('soil', 'Loam')
             irrigation = request.POST.get('irrigation', 'rainfed')
@@ -3031,6 +3039,33 @@ def aquacrop_simulation(request):
                 irrigation=irrigation,
                 weather_df=weather_df
             )
+
+            # Weekly/biweekly aggregation
+            if results.get('daily_output') is not None and len(results['daily_output']) > 0:
+                daily_df = results['daily_output'].copy()
+                # Add a Date column if not present (use day index)
+                if 'Date' not in daily_df.columns:
+                    import pandas as pd
+                    start_dt = pd.to_datetime(start_date)
+                    daily_df['Date'] = pd.date_range(start_dt, periods=len(daily_df), freq='D')
+                
+                resampled = aggregate_aquacrop_timeseries(daily_df, timestep)
+                
+                # Pick a meaningful column to plot — canopy_cover or biomass
+                y_col = 'biomass' if 'biomass' in resampled.columns else resampled.select_dtypes('number').columns[0]
+                ts_chart = plot_aquacrop_timeseries(
+                    resampled, y_col=y_col,
+                    title=f"{'Weekly' if timestep == 'weekly' else 'Biweekly'} Biomass Accumulation",
+                    color='#087F8C',
+                    timestep=timestep
+                )
+                context['resampled_chart'] = ts_chart
+                resampled_table = resampled[['Period', y_col]].rename(columns={y_col: 'value'})
+                context['resampled_data'] = resampled_table.to_dict('records')
+                # Yield in t/ha using Harvest Index
+                dry_biomass = results.get('yield_dry', results.get('yield_fresh', 0))
+                context['yield_tha'] = compute_yield_tha(dry_biomass, crop)
+                context['timestep'] = timestep
             
             # Add results to context
             context.update({
@@ -3041,8 +3076,9 @@ def aquacrop_simulation(request):
                 'start_date': start_date,
                 'end_date': end_date,
                 'has_results': True,
+                'timestep': timestep,        # add this
             })
-            
+                        
         except Exception as e:
             context['error_message'] = f"Simulation error: {str(e)}"
     

@@ -193,6 +193,13 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>📅 Analysis Timestep</label>
+                    <select name="timestep" id="timestep">
+                        <option value="weekly" {% if timestep == 'weekly' %}selected{% endif %}>Weekly (7-day)</option>
+                        <option value="biweekly" {% if timestep == 'biweekly' %}selected{% endif %}>Biweekly (14-day)</option>
+                    </select>
+                </div>
                 
                 <div class="form-group">
                     <label>🏞️ Soil Type</label>
@@ -268,6 +275,12 @@
             <p>tonnes/ha</p>
             <p style="margin-top: 5px; font-weight: 600;">Total Biomass</p>
         </div>
+
+        <div class="result-card">
+            <h3>{{ yield_tha|floatformat:2 }}</h3>
+            <p>t/ha</p>
+            <p style="margin-top: 5px; font-weight: 600;">Marketable Yield</p>
+        </div>
         
         <div class="result-card secondary">
             <h3>{{ results.total_et|floatformat:0 }}</h3>
@@ -299,6 +312,35 @@
         <h3>📈 Crop Growth Over Time</h3>
         <canvas id="growthChart"></canvas>
     </div>
+
+    {% if resampled_chart %}
+<div class="chart-container">
+    <h3>📊 {% if timestep == 'weekly' %}Weekly{% else %}Biweekly{% endif %} Growth Summary</h3>
+    <img src="data:image/png;base64,{{ resampled_chart }}" 
+         alt="Aggregated growth chart" style="max-width:100%; border-radius:8px;">
+</div>
+{% endif %}
+
+{% if resampled_data %}
+<div class="chart-container">
+    <h3>📋 {% if timestep == 'weekly' %}Weekly{% else %}Biweekly{% endif %} Data Table</h3>
+    <table style="width:100%; border-collapse:collapse;">
+        <thead>
+            <tr style="background:#087F8C; color:white;">
+                <th style="padding:10px; text-align:left;">Period</th>
+                <th style="padding:10px; text-align:left;">Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in resampled_data %}
+            <tr style="border-bottom:1px solid #e0f2f1;">
+                <td style="padding:10px;">{{ row.Period }}</td>
+                <td style="padding:10px;">{{ row.value|floatformat:2 }}</td>            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
 
     <!-- Water Balance Chart -->
     <div class="chart-container">
