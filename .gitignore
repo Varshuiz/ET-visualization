@@ -1,7 +1,57 @@
-env/
+# Python
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
 *.pyc
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Django
+*.log
+local_settings.py
 db.sqlite3
+db.sqlite3-journal
+media/
 staticfiles/
-sessions/
-.vercel/
+static/
+
+# Environment variables
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Test / coverage
+htmlcov/
+.coverage
+.tox/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# Node (if any frontend tooling)
+node_modules/
+
+# Secrets / keys
+*.pem
+*.key
+secrets.py
