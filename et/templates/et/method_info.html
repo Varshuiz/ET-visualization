@@ -9,64 +9,220 @@
 </div>
 
 <div class="card fade-in">
-    <div class="method-comparison-info">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 30px;">
-            
-            <!-- Priestley-Taylor Method -->
-            <div class="method-info-card" style="border: 2px solid var(--asparagus); border-radius: 15px; padding: 25px;">
-                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-                    <div style="width: 50px; height: 50px; background: var(--asparagus); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
-                        <i class="fas fa-leaf"></i>
-                    </div>
-                    <h2 style="color: var(--midnight-green); margin: 0;">Priestley-Taylor</h2>
-                </div>
-                
-                <h3 style="color: var(--asparagus); margin-bottom: 10px;">Overview</h3>
-                <p style="margin-bottom: 15px; line-height: 1.6;">
-                    A simplified energy balance method that requires only temperature and solar radiation data. 
-                    It's based on the assumption that under humid conditions with minimal advection, 
-                    evapotranspiration can be estimated using an empirical coefficient (α = 1.26).
-                </p>
-                
-                <h3 style="color: var(--asparagus); margin-bottom: 10px;">Advantages</h3>
-                <ul style="margin-bottom: 15px; padding-left: 20px;">
-                    <li>Simple data requirements</li>
-                    <li>Good accuracy in humid regions</li>
-                    <li>Computational efficiency</li>
-                    <li>Widely used in research</li>
-                </ul>
-                
-                <h3 style="color: var(--asparagus); margin-bottom: 10px;">Limitations</h3>
-                <ul style="margin-bottom: 15px; padding-left: 20px;">
-                    <li>Less accurate in arid regions</li>
-                    <li>Doesn't account for wind effects</li>
-                    <li>Assumes minimal advection</li>
-                </ul>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 30px;">
 
-                <h3 style="color: var(--asparagus); margin-bottom: 10px;">Required Data</h3>
-                <ul style="padding-left: 20px;">
-                    <li>Average air temperature (°C)</li>
-                    <li>Solar radiation (MJ/m²/day)</li>
-                </ul>
+        <!-- Priestley-Taylor -->
+        <div style="border: 2px solid var(--asparagus); border-radius: 15px; padding: 25px;">
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                <div style="width: 50px; height: 50px; background: var(--asparagus); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                    <i class="fas fa-leaf"></i>
+                </div>
+                <h2 style="color: var(--midnight-green); margin: 0;">Priestley-Taylor</h2>
             </div>
+            <p style="margin-bottom: 15px; line-height: 1.6; color: var(--midnight-green);">
+                A simplified energy balance method based on the assumption that under humid conditions,
+                ET can be estimated using an empirical coefficient (α = 1.26) applied to equilibrium ET.
+            </p>
+            <h4 style="color: var(--asparagus); margin-bottom: 8px;">Advantages</h4>
+            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
+                <li>Simple data requirements</li>
+                <li>Good accuracy in humid regions</li>
+                <li>Computationally efficient</li>
+                <li>Widely used in research</li>
+            </ul>
+            <h4 style="color: var(--asparagus); margin-bottom: 8px;">Limitations</h4>
+            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
+                <li>Less accurate in arid regions</li>
+                <li>Does not account for wind effects</li>
+                <li>Assumes minimal advection</li>
+            </ul>
+            <h4 style="color: var(--asparagus); margin-bottom: 8px;">Required Data</h4>
+            <ul style="padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
+                <li>Average air temperature (°C)</li>
+                <li>Solar radiation (MJ/m²/day)</li>
+            </ul>
+            <div style="margin-top: 15px; padding: 12px; background: #f1f8e9; border-radius: 8px;">
+                <code style="color: var(--asparagus); font-size: 0.9rem;">ET₀ = α × (Δ/(Δ+γ)) × (Rn - G) / λ</code>
+            </div>
+        </div>
 
-            <!-- Penman-Monteith Method -->
-            <div class="method-info-card" style="border: 2px solid var(--teal); border-radius: 15px; padding: 25px;">
-                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-                    <div style="width: 50px; height: 50px; background: var(--teal); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
-                        <i class="fas fa-wind"></i>
-                    </div>
-                    <h2 style="color: var(--midnight-green); margin: 0;">Penman-Monteith</h2>
+        <!-- Penman-Monteith -->
+        <div style="border: 2px solid var(--teal); border-radius: 15px; padding: 25px;">
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                <div style="width: 50px; height: 50px; background: var(--teal); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                    <i class="fas fa-wind"></i>
                 </div>
-                
-                <h3 style="color: var(--teal); margin-bottom: 10px;">Overview</h3>
-                <p style="margin-bottom: 15px; line-height: 1.6;">
-                    The FAO-56 international standard method for calculating reference evapotranspiration. 
-                    It combines energy balance and aerodynamic terms to provide the most accurate ET₀ estimates 
-                    for all climatic conditions.
-                </p>
-                
-                <h3 style="color: var(--teal); margin-bottom: 10px;">Advantages</h3>
-                <ul style="margin-bottom: 15px; padding-left: 20px;">
-                    <li>Highest accuracy</li>
-                    <li>International standard (FAO-56)</li>
+                <h2 style="color: var(--midnight-green); margin: 0;">Penman-Monteith</h2>
+            </div>
+            <p style="margin-bottom: 15px; line-height: 1.6; color: var(--midnight-green);">
+                The FAO-56 international standard. Combines energy balance and aerodynamic terms
+                to provide the most accurate ET₀ estimates for all climatic conditions.
+            </p>
+            <h4 style="color: var(--teal); margin-bottom: 8px;">Advantages</h4>
+            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
+                <li>Highest accuracy — international standard</li>
+                <li>Valid across all climate types</li>
+                <li>Accounts for wind and humidity</li>
+                <li>FAO-56 endorsed method</li>
+            </ul>
+            <h4 style="color: var(--teal); margin-bottom: 8px;">Limitations</h4>
+            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
+                <li>Requires the most input variables</li>
+                <li>Wind speed measurement needed</li>
+                <li>Sensitive to data quality</li>
+            </ul>
+            <h4 style="color: var(--teal); margin-bottom: 8px;">Required Data</h4>
+            <ul style="padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
+                <li>Tmax, Tmin (°C)</li>
+                <li>Relative humidity (%)</li>
+                <li>Wind speed at 2m (m/s)</li>
+                <li>Solar radiation (MJ/m²/day)</li>
+            </ul>
+            <div style="margin-top: 15px; padding: 12px; background: #e6f7f7; border-radius: 8px;">
+                <code style="color: var(--teal); font-size: 0.8rem;">ET₀ = [0.408Δ(Rn-G) + γ(900/(T+273))u₂(es-ea)] / [Δ + γ(1+0.34u₂)]</code>
+            </div>
+        </div>
+
+        <!-- Hargreaves-Samani -->
+        <div style="border: 2px solid #5AAA95; border-radius: 15px; padding: 25px;">
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                <div style="width: 50px; height: 50px; background: #5AAA95; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                    <i class="fas fa-thermometer-half"></i>
+                </div>
+                <h2 style="color: var(--midnight-green); margin: 0;">Hargreaves-Samani</h2>
+            </div>
+            <p style="margin-bottom: 15px; line-height: 1.6; color: var(--midnight-green);">
+                The simplest ET estimation approach requiring only Tmax and Tmin.
+                Extraterrestrial radiation Ra is calculated internally from latitude and day of year.
+            </p>
+            <h4 style="color: #5AAA95; margin-bottom: 8px;">Advantages</h4>
+            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
+                <li>Only temperature data needed</li>
+                <li>Ideal for remote or historical data</li>
+                <li>Globally validated</li>
+                <li>Reliable long-term trend analysis</li>
+            </ul>
+            <h4 style="color: #5AAA95; margin-bottom: 8px;">Limitations</h4>
+            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
+                <li>Lower accuracy vs. PM in arid areas</li>
+                <li>Ignores humidity and wind effects</li>
+                <li>May overestimate in coastal regions</li>
+            </ul>
+            <h4 style="color: #5AAA95; margin-bottom: 8px;">Required Data</h4>
+            <ul style="padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
+                <li>Maximum temperature (°C)</li>
+                <li>Minimum temperature (°C)</li>
+            </ul>
+            <div style="margin-top: 15px; padding: 12px; background: #e0f2f1; border-radius: 8px;">
+                <code style="color: #5AAA95; font-size: 0.9rem;">ET₀ = 0.0023 × Ra × (Tmax-Tmin)^0.5 × (Tavg+17.8)</code>
+            </div>
+        </div>
+
+        <!-- Maulé -->
+        <div style="border: 2px solid #BB9F06; border-radius: 15px; padding: 25px;">
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                <div style="width: 50px; height: 50px; background: #BB9F06; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                    <i class="fas fa-seedling"></i>
+                </div>
+                <h2 style="color: var(--midnight-green); margin: 0;">Maulé</h2>
+            </div>
+            <p style="margin-bottom: 15px; line-height: 1.6; color: var(--midnight-green);">
+                A regionally calibrated method designed for prairie and semi-arid conditions.
+                Uses an empirical coefficient tuned for the Canadian Prairies and similar climates.
+            </p>
+            <h4 style="color: #BB9F06; margin-bottom: 8px;">Advantages</h4>
+            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
+                <li>Calibrated for Prairie conditions</li>
+                <li>Minimal data requirements</li>
+                <li>Optional humidity correction</li>
+                <li>Good performance in semi-arid climates</li>
+            </ul>
+            <h4 style="color: #BB9F06; margin-bottom: 8px;">Limitations</h4>
+            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
+                <li>Region-specific — less tested globally</li>
+                <li>Less accurate outside Prairie climates</li>
+                <li>Empirical coefficient may need recalibration</li>
+            </ul>
+            <h4 style="color: #BB9F06; margin-bottom: 8px;">Required Data</h4>
+            <ul style="padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
+                <li>Tmax, Tmin (°C)</li>
+                <li>Solar radiation (MJ/m²/day)</li>
+                <li><em>Optional:</em> Relative humidity (%)</li>
+            </ul>
+            <div style="margin-top: 15px; padding: 12px; background: #fff8e1; border-radius: 8px;">
+                <code style="color: #BB9F06; font-size: 0.9rem;">ET₀ = C × Ra × (Tmax-Tmin)^0.5 × (Tavg+17.8) / 100</code>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Comparison Table -->
+    <div style="margin-top: 40px;">
+        <h2 style="color: var(--midnight-green); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-table"></i> Method Comparison Summary
+        </h2>
+        <div style="overflow-x: auto;">
+            <table style="width:100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px var(--shadow);">
+                <thead>
+                    <tr style="background: linear-gradient(135deg, var(--teal), var(--midnight-green)); color: white;">
+                        <th style="padding: 15px; text-align: left;">Method</th>
+                        <th style="padding: 15px; text-align: center;">Temp</th>
+                        <th style="padding: 15px; text-align: center;">Radiation</th>
+                        <th style="padding: 15px; text-align: center;">Humidity</th>
+                        <th style="padding: 15px; text-align: center;">Wind</th>
+                        <th style="padding: 15px; text-align: center;">Accuracy</th>
+                        <th style="padding: 15px; text-align: left;">Best For</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: rgba(119,163,79,0.05);">
+                        <td style="padding: 12px 15px; font-weight: 600; color: var(--asparagus);">Priestley-Taylor</td>
+                        <td style="padding: 12px 15px; text-align: center;">✅</td>
+                        <td style="padding: 12px 15px; text-align: center;">✅</td>
+                        <td style="padding: 12px 15px; text-align: center;">❌</td>
+                        <td style="padding: 12px 15px; text-align: center;">❌</td>
+                        <td style="padding: 12px 15px; text-align: center;">⭐⭐⭐</td>
+                        <td style="padding: 12px 15px;">Humid regions, research</td>
+                    </tr>
+                    <tr style="background: rgba(8,127,140,0.05);">
+                        <td style="padding: 12px 15px; font-weight: 600; color: var(--teal);">Penman-Monteith</td>
+                        <td style="padding: 12px 15px; text-align: center;">✅</td>
+                        <td style="padding: 12px 15px; text-align: center;">✅</td>
+                        <td style="padding: 12px 15px; text-align: center;">✅</td>
+                        <td style="padding: 12px 15px; text-align: center;">✅</td>
+                        <td style="padding: 12px 15px; text-align: center;">⭐⭐⭐⭐⭐</td>
+                        <td style="padding: 12px 15px;">All climates, standard practice</td>
+                    </tr>
+                    <tr style="background: rgba(90,170,149,0.05);">
+                        <td style="padding: 12px 15px; font-weight: 600; color: #5AAA95;">Hargreaves-Samani</td>
+                        <td style="padding: 12px 15px; text-align: center;">✅</td>
+                        <td style="padding: 12px 15px; text-align: center;">❌</td>
+                        <td style="padding: 12px 15px; text-align: center;">❌</td>
+                        <td style="padding: 12px 15px; text-align: center;">❌</td>
+                        <td style="padding: 12px 15px; text-align: center;">⭐⭐⭐</td>
+                        <td style="padding: 12px 15px;">Remote areas, historical data</td>
+                    </tr>
+                    <tr style="background: rgba(187,159,6,0.05);">
+                        <td style="padding: 12px 15px; font-weight: 600; color: #BB9F06;">Maulé</td>
+                        <td style="padding: 12px 15px; text-align: center;">✅</td>
+                        <td style="padding: 12px 15px; text-align: center;">✅</td>
+                        <td style="padding: 12px 15px; text-align: center;">Optional</td>
+                        <td style="padding: 12px 15px; text-align: center;">❌</td>
+                        <td style="padding: 12px 15px; text-align: center;">⭐⭐⭐⭐</td>
+                        <td style="padding: 12px 15px;">Canadian Prairies, semi-arid</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 40px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+        <a href="{% url 'et:comparison' %}" style="background: linear-gradient(135deg, var(--teal), var(--midnight-green)); color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 5px 15px rgba(8,127,140,0.3);">
+            <i class="fas fa-calculator"></i> Compare All Methods
+        </a>
+        <a href="{% url 'et:help' %}" style="background: linear-gradient(135deg, var(--zomp), var(--asparagus)); color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 5px 15px rgba(90,170,149,0.3);">
+            <i class="fas fa-question-circle"></i> Help Guide
+        </a>
+    </div>
+</div>
+{% endblock %}
