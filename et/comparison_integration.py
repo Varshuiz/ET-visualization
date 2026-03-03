@@ -1,4 +1,3 @@
-# Add this to your comparison_with_acis view in views.py
 
 def comparison_with_acis(request):
     """
