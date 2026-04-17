@@ -44,6 +44,10 @@ build/
 htmlcov/
 .coverage
 .tox/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
 
 # Jupyter notebooks
 .ipynb_checkpoints/
@@ -55,3 +59,7 @@ node_modules/
 *.pem
 *.key
 secrets.py
+
+# Cursor / local agent files
+.cursor/
+.cursorignore

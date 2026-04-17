@@ -1,6 +1,6 @@
 {% extends 'et/base.html' %}
 
-{% block title %}Fetch Weather Data - Alberta ACIS{% endblock %}
+{% block title %}Fetch Weather Data - Environment Canada{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -239,22 +239,22 @@
 {% block content %}
 <div class="container">
     <div class="page-header">
-        <h1>🌐 Fetch Weather Data from Alberta ACIS</h1>
-        <p class="subtitle">Get historical weather data with Reference Evapotranspiration</p>
+        <h1>🌐 Fetch Weather Data from Environment Canada</h1>
+        <p class="subtitle">Get historical weather data for ET calculations (with CSV backup upload)</p>
     </div>
 
     <div class="info-box">
-        <h3>📍About ACIS Data</h3>
+        <h3>📍About Environment Canada Data</h3>
         <p>
-            The <strong>Alberta Climate Information Service (ACIS)</strong> provides high-quality weather data 
-            from agricultural weather stations across Alberta. This tool automatically fetches:
+            This tool uses a deploy-friendly <strong>historical weather API</strong> for Alberta coordinates. It automatically fetches:
         </p>
         <ul style="margin-top: 10px; margin-left: 20px;">
             <li>✅ <strong>Temperature</strong> (max/min/average)</li>
             <li>✅ <strong>Precipitation</strong> (daily rainfall)</li>
             <li>✅ <strong>Relative Humidity</strong> (for accurate calculations)</li>
             <li>✅ <strong>Wind Speed</strong> (at 10m height, converted to 2m)</li>
-            <li>✅ <strong>Reference ET</strong> (official ACIS calculation for comparison)</li>
+            <li>ℹ️ <strong>Reference ET</strong> is not included in this source (calculated ET methods still work)</li>
+            <li>🛟 <strong>Backup upload:</strong> You can upload a CSV if automatic fetch fails</li>
         </ul>
        
     </div>
@@ -273,7 +273,7 @@
     {% endif %}
 
     <div class="upload-card">
-        <form method="post" id="acisForm">
+        <form method="post" enctype="multipart/form-data" id="acisForm">
             {% csrf_token %}
 
             <!-- Location Type Toggle -->
@@ -391,17 +391,27 @@
                 </div>
             </div>
             <div style="background: #fff3cd; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 0.85rem;">
-                <strong>⏱️ Note:</strong> Up to 30 years of data supported. Large ranges (10+ years) may take 30–60 seconds. Growing season (May–October) recommended for ET calculations.
+                <strong>⏱️ Note:</strong> Historical dates up to today are supported. Large ranges may take longer. Growing season (May-October) is recommended for ET calculations.
+            </div>
+
+            <h3 style="color: #095256; margin: 24px 0 15px 0;">🛟 Backup CSV Upload (Optional)</h3>
+            <div class="form-field">
+                <label for="id_file">Upload CSV instead of automatic fetch</label>
+                <input type="file" id="id_file" name="file" accept=".csv">
+                <small style="color: #666; margin-top: 8px; display: block;">
+                    If selected, CSV data is used directly. Required columns: Date, Tmax, Tmin.
+                    Optional columns: Precipitation, RH, Wind_Speed/u2, Solar_Radiation, ET_ACIS.
+                </small>
             </div>
 
             <input type="hidden" name="location_type" id="location_type" value="place">
 
             <button type="submit" class="submit-btn" style="margin-top: 30px;">
-                🌐 Fetch Weather Data from ACIS
+                🌐 Fetch Historical Data
             </button>
 
             <div class="loading" id="loading" style="display: none;">
-                <div>🔄 Fetching data from ACIS</div>
+                <div>🔄 Fetching historical data</div>
                 <div style="font-size: 0.9rem; margin-top: 10px; font-weight: normal;">
                     This may take 10-30 seconds...
                 </div>
@@ -421,7 +431,7 @@
                     <th>Precip (mm)</th>
                     <th>RH (%)</th>
                     <th>Wind (m/s)</th>
-                    <th>ET ACIS (mm)</th>
+                    <th>ET Reference (mm)</th>
                 </tr>
             </thead>
             <tbody>

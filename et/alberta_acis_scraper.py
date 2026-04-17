@@ -1,21 +1,13 @@
+import io
+import re
+from urllib.parse import urljoin
 
-
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
-import time
-import tempfile
-from datetime import datetime
+import requests
 
 
 class AlbertaACISScraper:
-    """Web scraper for Alberta ACIS weather data"""
+    """HTTP client for Alberta ACIS weather data (no browser automation)."""
     
     STATION_MAPPING = {
         'Lethbridge': 'Lethbridge CDA',
@@ -32,241 +24,185 @@ class AlbertaACISScraper:
     }
     
     def __init__(self, headless=True):
-        self.headless = headless
-        self.driver = None
+        self.headless = headless  # kept for backward compatibility
+        self.base_url = "https://acis.alberta.ca/acis/weather-data-viewer.jsp"
+        self.session = requests.Session()
+        self.session.headers.update(
+            {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/123.0.0.0 Safari/537.36"
+                ),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            }
+        )
         
     def setup_driver(self):
-        """Setup Chrome webdriver"""
-        chrome_options = Options()
-        
-        if self.headless:
-            chrome_options.add_argument('--headless')
-        
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--window-size=1920,1080')
-        
-        # Unique user data directory
-        user_data_dir = tempfile.mkdtemp()
-        chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
-        
-        # Set download directory
-        download_dir = tempfile.gettempdir()
-        prefs = {
-            'download.default_directory': download_dir,
-            'download.prompt_for_download': False,
-        }
-        chrome_options.add_experimental_option('prefs', prefs)
-        
-        service = Service(ChromeDriverManager().install())
-        self.driver = webdriver.Chrome(service=service, options=chrome_options)
-        
-        print("✓ Chrome driver initialized")
+        """No-op kept for compatibility with old call sites."""
+        return None
         
     def close(self):
-        """Close the browser"""
-        if self.driver:
-            self.driver.quit()
-            print("✓ Browser closed")
+        """Close HTTP session."""
+        self.session.close()
     
     def fetch_data(self, station_name, start_date, end_date):
-        """Fetch weather data from Alberta ACIS"""
-        
+        """Fetch weather data from Alberta ACIS without Selenium."""
         try:
-            print(f"\n🌐 Fetching data from Alberta ACIS...")
+            print("\n🌐 Fetching data from Alberta ACIS via HTTP...")
             print(f"   Station: {station_name}")
             print(f"   Date range: {start_date} to {end_date}")
-            
-            if not self.driver:
-                self.setup_driver()
-            
-            url = "https://acis.alberta.ca/acis/weather-data-viewer.jsp"
-            print(f"   Loading {url}...")
-            self.driver.get(url)
-            
-            wait = WebDriverWait(self.driver, 20)
-            
-            # Wait for page to load
-            print("   Waiting for page to load...")
-            station_select = wait.until(
-                EC.presence_of_element_located((By.ID, "acis_stations"))
-            )
-            time.sleep(3)
-            
-            # Step 1: Select station
-            print("   Selecting station...")
+
             full_station_name = self.STATION_MAPPING.get(station_name, station_name)
-            
-            select = Select(station_select)
-            station_found = False
-            for option in select.options:
-                option_text = option.text.strip()
-                if full_station_name.upper() in option_text.upper() or \
-                   station_name.upper() in option_text.upper():
-                    option.click()
-                    station_found = True
-                    print(f"   ✓ Selected: {option_text}")
-                    break
-            
-            if not station_found:
-                raise ValueError(f"Station '{station_name}' not found")
-            
-            time.sleep(2)
-            
-            # Step 2: Select "Daily" interval
-            print("   Setting interval to Daily...")
-            interval_select = self.driver.find_element(By.ID, "intervalSelector")
-            Select(interval_select).select_by_visible_text("Daily")
-            time.sleep(1)
-            
-            # Step 3: Set date range using correct input IDs
-            print("   Setting date range...")
-            try:
-                # Find date inputs by ID (they're type="text", not type="date"!)
-                start_input = self.driver.find_element(By.ID, "calendarDataStart")
-                end_input = self.driver.find_element(By.ID, "calendarDataEnd")
-                
-                # Clear and set start date
-                start_input.click()
-                time.sleep(0.3)
-                start_input.clear()
-                start_input.send_keys(start_date)
-                
-                # Clear and set end date
-                end_input.click()
-                time.sleep(0.3)
-                end_input.clear()
-                end_input.send_keys(end_date)
-                
-                time.sleep(1)
-                print(f"   ✓ Dates set: {start_date} to {end_date}")
-                
-            except Exception as e:
-                print(f"   ⚠ Error setting dates: {str(e)[:100]}")
-                print(f"   Will use default dates")
-            
-            # Step 4: Select checkboxes using JavaScript (bypasses overlay)
-            print("   Selecting data variables...")
-            
-            variables = {
-                'cb_pop_at_max': 'Maximum Temperature',
-                'cb_pop_at_min': 'Minimum Temperature',
-                'cb_pop_pr_b': 'Precipitation',
-                'cb_pop_et_std_grass': 'Reference Evapotranspiration',
-                'cb_pop_hu_ave': 'Relative Humidity Average',
-                'cb_pop_ws_inst': 'Wind Speed',
-            }
-            
-            for checkbox_id, var_name in variables.items():
-                try:
-                    # Use JavaScript to check the checkbox
-                    result = self.driver.execute_script(f"""
-                        var checkbox = document.getElementById('{checkbox_id}');
-                        if (checkbox) {{
-                            checkbox.checked = true;
-                            checkbox.onclick();  // Trigger the onclick event
-                            return true;
-                        }}
-                        return false;
-                    """)
-                    
-                    if result:
-                        print(f"   ✓ Selected: {var_name}")
-                    else:
-                        print(f"   ⚠ Could not find: {var_name}")
-                        
-                    time.sleep(0.5)
-                except Exception as e:
-                    print(f"   ⚠ Error selecting {var_name}: {str(e)[:50]}")
-            
-            time.sleep(2)
-            
-            # Step 5: Click CSV button
-            print("   Clicking CSV button...")
-            
-            try:
-                csv_button = wait.until(
-                    EC.element_to_be_clickable((By.ID, "btnCsv"))
-                )
-                csv_button.click()
-                
-                # Check for alert
-                time.sleep(2)
-                try:
-                    alert = self.driver.switch_to.alert
-                    alert_text = alert.text
-                    print(f"   ⚠ Alert: {alert_text}")
-                    alert.accept()
-                    raise ValueError(f"CSV download failed: {alert_text}")
-                except:
-                    pass  # No alert means success
-                
-                print("   ✓ CSV download initiated")
-                time.sleep(3)
-                
-                # Find and read downloaded CSV
-                df = self._find_and_read_csv()
-                
-                if df is not None and len(df) > 0:
-                    print(f"   ✓ Successfully read {len(df)} rows")
-                    return df
-                else:
-                    raise ValueError("No data in CSV file")
-                    
-            except Exception as e:
-                print(f"   CSV method failed: {str(e)[:100]}")
-                raise
-        
+
+            page_html = self._get_viewer_html()
+            station_value, resolved_station = self._resolve_station_value(
+                page_html, full_station_name, station_name
+            )
+            if not station_value:
+                raise ValueError(f"Station '{station_name}' not found in ACIS station list")
+            print(f"   ✓ Selected: {resolved_station}")
+
+            payload = self._build_payload(station_value, start_date, end_date)
+            df = self._submit_for_data(payload)
+            if df is None or df.empty:
+                raise ValueError("ACIS returned no data for this query")
+
+            print(f"   ✓ Successfully read {len(df)} rows")
+            return df
         except Exception as e:
             print(f"   ✗ Error: {e}")
-            
-            try:
-                screenshot_path = "/tmp/alberta_acis_error.png"
-                self.driver.save_screenshot(screenshot_path)
-                print(f"   Screenshot: {screenshot_path}")
-            except:
-                pass
-            
             raise ValueError(f"Failed to fetch data: {e}")
-    
-    def _find_and_read_csv(self):
-        """Find and read downloaded CSV"""
-        import os
-        import glob
-        
-        possible_dirs = [
-            tempfile.gettempdir(),
-            os.path.expanduser('~/Downloads'),
-            '/tmp',
-        ]
-        
-        for directory in possible_dirs:
-            if not os.path.exists(directory):
+
+    def _get_viewer_html(self):
+        response = self.session.get(self.base_url, timeout=45)
+        response.raise_for_status()
+        return response.text
+
+    def _resolve_station_value(self, html, full_station_name, fallback_name):
+        # Parse station options from the select list.
+        # ACIS markup can vary: quoted value, unquoted value, or no value.
+        options = re.findall(
+            r'<option\b([^>]*)>(.*?)</option>',
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+        def normalize(text):
+            return re.sub(r"\s+", " ", text or "").strip()
+
+        for attrs, label_html in options:
+            value_match = re.search(
+                r'\bvalue\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))',
+                attrs,
+                flags=re.IGNORECASE,
+            )
+            value = ""
+            if value_match:
+                value = value_match.group(1) or value_match.group(2) or value_match.group(3) or ""
+
+            label = normalize(re.sub(r"<[^>]+>", "", label_html))
+            if not label:
                 continue
-            
-            # Look for CSV files
-            csv_pattern = os.path.join(directory, '*.csv')
-            csv_files = glob.glob(csv_pattern)
-            
-            if csv_files:
-                # Get most recent
-                csv_files.sort(key=os.path.getmtime, reverse=True)
-                
-                for csv_path in csv_files[:3]:  # Check 3 most recent
-                    # Check if recent (within last 10 seconds)
-                    if time.time() - os.path.getmtime(csv_path) < 10:
-                        print(f"   Reading: {csv_path}")
-                        try:
-                            df = pd.read_csv(csv_path, encoding="latin-1")
-                            df = self._clean_dataframe(df)
-                            if len(df) > 0:
-                                return df
-                        except Exception as e:
-                            print(f"   Error reading {csv_path}: {e}")
-                            continue
-        
+            if full_station_name.lower() in label.lower() or fallback_name.lower() in label.lower():
+                return (normalize(value) or label), label
+
+        # Don't fail if station list cannot be parsed from HTML.
+        # Use the mapped station name directly so the POST can still be attempted.
+        fallback_station = full_station_name or fallback_name
+        return normalize(fallback_station), normalize(fallback_station)
+
+    def _build_payload(self, station_value, start_date, end_date):
+        # Uses same input ids currently selected by Selenium flow.
+        payload = {
+            "acis_stations": station_value,
+            "intervalSelector": "Daily",
+            "calendarDataStart": start_date,
+            "calendarDataEnd": end_date,
+            "cb_pop_at_max": "on",
+            "cb_pop_at_min": "on",
+            "cb_pop_pr_b": "on",
+            "cb_pop_et_std_grass": "on",
+            "cb_pop_hu_ave": "on",
+            "cb_pop_ws_inst": "on",
+        }
+        return payload
+
+    def _submit_for_data(self, payload):
+        # Try CSV/static-table actions first; ACIS may wire them with different submit names.
+        action_variants = [
+            {"btnCsv": "CSV"},
+            {"btnCsv": "View CSV"},
+            {"btnStaticTable": "Static Table"},
+            {"btnTable": "Table"},
+            {},
+        ]
+
+        for action_payload in action_variants:
+            merged = dict(payload)
+            merged.update(action_payload)
+            try:
+                response = self.session.post(self.base_url, data=merged, timeout=60)
+                if response.status_code == 403 and "modern, standards-compliant web-browser" in response.text:
+                    raise ValueError(
+                        "ACIS blocked automated server requests (HTTP 403). "
+                        "Their endpoint currently requires interactive browser access."
+                    )
+                response.raise_for_status()
+                df = self._extract_dataframe_from_response(response)
+                if df is not None and not df.empty:
+                    return df
+            except Exception:
+                continue
+        raise ValueError(
+            "Could not retrieve ACIS data using HTTP form submission "
+            "(likely blocked by ACIS anti-automation checks/captcha)."
+        )
+
+    def _extract_dataframe_from_response(self, response):
+        content_type = (response.headers.get("Content-Type") or "").lower()
+        text = response.text
+
+        # 1) Direct CSV response
+        if "text/csv" in content_type or "application/csv" in content_type:
+            return self._read_csv_text(text)
+
+        # 2) CSV-like body even if mislabeled
+        if "date" in text.lower() and "," in text[:5000]:
+            df = self._read_csv_text(text)
+            if df is not None and not df.empty:
+                return df
+
+        # 3) Linked CSV in response HTML
+        csv_links = re.findall(r'href=["\']([^"\']+\.csv[^"\']*)["\']', text, flags=re.IGNORECASE)
+        for link in csv_links:
+            try:
+                csv_url = urljoin(self.base_url, link)
+                csv_resp = self.session.get(csv_url, timeout=45)
+                csv_resp.raise_for_status()
+                df = self._read_csv_text(csv_resp.text)
+                if df is not None and not df.empty:
+                    return df
+            except Exception:
+                continue
+
+        # 4) HTML table response
+        try:
+            tables = pd.read_html(io.StringIO(text))
+        except Exception:
+            tables = []
+        for table in tables:
+            cleaned = self._clean_dataframe(table.copy())
+            if cleaned is not None and not cleaned.empty and "Date" in cleaned.columns:
+                return cleaned
         return None
+
+    def _read_csv_text(self, csv_text):
+        try:
+            df = pd.read_csv(io.StringIO(csv_text), encoding="latin-1")
+            return self._clean_dataframe(df)
+        except Exception:
+            return None
     
     def _clean_dataframe(self, df):
         """Clean and standardize the DataFrame"""
@@ -340,7 +276,7 @@ class AlbertaACISScraper:
 
 
 def fetch_alberta_acis_data(station_name, start_date, end_date):
-    """Convenience function to fetch data"""
+    """Convenience function to fetch ACIS data without Selenium."""
     
     scraper = AlbertaACISScraper(headless=True)
     
@@ -370,27 +306,3 @@ if __name__ == "__main__":
         
     except Exception as e:
         print(f"\n✗ Error: {e}")
-
-
-def get_all_acis_stations(self):
-    """Get list of all available ACIS stations"""
-    if not self.driver:
-        self.setup_driver()
-    
-    url = "https://acis.alberta.ca/acis/weather-data-viewer.jsp"
-    self.driver.get(url)
-    
-    wait = WebDriverWait(self.driver, 20)
-    station_select = wait.until(
-        EC.presence_of_element_located((By.ID, "acis_stations"))
-    )
-    
-    select = Select(station_select)
-    stations = []
-    
-    for option in select.options:
-        station_name = option.text.strip()
-        if station_name and station_name != "Select Station":
-            stations.append(station_name)
-    
-    return sorted(stations)
