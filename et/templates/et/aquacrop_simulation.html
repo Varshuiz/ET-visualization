@@ -1,7 +1,7 @@
 {% extends 'et/base.html' %}
 {% load static %}
 
-{% block title %}AquaCrop Crop Simulation{% endblock %}
+{% block title %}AquaCrop Crop Simulation | Aqualys{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -153,19 +153,19 @@
 {% block content %}
 <div class="container">
     <div class="page-header">
-        <h1>🌾 AquaCrop Crop Simulation</h1>
+        <h1>AquaCrop Crop Simulation</h1>
         <p class="subtitle">Simulate crop growth, water use, and yield predictions</p>
     </div>
 
     {% if error_message %}
     <div class="error-message">
-        ❌ {{ error_message }}
+        {{ error_message }}
     </div>
     {% endif %}
 
     <!-- Information Box -->
     <div class="info-box">
-        <h4>📘 About AquaCrop</h4>
+        <h4>About AquaCrop</h4>
         <p>AquaCrop is FAO's crop water productivity model that simulates yield response to water. It helps farmers and researchers:</p>
         <ul>
             <li>Predict crop yields under different water conditions</li>
@@ -177,14 +177,14 @@
 
     <!-- Simulation Form -->
     <div class="simulation-form">
-        <h3 style="color: #095256; margin-bottom: 20px;">⚙️ Simulation Parameters</h3>
+        <h3 style="color: #095256; margin-bottom: 20px;">Simulation Parameters</h3>
         
-        <form method="post" enctype="multipart/form-data" id="simulationForm">
+        <form method="post" enctype="multipart/form-data" id="simulationForm" data-loading-text="Running crop simulation...">
             {% csrf_token %}
             
             <div class="form-grid">
                 <div class="form-group">
-                    <label>🌾 Select Crop</label>
+                    <label>Select Crop</label>
                     <select name="crop" id="crop">
                         {% for crop in crops %}
                         <option value="{{ crop }}" {% if selected_crop == crop %}selected{% endif %}>
@@ -194,7 +194,7 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>📅 Analysis Timestep</label>
+                    <label>Analysis Timestep</label>
                     <select name="timestep" id="timestep">
                         <option value="weekly" {% if timestep == 'weekly' %}selected{% endif %}>Weekly (7-day)</option>
                         <option value="biweekly" {% if timestep == 'biweekly' %}selected{% endif %}>Biweekly (14-day)</option>
@@ -202,7 +202,7 @@
                 </div>
                 
                 <div class="form-group">
-                    <label>🏞️ Soil Type</label>
+                    <label>Soil Type</label>
                     <select name="soil" id="soil">
                         {% for soil in soil_types %}
                         <option value="{{ soil }}" {% if selected_soil == soil %}selected{% endif %}>
@@ -213,7 +213,7 @@
                 </div>
                 
                 <div class="form-group">
-                    <label>💧 Irrigation Strategy</label>
+                    <label>Irrigation Strategy</label>
                     <select name="irrigation" id="irrigation">
                         {% for value, label in irrigation_methods %}
                         <option value="{{ value }}" {% if selected_irrigation == value %}selected{% endif %}>
@@ -224,13 +224,13 @@
                 </div>
                 
                 <div class="form-group">
-                    <label>📅 Start Date</label>
+                    <label>Start Date</label>
                     <input type="text" name="start_date" value="{{ start_date|default:'2024/05/01' }}" 
                            placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}">
                 </div>
                 
                 <div class="form-group">
-                    <label>📅 End Date</label>
+                    <label>End Date</label>
                     <input type="text" name="end_date" value="{{ end_date|default:'2024/09/01' }}" 
                            placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}">
                 </div>
@@ -238,10 +238,10 @@
             
             <!-- Weather Data Upload -->
             <div class="form-group" style="margin-top: 20px;">
-                <label>📊 Weather Data (Optional)</label>
+                <label>Weather Data (Optional)</label>
                 <div class="file-upload-area" onclick="document.getElementById('weather_file').click()">
                     <p style="margin: 0; color: #087F8C; font-size: 1.1rem;">
-                        📁 Click to upload weather data (CSV or Excel)
+                        Click to upload weather data (CSV or Excel)
                     </p>
                     <p style="margin: 10px 0 0 0; color: #666; font-size: 0.9rem;">
                         Required columns: Date, MinTemp, MaxTemp, Precipitation, ReferenceET
@@ -249,19 +249,19 @@
                     <input type="file" name="weather_file" id="weather_file" accept=".csv,.xlsx,.xls">
                 </div>
                 <p style="margin-top: 10px; color: #666; font-size: 0.85rem;">
-                    💡 If no file is uploaded, sample weather data will be generated
+                    If no file is uploaded, sample weather data will be generated.
                 </p>
             </div>
             
             <button type="submit" class="submit-btn" style="margin-top: 20px;">
-                🚀 Run Simulation
+                Run Simulation
             </button>
         </form>
     </div>
 
     {% if has_results %}
     <!-- Results Summary -->
-    <h2 style="color: #095256; margin-bottom: 20px;">📊 Simulation Results</h2>
+    <h2 style="color: #095256; margin-bottom: 20px;">Simulation Results</h2>
     
     <div class="results-summary">
         <div class="result-card">
@@ -309,13 +309,13 @@
 
     <!-- Growth Chart -->
     <div class="chart-container">
-        <h3>📈 Crop Growth Over Time</h3>
+        <h3>Crop Growth Over Time</h3>
         <canvas id="growthChart"></canvas>
     </div>
 
     {% if resampled_chart %}
 <div class="chart-container">
-    <h3>📊 {% if timestep == 'weekly' %}Weekly{% else %}Biweekly{% endif %} Growth Summary</h3>
+    <h3>{% if timestep == 'weekly' %}Weekly{% else %}Biweekly{% endif %} Growth Summary</h3>
     <img src="data:image/png;base64,{{ resampled_chart }}" 
          alt="Aggregated growth chart" style="max-width:100%; border-radius:8px;">
 </div>
@@ -323,7 +323,7 @@
 
 {% if resampled_data %}
 <div class="chart-container">
-    <h3>📋 {% if timestep == 'weekly' %}Weekly{% else %}Biweekly{% endif %} Data Table</h3>
+    <h3>{% if timestep == 'weekly' %}Weekly{% else %}Biweekly{% endif %} Data Table</h3>
     <table style="width:100%; border-collapse:collapse;">
         <thead>
             <tr style="background:#087F8C; color:white;">
@@ -344,14 +344,14 @@
 
     <!-- Water Balance Chart -->
     <div class="chart-container">
-        <h3>💧 Water Balance</h3>
+        <h3>Water Balance</h3>
         <canvas id="waterBalanceChart"></canvas>
     </div>
 
     <!-- Download Button -->
     <div style="text-align: center; margin-top: 30px;">
         <button onclick="downloadResults()" class="submit-btn">
-            📥 Download Results as CSV
+            Download Results as CSV
         </button>
     </div>
     {% endif %}
@@ -538,7 +538,7 @@ function downloadResults() {
 document.getElementById('weather_file').addEventListener('change', function(e) {
     const fileName = e.target.files[0]?.name || 'No file selected';
     const uploadArea = document.querySelector('.file-upload-area p');
-    uploadArea.textContent = `📄 ${fileName}`;
+    uploadArea.textContent = `File: ${fileName}`;
     uploadArea.style.color = '#5AAA95';
 });
 </script>

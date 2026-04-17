@@ -1,6 +1,6 @@
 {% extends 'et/base.html' %}
 
-{% block title %}Maulé ET Calculator{% endblock %}
+{% block title %}Maulé ET Calculator | Aqualys{% endblock %}
 
 {% block content %}
 <div class="page-header fade-in">
@@ -9,7 +9,7 @@
 </div>
 
 <div class="card fade-in">
-    <div class="method-info" style="background: linear-gradient(135deg, #fff8e1, #fffbf0); padding: 25px; border-radius: 15px; margin-bottom: 30px; border-left: 5px solid #BB9F06;">
+    <div class="method-info" style="background: linear-gradient(135deg, var(--light-green), #e6f7f1); padding: 25px; border-radius: 15px; margin-bottom: 30px; border-left: 5px solid var(--teal);">
         <h3 style="color: var(--midnight-green); margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
             <i class="fas fa-info-circle"></i> About the Maulé Method
         </h3>
@@ -45,23 +45,23 @@
     </div>
 
     <div class="upload-section">
-        <h2><i class="fas fa-cloud-upload-alt"></i> Upload Weather Data</h2>
+        <h2><i class="fas fa-cloud-upload-alt"></i> Add Your Weather File</h2>
 
         <div style="background: #fff8e1; border: 1px solid #ffe082; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
-            <h4 style="color: #856404; margin-bottom: 10px;"><i class="fas fa-exclamation-triangle"></i> Data Requirements</h4>
-            <p style="color: #856404;">Requires Tmax, Tmin (or Tavg) and solar radiation. Humidity is optional — if provided it improves accuracy.</p>
+            <h4 style="color: #856404; margin-bottom: 10px;"><i class="fas fa-exclamation-triangle"></i> Good To Know</h4>
+            <p style="color: #856404;">This method needs max/min temperature and sunlight. Humidity is optional but helps improve accuracy.</p>
         </div>
 
-        <form method="post" enctype="multipart/form-data" id="uploadForm">
+        <form method="post" enctype="multipart/form-data" id="uploadForm" data-loading-text="Calculating Maule ET...">
             {% csrf_token %}
             <input type="hidden" name="unit" value="{{ selected_unit }}">
             <div class="file-upload-wrapper">
                 <label class="file-upload">
-                    <i class="fas fa-file-csv"></i> Choose CSV File
+                    <i class="fas fa-file-csv"></i> Select CSV File
                     {{ form.file }}
                 </label>
                 <button type="submit" class="submit-btn" id="submitBtn">
-                    <i class="fas fa-calculator"></i> Calculate Maulé ET
+                    <i class="fas fa-calculator"></i> Estimate Water Use (Maule)
                 </button>
             </div>
             <div class="file-info" id="fileInfo">
@@ -71,7 +71,7 @@
 
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>Processing your data using the Maulé method...</p>
+            <p>Calculating daily crop water use from your weather data...</p>
         </div>
     </div>
 </div>
@@ -93,7 +93,7 @@
     <!-- Unit Toggle -->
     <div class="unit-toggle-section" style="display: flex; align-items: center; gap: 15px; margin: 20px 0;">
         <span style="font-weight: 600; color: var(--midnight-green);">Units:</span>
-        <span class="unit-label {% if selected_unit == 'mm' %}unit-active{% endif %}">mm</span>
+        <span class="unit-label {% if selected_unit == 'inches' %}unit-active{% endif %}">inches</span>
         <label class="toggle-switch">
             <input type="checkbox" id="unitToggle" {% if selected_unit == 'inches' %}checked{% endif %}>
             <span class="slider"></span>

@@ -1,8 +1,9 @@
 {% extends 'et/base.html' %}
 
-{% block title %}Fetch Weather Data - Environment Canada{% endblock %}
+{% block title %}Prepare ET Inputs | Aqualys{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
     
     .location-toggle {
@@ -233,69 +234,74 @@
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: 8px;
     }
+
+    #farmMap {
+        height: 320px;
+        border-radius: 10px;
+        border: 1px solid #cfe1dc;
+        margin-top: 12px;
+        overflow: hidden;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container">
     <div class="page-header">
-        <h1>🌐 Fetch Weather Data from Environment Canada</h1>
-        <p class="subtitle">Get historical weather data for ET calculations (with CSV backup upload)</p>
+        <h1>Prepare ET Inputs</h1>
+        <p class="subtitle">Start here to bring in weather data and estimate daily crop water use for your field.</p>
     </div>
 
     <div class="info-box">
-        <h3>📍About Environment Canada Data</h3>
+        <h3>Use This Tool To</h3>
         <p>
-            This tool uses a deploy-friendly <strong>historical weather API</strong> for Alberta coordinates. It automatically fetches:
+            This page helps you quickly turn weather records into practical irrigation planning information:
         </p>
         <ul style="margin-top: 10px; margin-left: 20px;">
-            <li>✅ <strong>Temperature</strong> (max/min/average)</li>
-            <li>✅ <strong>Precipitation</strong> (daily rainfall)</li>
-            <li>✅ <strong>Relative Humidity</strong> (for accurate calculations)</li>
-            <li>✅ <strong>Wind Speed</strong> (at 10m height, converted to 2m)</li>
-            <li>ℹ️ <strong>Reference ET</strong> is not included in this source (calculated ET methods still work)</li>
-            <li>🛟 <strong>Backup upload:</strong> You can upload a CSV if automatic fetch fails</li>
+            <li>Pull recent and past weather conditions for your farm area</li>
+            <li>Estimate crop water demand (ET) using trusted ET methods</li>
+            <li>Compare methods side-by-side so you can make a confident watering decision</li>
+            <li>Upload your own CSV weather file if automatic fetch is not available</li>
         </ul>
        
     </div>
 
     {% if error_message %}
     <div class="error-message">
-        ❌ {{ error_message }}
+        {{ error_message }}
     </div>
     {% endif %}
 
     {% if success_message %}
     <div class="success-message">
-        <span style="font-size: 1.5rem;">✓</span>
         <span>{{ success_message }}</span>
     </div>
     {% endif %}
 
     <div class="upload-card">
-        <form method="post" enctype="multipart/form-data" id="acisForm">
+        <form method="post" enctype="multipart/form-data" id="acisForm" data-loading-text="Fetching historical weather data...">
             {% csrf_token %}
 
             <!-- Location Type Toggle -->
             <div class="location-toggle">
                 <button type="button" class="active" data-target="place">
-                    📍 Station/Place Name
+                    City or Town
                 </button>
                 <button type="button" data-target="township">
-                    🗺️ Township/Range
+                    Township and Range
                 </button>
                 <button type="button" data-target="coordinates">
-                    🧭 Coordinates
+                    Coordinates
                 </button>
             </div>
 
             <!-- Place Name Search -->
             <div class="input-section active" id="place-section">
-                <h3 style="color: #095256; margin-bottom: 15px;">🔍 Search by Location or Station Name</h3>
+                <h3 style="color: #095256; margin-bottom: 15px;">Pick Your Farm Area</h3>
                 <div class="form-field">
-                    <label for="place_name">Enter City, Town, or ACIS Station Name</label>
+                    <label for="place_name">Closest City or Town</label>
                     <input type="text" id="place_name" name="place_name" 
-                           placeholder="e.g., Calgary, Radway LITE, Medicine Lake Auto, Brooks AGDM..."
+                           placeholder="e.g., Calgary, Lethbridge, Red Deer, Medicine Hat..."
                            list="popular_locations"
                            autocomplete="off">
                     <datalist id="popular_locations">
@@ -303,17 +309,13 @@
                         <option value="{{ location }}">
                         {% endfor %}
                     </datalist>
-                    <small style="color: #666; margin-top: 8px; display: block;">
-                        💡 <strong>Tip:</strong> You can enter any city name (e.g., "Calgary", "Lethbridge") 
-                        OR the exact ACIS station name (e.g., "Radway LITE", "Medicine Lake Auto", "Brooks AGDM").
-                        Stations ending in "LITE", "Auto", or "AGDM" typically have Reference ET data.
-                    </small>
+                    <small style="color: #666; margin-top: 8px; display: block;"><strong>Tip:</strong> Use the closest community to your farm for a fast start.</small>
                 </div>
                 
         
                 {% if location_result %}
                 <div class="station-info">
-                    <strong>📍 Location Found:</strong> {{ location_result.place_name }}<br>
+                    <strong>Location Found:</strong> {{ location_result.place_name }}<br>
                     <small>Coordinates: {{ location_result.latitude|floatformat:4 }}°N, {{ location_result.longitude|floatformat:4 }}°W</small>
                     {% if location_result.township %}
                     <br><small>Township {{ location_result.township }}, Range {{ location_result.range }}, {{ location_result.meridian }} Meridian</small>
@@ -324,7 +326,7 @@
 
             <!-- Township/Range Input -->
             <div class="input-section" id="township-section">
-                <h3 style="color: #095256; margin-bottom: 15px;">🗺️ Alberta Township/Range System</h3>
+                <h3 style="color: #095256; margin-bottom: 15px;">Find by Township and Range</h3>
                 <div class="form-grid">
                     <div class="form-field">
                         <label for="township">Township Number</label>
@@ -346,7 +348,7 @@
                     </div>
                 </div>
                 <div style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 0.9rem;">
-                    <strong>📌 Examples:</strong><br>
+                    <strong>Examples:</strong><br>
                     • Brooks: Township 19, Range 14, 4th Meridian<br>
                     • Lethbridge: Township 9, Range 22, 4th Meridian<br>
                     • Calgary: Township 24, Range 1, 5th Meridian
@@ -355,7 +357,7 @@
 
             <!-- Lat/Lon Input -->
             <div class="input-section" id="coordinates-section">
-                <h3 style="color: #095256; margin-bottom: 15px;">🧭 Geographic Coordinates</h3>
+                <h3 style="color: #095256; margin-bottom: 15px;">Find by Latitude and Longitude</h3>
                 <div class="form-grid">
                     <div class="form-field">
                         <label for="latitude">Latitude (49-60°N)</label>
@@ -371,15 +373,22 @@
                     </div>
                 </div>
                 <div style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 0.9rem;">
-                    <strong>📌 Examples:</strong><br>
+                    <strong>Examples:</strong><br>
                     • Brooks: 50.5644°N, -111.8986°W<br>
                     • Lethbridge: 49.6942°N, -112.8328°W<br>
                     • Calgary: 51.0486°N, -114.0708°W
                 </div>
+                <div style="margin-top: 14px;">
+                    <strong style="color:#204f53;">Map Picker</strong>
+                    <small style="display:block; color:#577476; margin-top:4px;">
+                        Click your farm location on the map to auto-fill latitude and longitude.
+                    </small>
+                    <div id="farmMap"></div>
+                </div>
             </div>
 
             <!-- Date Range -->
-            <h3 style="color: #095256; margin: 30px 0 15px 0;">📅 Date Range</h3>
+            <h3 style="color: #095256; margin: 30px 0 15px 0;">Select Your Date Range</h3>
             <div class="form-grid">
                 <div class="form-field">
                     <label for="start_date">Start Date</label>
@@ -391,27 +400,39 @@
                 </div>
             </div>
             <div style="background: #fff3cd; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 0.85rem;">
-                <strong>⏱️ Note:</strong> Historical dates up to today are supported. Large ranges may take longer. Growing season (May-October) is recommended for ET calculations.
+                <strong>Note:</strong> Pick dates up to today. For irrigation planning, the growing season months are usually most useful.
             </div>
 
-            <h3 style="color: #095256; margin: 24px 0 15px 0;">🛟 Backup CSV Upload (Optional)</h3>
+            <h3 style="color: #095256; margin: 24px 0 12px 0;">Choose Data Source Style</h3>
+            <div style="background:#f5f9f8; border:1px solid #d9e7e3; border-radius:10px; padding:12px;">
+                <label style="display:block; margin-bottom:8px; color:#274f53;">
+                    <input type="radio" name="data_source_mode" value="exact_coordinates" {% if data_source_mode != 'nearest_station' %}checked{% endif %}>
+                    Use my exact map coordinates
+                </label>
+                <label style="display:block; color:#274f53;">
+                    <input type="radio" name="data_source_mode" value="nearest_station" {% if data_source_mode == 'nearest_station' %}checked{% endif %}>
+                    Use nearest weather station (recommended for most users)
+                    {% if nearest_station_hint %}<strong>- nearest found: {{ nearest_station_hint }}</strong>{% endif %}
+                </label>
+            </div>
+
+            <h3 style="color: #095256; margin: 24px 0 15px 0;">Optional: Upload Your Own Weather File</h3>
             <div class="form-field">
-                <label for="id_file">Upload CSV instead of automatic fetch</label>
+                <label for="id_file">Use a CSV file instead of automatic weather fetch</label>
                 <input type="file" id="id_file" name="file" accept=".csv">
                 <small style="color: #666; margin-top: 8px; display: block;">
-                    If selected, CSV data is used directly. Required columns: Date, Tmax, Tmin.
-                    Optional columns: Precipitation, RH, Wind_Speed/u2, Solar_Radiation, ET_ACIS.
+                    Required columns: Date, Tmax, Tmin. Optional columns: Precipitation, RH, Wind_Speed/u2, Solar_Radiation.
                 </small>
             </div>
 
             <input type="hidden" name="location_type" id="location_type" value="place">
 
             <button type="submit" class="submit-btn" style="margin-top: 30px;">
-                🌐 Fetch Historical Data
+                Load Weather Data
             </button>
 
             <div class="loading" id="loading" style="display: none;">
-                <div>🔄 Fetching historical data</div>
+                <div>Fetching historical data</div>
                 <div style="font-size: 0.9rem; margin-top: 10px; font-weight: normal;">
                     This may take 10-30 seconds...
                 </div>
@@ -421,7 +442,12 @@
 
     {% if df_preview %}
     <div style="margin-top: 40px;">
-        <h2 style="color: #095256;">📊 Data Preview (First 10 Days)</h2>
+        <h2 style="color: #095256;">Data Preview (First 10 Days)</h2>
+        {% if used_station %}
+        <p style="margin: 6px 0 14px 0; color:#355c60; font-weight:600;">
+            Data source used: {{ used_station }}
+        </p>
+        {% endif %}
         <table class="preview-table">
             <thead>
                 <tr>
@@ -431,7 +457,6 @@
                     <th>Precip (mm)</th>
                     <th>RH (%)</th>
                     <th>Wind (m/s)</th>
-                    <th>ET Reference (mm)</th>
                 </tr>
             </thead>
             <tbody>
@@ -443,15 +468,14 @@
                     <td>{{ row.Precipitation|floatformat:1|default:"--" }}</td>
                     <td>{{ row.RH|floatformat:0|default:"--" }}</td>
                     <td>{{ row.Wind_Speed|floatformat:1|default:"--" }}</td>
-                    <td><strong>{{ row.ET_ACIS|floatformat:2|default:"--" }}</strong></td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         
         <div style="text-align: center; margin-top: 30px;">
-            <a href="{% url 'et:comparison_with_acis' %}" class="submit-btn" style="display: inline-block; text-decoration: none;">
-                📈 Calculate & Compare ET Methods →
+            <a href="{% url 'et:comparison_with_acis' %}" class="submit-btn" style="display: inline-block; text-decoration: none;" data-loading-link="true" data-loading-text="Calculating ET values and opening comparison...">
+                Calculate and Compare Water Use
             </a>
         </div>
     </div>
@@ -460,8 +484,21 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{{ alberta_stations|json_script:"alberta-stations-data" }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    let farmMap = null;
+
+    function refreshMapSizeIfVisible() {
+        const coordSection = document.getElementById('coordinates-section');
+        if (farmMap && coordSection && coordSection.classList.contains('active')) {
+            setTimeout(function() {
+                farmMap.invalidateSize();
+            }, 150);
+        }
+    }
+
     // Location type toggle
     const toggleButtons = document.querySelectorAll('.location-toggle button');
     const sections = document.querySelectorAll('.input-section');
@@ -481,6 +518,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Update hidden input
             locationTypeInput.value = target;
+
+            // Leaflet map needs a resize refresh when container becomes visible.
+            refreshMapSizeIfVisible();
         });
     });
     
@@ -501,6 +541,60 @@ document.addEventListener('DOMContentLoaded', function() {
     
     document.getElementById('start_date').valueAsDate = startDate;
     document.getElementById('end_date').valueAsDate = endDate;
+
+    // Map picker for precise farm coordinates
+    const latInput = document.getElementById('latitude');
+    const lonInput = document.getElementById('longitude');
+    const mapEl = document.getElementById('farmMap');
+    if (mapEl && latInput && lonInput && typeof L !== 'undefined') {
+        const initialLat = parseFloat(latInput.value) || 53.5;
+        const initialLon = parseFloat(lonInput.value) || -114.0;
+        farmMap = L.map('farmMap').setView([initialLat, initialLon], 6);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 18,
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            subdomains: 'abcd'
+        }).addTo(farmMap);
+
+        let marker = L.marker([initialLat, initialLon], { draggable: true }).addTo(farmMap);
+        function setLatLon(lat, lon) {
+            latInput.value = lat.toFixed(4);
+            lonInput.value = lon.toFixed(4);
+            marker.setLatLng([lat, lon]);
+        }
+
+        farmMap.on('click', function(e) {
+            setLatLon(e.latlng.lat, e.latlng.lng);
+        });
+
+        marker.on('dragend', function(e) {
+            const pos = e.target.getLatLng();
+            setLatLon(pos.lat, pos.lng);
+        });
+
+        // Add available station markers and hover labels.
+        const stationsDataEl = document.getElementById('alberta-stations-data');
+        const stationData = stationsDataEl ? JSON.parse(stationsDataEl.textContent) : [];
+        stationData.forEach(function(stn) {
+            const stationMarker = L.circleMarker([stn.lat, stn.lon], {
+                radius: 6,
+                color: '#0b5f66',
+                weight: 2,
+                fillColor: '#5AAA95',
+                fillOpacity: 0.85
+            }).addTo(farmMap);
+            stationMarker.bindTooltip(stn.name, { direction: 'top', opacity: 0.95 });
+            stationMarker.on('click', function() {
+                setLatLon(stn.lat, stn.lon);
+                farmMap.panTo([stn.lat, stn.lon]);
+                const nearestMode = document.querySelector('input[name="data_source_mode"][value="nearest_station"]');
+                if (nearestMode) nearestMode.checked = true;
+            });
+        });
+
+        // Initial refresh in case the coordinates section is already active.
+        refreshMapSizeIfVisible();
+    }
 });
 </script>
 {% endblock %}

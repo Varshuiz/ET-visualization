@@ -1,6 +1,6 @@
 {% extends 'et/base.html' %}
 
-{% block title %}Penman-Monteith ET Calculator{% endblock %}
+{% block title %}Penman-Monteith ET Calculator | Aqualys{% endblock %}
 
 {% block content %}
 <div class="page-header fade-in">
@@ -46,22 +46,22 @@
     </div>
 
     <div class="upload-section">
-        <h2><i class="fas fa-cloud-upload-alt"></i> Upload Weather Data</h2>
+        <h2><i class="fas fa-cloud-upload-alt"></i> Add Your Weather File</h2>
         
         <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
-            <h4 style="color: #856404; margin-bottom: 10px;"><i class="fas fa-exclamation-triangle"></i> Data Requirements</h4>
-            <p style="color: #856404;">Penman-Monteith requires comprehensive meteorological data. Missing values will be estimated using defaults (Wind: 2 m/s, Humidity: 65%).</p>
+            <h4 style="color: #856404; margin-bottom: 10px;"><i class="fas fa-exclamation-triangle"></i> Good To Know</h4>
+            <p style="color: #856404;">This method works best with complete weather data. If a value is missing, the tool fills it with practical defaults.</p>
         </div>
         
-        <form method="post" enctype="multipart/form-data" id="uploadForm">
+        <form method="post" enctype="multipart/form-data" id="uploadForm" data-loading-text="Calculating Penman-Monteith ET...">
             {% csrf_token %}
             <div class="file-upload-wrapper">
                 <label class="file-upload">
-                    <i class="fas fa-file-csv"></i> Choose CSV File
+                    <i class="fas fa-file-csv"></i> Select CSV File
                     {{ form.file }}
                 </label>
                 <button type="submit" class="submit-btn" id="submitBtn">
-                    <i class="fas fa-calculator"></i> Calculate Penman-Monteith ET
+                    <i class="fas fa-calculator"></i> Estimate Water Use (Penman-Monteith)
                 </button>
             </div>
             
@@ -72,7 +72,7 @@
 
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>Processing your data using Penman-Monteith method...</p>
+            <p>Calculating daily crop water use from your weather data...</p>
         </div>
     </div>
 </div>

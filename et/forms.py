@@ -7,7 +7,7 @@ from django import forms
 #             'id': 'fileInput',
 #             'style': 'position: absolute; left: -9999px;'
 #         }),
-#         help_text='Upload a CSV file containing weather data from ACIS'
+#         help_text='Upload a CSV file containing weather data'
 #     )
     
 #     def clean_file(self):

@@ -1,6 +1,6 @@
 {% extends 'et/base.html' %}
 
-{% block title %}Hargreaves-Samani ET Calculator{% endblock %}
+{% block title %}Hargreaves-Samani ET Calculator | Aqualys{% endblock %}
 
 {% block content %}
 <div class="page-header fade-in">
@@ -9,7 +9,7 @@
 </div>
 
 <div class="card fade-in">
-    <div class="method-info" style="background: linear-gradient(135deg, #e0f2f1, #f1f8f7); padding: 25px; border-radius: 15px; margin-bottom: 30px; border-left: 5px solid #5AAA95;">
+    <div class="method-info" style="background: linear-gradient(135deg, var(--light-green), #e6f7f1); padding: 25px; border-radius: 15px; margin-bottom: 30px; border-left: 5px solid var(--teal);">
         <h3 style="color: var(--midnight-green); margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
             <i class="fas fa-info-circle"></i> About the Hargreaves-Samani Method
         </h3>
@@ -45,23 +45,23 @@
     </div>
 
     <div class="upload-section">
-        <h2><i class="fas fa-cloud-upload-alt"></i> Upload Weather Data</h2>
+        <h2><i class="fas fa-cloud-upload-alt"></i> Add Your Weather File</h2>
 
         <div style="background: #e0f2f1; border: 1px solid #b2dfdb; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
             <h4 style="color: #00695c; margin-bottom: 10px;"><i class="fas fa-check-circle"></i> Minimal Data Needed</h4>
             <p style="color: #00695c;">Only Tmax and Tmin are required. If only Tavg is present, the temperature range will be estimated.</p>
         </div>
 
-        <form method="post" enctype="multipart/form-data" id="uploadForm">
+        <form method="post" enctype="multipart/form-data" id="uploadForm" data-loading-text="Calculating Hargreaves ET...">
             {% csrf_token %}
             <input type="hidden" name="unit" value="{{ selected_unit }}">
             <div class="file-upload-wrapper">
                 <label class="file-upload">
-                    <i class="fas fa-file-csv"></i> Choose CSV File
+                    <i class="fas fa-file-csv"></i> Select CSV File
                     {{ form.file }}
                 </label>
                 <button type="submit" class="submit-btn" id="submitBtn">
-                    <i class="fas fa-calculator"></i> Calculate Hargreaves-Samani ET
+                    <i class="fas fa-calculator"></i> Estimate Water Use (Hargreaves)
                 </button>
             </div>
             <div class="file-info" id="fileInfo">
@@ -71,7 +71,7 @@
 
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>Processing your data using the Hargreaves-Samani method...</p>
+            <p>Calculating daily crop water use from your weather data...</p>
         </div>
     </div>
 </div>

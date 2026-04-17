@@ -1,11 +1,11 @@
 {% extends 'et/base.html' %}
 
-{% block title %}ET Calculation Methods - Information{% endblock %}
+{% block title %}ET Method Guide | Aqualys{% endblock %}
 
 {% block content %}
 <div class="page-header fade-in">
-    <h1><i class="fas fa-info-circle"></i> ET Calculation Methods</h1>
-    <p>Learn about the different evapotranspiration calculation methods available in this calculator</p>
+    <h1>ET Method Guide</h1>
+    <p>Choose the right evapotranspiration method based on your available weather data</p>
 </div>
 
 <div class="card fade-in">
@@ -23,14 +23,14 @@
                 A simplified energy balance method based on the assumption that under humid conditions,
                 ET can be estimated using an empirical coefficient (α = 1.26) applied to equilibrium ET.
             </p>
-            <h4 style="color: var(--asparagus); margin-bottom: 8px;">Advantages</h4>
+            <h4 style="color: var(--asparagus); margin-bottom: 8px;">When to Use</h4>
             <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
                 <li>Simple data requirements</li>
                 <li>Good accuracy in humid regions</li>
                 <li>Computationally efficient</li>
                 <li>Widely used in research</li>
             </ul>
-            <h4 style="color: var(--asparagus); margin-bottom: 8px;">Limitations</h4>
+            <h4 style="color: var(--asparagus); margin-bottom: 8px;">Watch-outs</h4>
             <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
                 <li>Less accurate in arid regions</li>
                 <li>Does not account for wind effects</li>
@@ -58,14 +58,14 @@
                 The FAO-56 international standard. Combines energy balance and aerodynamic terms
                 to provide the most accurate ET₀ estimates for all climatic conditions.
             </p>
-            <h4 style="color: var(--teal); margin-bottom: 8px;">Advantages</h4>
+            <h4 style="color: var(--teal); margin-bottom: 8px;">When to Use</h4>
             <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
                 <li>Highest accuracy — international standard</li>
                 <li>Valid across all climate types</li>
                 <li>Accounts for wind and humidity</li>
                 <li>FAO-56 endorsed method</li>
             </ul>
-            <h4 style="color: var(--teal); margin-bottom: 8px;">Limitations</h4>
+            <h4 style="color: var(--teal); margin-bottom: 8px;">Watch-outs</h4>
             <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
                 <li>Requires the most input variables</li>
                 <li>Wind speed measurement needed</li>
@@ -95,14 +95,14 @@
                 The simplest ET estimation approach requiring only Tmax and Tmin.
                 Extraterrestrial radiation Ra is calculated internally from latitude and day of year.
             </p>
-            <h4 style="color: #5AAA95; margin-bottom: 8px;">Advantages</h4>
+            <h4 style="color: #5AAA95; margin-bottom: 8px;">When to Use</h4>
             <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
                 <li>Only temperature data needed</li>
                 <li>Ideal for remote or historical data</li>
                 <li>Globally validated</li>
                 <li>Reliable long-term trend analysis</li>
             </ul>
-            <h4 style="color: #5AAA95; margin-bottom: 8px;">Limitations</h4>
+            <h4 style="color: #5AAA95; margin-bottom: 8px;">Watch-outs</h4>
             <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
                 <li>Lower accuracy vs. PM in arid areas</li>
                 <li>Ignores humidity and wind effects</li>
@@ -130,14 +130,14 @@
                 A regionally calibrated method designed for prairie and semi-arid conditions.
                 Uses an empirical coefficient tuned for the Canadian Prairies and similar climates.
             </p>
-            <h4 style="color: #BB9F06; margin-bottom: 8px;">Advantages</h4>
+            <h4 style="color: #BB9F06; margin-bottom: 8px;">When to Use</h4>
             <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
                 <li>Calibrated for Prairie conditions</li>
                 <li>Minimal data requirements</li>
                 <li>Optional humidity correction</li>
                 <li>Good performance in semi-arid climates</li>
             </ul>
-            <h4 style="color: #BB9F06; margin-bottom: 8px;">Limitations</h4>
+            <h4 style="color: #BB9F06; margin-bottom: 8px;">Watch-outs</h4>
             <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
                 <li>Region-specific — less tested globally</li>
                 <li>Less accurate outside Prairie climates</li>
@@ -159,7 +159,7 @@
     <!-- Comparison Table -->
     <div style="margin-top: 40px;">
         <h2 style="color: var(--midnight-green); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-            <i class="fas fa-table"></i> Method Comparison Summary
+            Method Comparison Summary
         </h2>
         <div style="overflow-x: auto;">
             <table style="width:100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px var(--shadow);">
@@ -177,37 +177,37 @@
                 <tbody>
                     <tr style="background: rgba(119,163,79,0.05);">
                         <td style="padding: 12px 15px; font-weight: 600; color: var(--asparagus);">Priestley-Taylor</td>
-                        <td style="padding: 12px 15px; text-align: center;">✅</td>
-                        <td style="padding: 12px 15px; text-align: center;">✅</td>
-                        <td style="padding: 12px 15px; text-align: center;">❌</td>
-                        <td style="padding: 12px 15px; text-align: center;">❌</td>
+                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
+                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
+                        <td style="padding: 12px 15px; text-align: center;">No</td>
+                        <td style="padding: 12px 15px; text-align: center;">No</td>
                         <td style="padding: 12px 15px; text-align: center;">⭐⭐⭐</td>
                         <td style="padding: 12px 15px;">Humid regions, research</td>
                     </tr>
                     <tr style="background: rgba(8,127,140,0.05);">
                         <td style="padding: 12px 15px; font-weight: 600; color: var(--teal);">Penman-Monteith</td>
-                        <td style="padding: 12px 15px; text-align: center;">✅</td>
-                        <td style="padding: 12px 15px; text-align: center;">✅</td>
-                        <td style="padding: 12px 15px; text-align: center;">✅</td>
-                        <td style="padding: 12px 15px; text-align: center;">✅</td>
+                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
+                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
+                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
+                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
                         <td style="padding: 12px 15px; text-align: center;">⭐⭐⭐⭐⭐</td>
                         <td style="padding: 12px 15px;">All climates, standard practice</td>
                     </tr>
                     <tr style="background: rgba(90,170,149,0.05);">
                         <td style="padding: 12px 15px; font-weight: 600; color: #5AAA95;">Hargreaves-Samani</td>
-                        <td style="padding: 12px 15px; text-align: center;">✅</td>
-                        <td style="padding: 12px 15px; text-align: center;">❌</td>
-                        <td style="padding: 12px 15px; text-align: center;">❌</td>
-                        <td style="padding: 12px 15px; text-align: center;">❌</td>
+                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
+                        <td style="padding: 12px 15px; text-align: center;">No</td>
+                        <td style="padding: 12px 15px; text-align: center;">No</td>
+                        <td style="padding: 12px 15px; text-align: center;">No</td>
                         <td style="padding: 12px 15px; text-align: center;">⭐⭐⭐</td>
                         <td style="padding: 12px 15px;">Remote areas, historical data</td>
                     </tr>
                     <tr style="background: rgba(187,159,6,0.05);">
                         <td style="padding: 12px 15px; font-weight: 600; color: #BB9F06;">Maulé</td>
-                        <td style="padding: 12px 15px; text-align: center;">✅</td>
-                        <td style="padding: 12px 15px; text-align: center;">✅</td>
+                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
+                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
                         <td style="padding: 12px 15px; text-align: center;">Optional</td>
-                        <td style="padding: 12px 15px; text-align: center;">❌</td>
+                        <td style="padding: 12px 15px; text-align: center;">No</td>
                         <td style="padding: 12px 15px; text-align: center;">⭐⭐⭐⭐</td>
                         <td style="padding: 12px 15px;">Canadian Prairies, semi-arid</td>
                     </tr>

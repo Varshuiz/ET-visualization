@@ -1,6 +1,6 @@
 {% extends 'et/base.html' %}
 
-{% block title %}ET Methods Comparison{% endblock %}
+{% block title %}ET Results | Aqualys{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -36,11 +36,6 @@
         border-color: #5AAA95;
     }
 
-    /* NEW: ACIS card styling */
-    .method-card.acis {
-        border-color: #FF6B6B;
-        border-width: 3px;
-    }
 
     .method-card:hover {
         transform: translateY(-3px);
@@ -81,10 +76,6 @@
         background: #5AAA95;
     }
 
-    /* NEW: ACIS icon */
-    .acis .method-icon {
-        background: #FF6B6B;
-    }
 
     .method-title {
         font-size: 1.2rem;
@@ -190,21 +181,12 @@
         font-weight: 600;
     }
 
-    /* NEW: ACIS column header */
-    .data-table th.acis-header {
-        background: linear-gradient(135deg, #FF6B6B, #FF8E8E);
-    }
 
     .data-table td {
         padding: 12px 15px;
         border-bottom: 1px solid #e0f2f1;
     }
 
-    /* NEW: ACIS column cells */
-    .data-table td.acis-cell {
-        background: #fff5f5;
-        font-weight: bold;
-    }
 
     .data-table tbody tr:hover {
         background: #f8fffe;
@@ -292,7 +274,6 @@
     .checkbox-item.pm { border-left: 4px solid #087F8C; }
     .checkbox-item.maule { border-left: 4px solid #BB9F06; }
     .checkbox-item.hargreaves { border-left: 4px solid #5AAA95; }
-    .checkbox-item.acis { border-left: 4px solid #FF6B6B; }
     
     /* Select All button */
     .select-all-btn {
@@ -319,14 +300,12 @@
 {% block content %}
 <div class="container">
     <div class="page-header">
-        <h1>🌾 ET Methods Comparison</h1>
+        <h1>ET Results</h1>
         {% if acis_location %}
         <p class="subtitle">Comparing ET calculation methods for {{ acis_location.description }}</p>
         <p style="color: #fff; font-size: 0.9rem; opacity: 0.9;">
             Data period: {{ acis_location.start_date }} to {{ acis_location.end_date }}
         </p>
-        {% else %}
-        <p class="subtitle">Compare All ET Calculation Methods</p>
         {% endif %}
     </div>
 
@@ -340,43 +319,10 @@
         <span class="unit-label {% if selected_unit == 'inches' %}active{% endif %}">inches</span>
     </div>
 
-    <!-- File Upload Form (only show if no data) -->
-    {% if not et_data %}
-    <div class="upload-card">
-        <form method="post" enctype="multipart/form-data" id="uploadForm">
-            {% csrf_token %}
-            <div class="form-group">
-                <label for="id_file" class="form-label">
-                    📁 Upload CSV File with Weather Data
-                </label>
-                {{ form.file }}
-                <div class="file-requirements">
-                    <strong>Required columns:</strong> Temperature (Tmax/Tmin or Tavg)
-                    <br>
-                    <strong>Optional columns:</strong> Solar Radiation, Wind Speed, Relative Humidity
-                    <br>
-                    <small>All methods will calculate with available data</small>
-                </div>
-            </div>
-            {% if error_message %}
-                <div class="error-message">
-                    ❌ {{ error_message }}
-                </div>
-            {% endif %}
-            <button type="submit" class="submit-btn" id="submitBtn">
-                Calculate All ET Methods
-            </button>
-            <div class="loading" id="loading" style="display: none;">
-                Processing your data...
-            </div>
-        </form>
-    </div>
-    {% endif %}
-
     {% if et_data %}
     <div class="results-section">
         <!-- Method Statistics Cards -->
-        <h2 style="color: #095256; margin-bottom: 20px;">📊 Method Statistics</h2>
+        <h2 style="color: #095256; margin-bottom: 20px;">Method Statistics</h2>
         <div class="method-grid">
             {% if et_stats.PT %}
             <div class="method-card priestley-taylor">
@@ -462,35 +408,11 @@
             </div>
             {% endif %}
 
-            <!-- NEW: ACIS Reference Card -->
-            {% if et_stats.ACIS %}
-            <div class="method-card acis">
-                <div class="method-header">
-                    <div class="method-icon">⭐</div>
-                    <div class="method-title">ACIS Reference</div>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Average ET:</span>
-                    <span class="stat-value">{{ et_stats.ACIS.avg|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Maximum:</span>
-                    <span class="stat-value">{{ et_stats.ACIS.max|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Minimum:</span>
-                    <span class="stat-value">{{ et_stats.ACIS.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span>
-                </div>
-                <div style="margin-top: 10px; padding: 8px; background: #fff5f5; border-radius: 5px; font-size: 0.9rem; color: #666;">
-                    🌐 Official ACIS Data
-                </div>
-            </div>
-            {% endif %}
         </div>
 
         <!-- Correlation Analysis -->
         {% if comparison_stats.correlations %}
-        <h2 style="color: #095256; margin: 40px 0 20px 0;">🔗 Method Correlation Analysis</h2>
+        <h2 style="color: #095256; margin: 40px 0 20px 0;">Method Correlation Analysis</h2>
         <div class="correlation-grid">
             {% for key, value in comparison_stats.correlations.items %}
             <div class="correlation-card">
@@ -505,11 +427,11 @@
                 </div>
                 <div style="margin-top: 10px; color: #5AAA95; font-size: 0.9rem;">
                     {% if value >= 0.9 %}
-                        ✓ Very Strong Agreement
+                        Very Strong Agreement
                     {% elif value >= 0.7 %}
                         ~ Good Agreement
                     {% else %}
-                        ⚠ Moderate Agreement
+                        Moderate Agreement
                     {% endif %}
                 </div>
             </div>
@@ -520,7 +442,7 @@
         <!-- Visualization with Interactive Checkboxes -->
         {% if plot_url %}
         <div class="plot-container">
-            <h2 style="color: #095256; margin-bottom: 20px;">📈 ET Comparison Visualization</h2>
+            <h2 style="color: #095256; margin-bottom: 20px;">ET Comparison Visualization</h2>
             <img id="comparisonPlot" src="data:image/png;base64,{{ plot_url }}" alt="ET Comparison Plot">
             
             <!-- NEW: Interactive Checkboxes -->
@@ -529,7 +451,7 @@
                     Toggle All Methods
                 </button>
                 
-                <h4>🎛️ Select Methods to Display</h4>
+                <h4>Select Methods to Display</h4>
                 <div class="checkbox-group">
                     {% if 'PT' in available_methods %}
                     <div class="checkbox-item pt">
@@ -559,16 +481,10 @@
                     </div>
                     {% endif %}
                     
-                    {% if 'ACIS' in available_methods %}
-                    <div class="checkbox-item acis">
-                        <input type="checkbox" id="show-acis" checked onchange="updatePlot()">
-                        <label for="show-acis">ACIS Reference ⭐</label>
-                    </div>
-                    {% endif %}
                 </div>
                 
                 <p style="color: #666; margin-top: 15px; font-size: 0.9rem;">
-                    💡 Tip: Uncheck methods to hide them from the plot and compare specific methods
+                    Tip: Uncheck methods to hide them from the plot and compare specific methods.
                 </p>
             </div>
         </div>
@@ -577,13 +493,13 @@
         <!-- Growing Season Plots -->
         {% if growing_season_plots.growing_season_analysis %}
         <div class="plot-container">
-            <h2 style="color: #095256; margin-bottom: 20px;">🌱 Growing Season Analysis</h2>
+            <h2 style="color: #095256; margin-bottom: 20px;">Growing Season Analysis</h2>
             <img src="data:image/png;base64,{{ growing_season_plots.growing_season_analysis }}" alt="Growing Season Analysis">
         </div>
         {% endif %}
 
         <!-- Data Table -->
-        <h2 style="color: #095256; margin: 40px 0 20px 0;">📋 Detailed ET Data (First 20 rows)</h2>
+        <h2 style="color: #095256; margin: 40px 0 20px 0;">Detailed ET Data (First 20 rows)</h2>
         <div style="overflow-x: auto;">
             <table class="data-table">
                 <thead>
@@ -600,9 +516,6 @@
                         {% endif %}
                         {% if 'Hargreaves' in available_methods %}
                         <th>Hargreaves<br>({{ unit_info.daily_label }})</th>
-                        {% endif %}
-                        {% if 'ACIS' in available_methods %}
-                        <th class="acis-header">ACIS Reference ⭐<br>({{ unit_info.daily_label }})</th>
                         {% endif %}
                     </tr>
                 </thead>
@@ -622,9 +535,6 @@
                         {% if 'Hargreaves' in available_methods %}
                         <td>{{ row.ET_Hargreaves|floatformat:unit_info.decimal_places }}</td>
                         {% endif %}
-                        {% if 'ACIS' in available_methods %}
-                        <td class="acis-cell">{{ row.ET_ACIS|floatformat:unit_info.decimal_places }}</td>
-                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -634,7 +544,7 @@
         <!-- Download Section -->
         <div class="download-section">
             <a href="{% url 'et:download_comparison_csv' %}" class="download-btn">
-                💾 Download Complete Data as CSV
+                Download Complete Data as CSV
             </a>
         </div>
     </div>
@@ -664,18 +574,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             window.location.href = url.toString();
-        });
-    }
-
-    // Form submission handling
-    const uploadForm = document.getElementById('uploadForm');
-    const submitBtn = document.getElementById('submitBtn');
-    const loading = document.getElementById('loading');
-    
-    if (uploadForm) {
-        uploadForm.addEventListener('submit', function() {
-            submitBtn.disabled = true;
-            loading.style.display = 'block';
         });
     }
 
@@ -726,11 +624,6 @@ function updatePlot() {
     const hargreavesCheckbox = document.getElementById('show-hargreaves');
     if (hargreavesCheckbox?.checked) {
         selectedMethods.push('Hargreaves');
-    }
-    
-    const acisCheckbox = document.getElementById('show-acis');
-    if (acisCheckbox?.checked) {
-        selectedMethods.push('ACIS');
     }
     
     // If no methods selected, show message

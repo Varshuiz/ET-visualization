@@ -1,31 +1,22 @@
-import pandas as pd
+import base64
+import calendar
 import io
-from django.shortcuts import render
-from .forms import UploadFileForm
+import json
+import xml.etree.ElementTree as ET
+from datetime import datetime, date, timedelta
+from io import BytesIO, StringIO
 from math import exp
+
+import feedparser
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from io import BytesIO
-import base64
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import render, redirect 
 import numpy as np
+import pandas as pd
 import requests
-import xml.etree.ElementTree as ET
-import feedparser
-from datetime import datetime, date, timedelta
-import calendar
-import json
-import pandas as pd
-import numpy as np
-import io
-from io import StringIO
-from .alberta_acis_scraper import fetch_alberta_acis_data
-from django.shortcuts import render
-from django.http import JsonResponse
-import pandas as pd
-import json
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import redirect, render
+
 from .aquacrop_simulator import AquaCropSimulator, run_aquacrop_simulation
 from .aquacrop_aggregation import (
     aggregate_aquacrop_timeseries,
@@ -34,6 +25,17 @@ from .aquacrop_aggregation import (
     build_yield_comparison_chart,
     format_yield_table,
 )
+from .forms import UploadFileForm
+from .forecast_recommendations import (
+    CROP_GDD_PROFILES,
+    SOIL_IRRIGATION_FACTORS,
+    build_historical_confidence,
+    build_irrigation_confidence_plot,
+    calculate_daily_gdd,
+    gdd_stage_factor,
+    safe_temp_convert,
+)
+from .stations import ALBERTA_STATIONS_COORDS, find_nearest_alberta_station
 
 
 
@@ -1768,7 +1770,6 @@ ALBERTA_LOCATIONS = {
 def search_alberta_location(query):
     """
     Search Alberta locations database with fuzzy matching
-    Falls back to allowing any station name for ACIS scraper
     """
     query = query.strip().lower()
     
@@ -1798,18 +1799,7 @@ def search_alberta_location(query):
                 'source': 'database'
             }
     
-    # NEW: If not in database, treat it as a direct ACIS station name
-    # Return generic Alberta coordinates - the scraper will find the station
-    return {
-        'place_name': query.title(),
-        'latitude': 53.5,  # Central Alberta
-        'longitude': -114.0,
-        'township': None,
-        'range': None,
-        'meridian': None,
-        'source': 'station_name',
-        'is_direct_station': True
-    }
+    return None
 # API endpoint for location search autocomplete
 def location_search_api(request):
     """
@@ -1899,7 +1889,6 @@ def fetch_openmeteo_historical_data(latitude, longitude, start_date, end_date):
 
     # Open-Meteo daily archive does not provide RH mean in this request, use conservative default.
     df["RH"] = 65.0
-    df["ET_ACIS"] = np.nan
 
     return df
 
@@ -1929,7 +1918,6 @@ def normalize_uploaded_weather_dataframe(df):
         "solar_radiation": "Solar_Radiation",
         "rs": "Solar_Radiation",
         "shortwave_radiation_sum": "Solar_Radiation",
-        "et_acis": "ET_ACIS",
     }
 
     df = df.copy()
@@ -1968,11 +1956,6 @@ def normalize_uploaded_weather_dataframe(df):
     if "Solar_Radiation" in df.columns:
         df["Solar_Radiation"] = pd.to_numeric(df["Solar_Radiation"], errors="coerce")
 
-    if "ET_ACIS" in df.columns:
-        df["ET_ACIS"] = pd.to_numeric(df["ET_ACIS"], errors="coerce")
-    else:
-        df["ET_ACIS"] = np.nan
-
     df = df.dropna(subset=["Date", "Tmax", "Tmin"]).sort_values("Date").reset_index(drop=True)
     if df.empty:
         raise ValueError("Uploaded CSV has no valid Date/Tmax/Tmin records after cleaning")
@@ -1981,14 +1964,14 @@ def normalize_uploaded_weather_dataframe(df):
 
 
 def acis_data_view(request):
-    """
-    View for fetching ACIS data - NOW WITH WEB SCRAPING from Alberta ACIS!
-    """
+    """View for loading weather data used by ET method calculations."""
     error_message = None
     df_preview = None
     success_message = None
     location_result = None
     scraping = False
+    data_source_mode = request.POST.get("data_source_mode", "exact_coordinates") if request.method == "POST" else "exact_coordinates"
+    used_station = None
     
     selected_unit = request.GET.get('unit', 'mm')
     if selected_unit not in ['mm', 'inches']:
@@ -2000,6 +1983,7 @@ def acis_data_view(request):
         try:
             location_type = request.POST.get('location_type', 'place')
             uploaded_file = request.FILES.get('file')
+            data_source_mode = request.POST.get("data_source_mode", "exact_coordinates")
             
             # Get date range first
             start_date = request.POST.get('start_date', '').strip()
@@ -2016,8 +2000,8 @@ def acis_data_view(request):
                 if end_dt < start_dt:
                     raise ValueError("End date must be after start date")
                 
-                if (end_dt - start_dt).days > 730:  # 2 years max
-                    raise ValueError("Date range cannot exceed 2 years")
+                if (end_dt - start_dt).days > 365 * 30:  # 30 years max
+                    raise ValueError("Date range cannot exceed 30 years")
                 
             except ValueError as e:
                 if "does not match format" in str(e):
@@ -2096,11 +2080,23 @@ def acis_data_view(request):
                 else:
                     raise ValueError("No weather station found near this location")
             
+            # Optional snap-to-nearest-station mode for coordinate sourcing.
+            if data_source_mode == "nearest_station":
+                station_result = find_nearest_alberta_station(latitude, longitude)
+                if not station_result:
+                    raise ValueError("Could not locate a nearby station for selected coordinates")
+                used_station = station_result["name"]
+                latitude = station_result["latitude"]
+                longitude = station_result["longitude"]
+                location_desc = f"{location_desc} | Using nearest station: {used_station}"
+            else:
+                used_station = "Exact farm coordinates"
+
             print(f"\n{'='*60}")
             print(f"FETCHING DATA FOR ET PIPELINE")
             print(f"{'='*60}")
             print(f"Location: {location_desc}")
-            print(f"Station: {station_name}")
+            print(f"Station/source mode: {used_station}")
             print(f"Date range: {start_date} to {end_date}")
             print(f"{'='*60}\n")
             
@@ -2127,12 +2123,7 @@ def acis_data_view(request):
                 if df is None or len(df) == 0:
                     raise ValueError("No weather data returned from selected source")
                 
-                # Reference ET is not expected with Environment Canada forecast feed.
-                has_et = 'ET_ACIS' in df.columns and df['ET_ACIS'].notna().sum() > 0
-                
-                if not has_et:
-                    print("⚠ Reference ET is unavailable in this source")
-                    print(f"Available columns: {df.columns.tolist()}")
+                print(f"Available columns: {df.columns.tolist()}")
                 
                 # Ensure we have required columns
                 required_cols = ['Date', 'Tmax', 'Tmin']
@@ -2174,13 +2165,8 @@ def acis_data_view(request):
                 # Clean up
                 df = df.drop('day_of_year', axis=1, errors='ignore')
                 
-                print(f"\n✓ Successfully fetched {len(df)} days of data")
+                print(f"\nSuccessfully fetched {len(df)} days of data")
                 print(f"  Temperature range: {df['Tmax'].min():.1f}°C to {df['Tmax'].max():.1f}°C")
-                
-                if has_et:
-                    et_valid = df['ET_ACIS'].notna().sum()
-                    print(f"  Reference ET: {et_valid} valid values")
-                    print(f"  ET range: {df['ET_ACIS'].min():.2f} to {df['ET_ACIS'].max():.2f} mm/day")
                 
                 # Store in session
                 request.session['acis_data'] = df.to_json(date_format='iso')
@@ -2190,22 +2176,20 @@ def acis_data_view(request):
                     'start_date': start_date,
                     'end_date': end_date,
                     'description': location_desc,
-                    'station': station_name
+                    'station': station_name,
+                    'used_station': used_station,
+                    'data_source_mode': data_source_mode,
                 }
                 
                 # Preview
                 df_preview = df.head(10).to_dict('records')
                 success_message = (
-                    f"✓ Successfully loaded {len(df)} day(s) of weather data from {source_name}."
+                    f"Successfully loaded {len(df)} day(s) of weather data from {source_name}."
                 )
-                
-                if has_et:
-                    success_message += f" Including {et_valid} days of Reference ET values."
-                else:
-                    success_message += " Reference ET is not provided by this source."
+                success_message += f" Source mode: {used_station}."
                 
             except Exception as scrape_error:
-                print(f"\n✗ Environment Canada fetch failed: {scrape_error}")
+                print(f"\nEnvironment Canada fetch failed: {scrape_error}")
                 
                 error_message = (
                     f"Automatic data fetch failed: {str(scrape_error)}\n\n"
@@ -2221,11 +2205,22 @@ def acis_data_view(request):
             import traceback
             traceback.print_exc()
     
+    nearest_station_hint = None
+    if used_station and used_station != "Exact farm coordinates":
+        nearest_station_hint = used_station
+
     context = {
         'error_message': error_message,
         'success_message': success_message,
         'df_preview': df_preview,
         'location_result': location_result,
+        'used_station': used_station,
+        'nearest_station_hint': nearest_station_hint,
+        'data_source_mode': data_source_mode,
+        'alberta_stations': [
+            {'name': name, 'lat': coords['lat'], 'lon': coords['lon']}
+            for name, coords in ALBERTA_STATIONS_COORDS.items()
+        ],
         'selected_unit': selected_unit,
         'unit_info': unit_info,
         'popular_locations': list(ALBERTA_LOCATIONS.keys())[:20],
@@ -2234,55 +2229,6 @@ def acis_data_view(request):
     
     return render(request, 'et/acis_fetch.html', context)
 
-
-def find_nearest_alberta_station(latitude, longitude):
-    """
-    Find nearest Alberta ACIS weather station to given coordinates
-    """
-    
-    # Alberta ACIS weather stations with coordinates
-    ALBERTA_STATIONS_COORDS = {
-        'Lethbridge': {'lat': 49.6942, 'lon': -112.8328},
-        'Calgary': {'lat': 51.1139, 'lon': -114.0203},
-        'Edmonton': {'lat': 53.3097, 'lon': -113.5800},
-        'Red Deer': {'lat': 52.1822, 'lon': -113.8939},
-        'Medicine Hat': {'lat': 50.0189, 'lon': -110.7208},
-        'Medicine Lake Auto': {'lat': 54.0181, 'lon': -112.9767},
-        'Brooks': {'lat': 50.5644, 'lon': -111.8986},
-        'Vauxhall': {'lat': 50.0500, 'lon': -112.1333},
-        'Taber': {'lat': 49.7833, 'lon': -112.1500},
-        'Grande Prairie': {'lat': 55.1796, 'lon': -118.8850},
-        'Fort McMurray': {'lat': 56.6532, 'lon': -111.2217},
-    }
-    
-    from math import radians, cos, sin, asin, sqrt
-    
-    def haversine(lon1, lat1, lon2, lat2):
-        """Calculate distance between two points on Earth (km)"""
-        lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
-        dlon = lon2 - lon1
-        dlat = lat2 - lat1
-        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-        c = 2 * asin(sqrt(a))
-        km = 6371 * c
-        return km
-    
-    nearest = None
-    min_distance = float('inf')
-    
-    for station_name, coords in ALBERTA_STATIONS_COORDS.items():
-        distance = haversine(longitude, latitude, coords['lon'], coords['lat'])
-        
-        if distance < min_distance:
-            min_distance = distance
-            nearest = {
-                'name': station_name,
-                'latitude': coords['lat'],
-                'longitude': coords['lon'],
-                'distance': distance
-            }
-    
-    return nearest
 
 def get_coordinates_from_township(township, range_val, meridian='4th'):
     """
@@ -2323,41 +2269,8 @@ def get_coordinates_from_township(township, range_val, meridian='4th'):
     longitude = base_lon - lon_offset
     
     return (latitude, longitude)
-
-
-    if location_type == 'place':
-        place_name = request.POST.get('place_name', '').strip()
-    
-    if not place_name:
-        raise ValueError("Please enter a location name")
-    
-    print(f"Searching for: {place_name}")
-    location_result = search_alberta_location(place_name)
-    
-    if not location_result:
-        raise ValueError(f"Location '{place_name}' not found")
-    
-    # NEW: Check if this is a direct station name
-    if location_result.get('is_direct_station'):
-        # User typed a station name directly
-        latitude = location_result['latitude']
-        longitude = location_result['longitude']
-        station_name = place_name  # Use the exact name they typed
-        location_desc = f"{place_name} (Station)"
-    else:
-        # Found in our database
-        latitude = location_result['latitude']
-        longitude = location_result['longitude']
-        station_name = location_result['place_name']
-        location_desc = location_result['place_name']
-        
-        if location_result.get('township'):
-            location_desc += f" (Twp {location_result['township']}, Rge {location_result['range']}, {location_result['meridian']} Meridian)"
-
 def comparison_with_acis(request):
-    """
-    Enhanced ET calculator with ACIS data - INCLUDING ACIS ET VALUES FOR COMPARISON
-    """
+    """Enhanced ET calculator with method-only ET comparison."""
     et_data = None
     et_stats = None
     comparison_stats = None
@@ -2365,7 +2278,7 @@ def comparison_with_acis(request):
     plot_url = None
     growing_season_plots = None
     
-    # Get ACIS data from session
+    # Get session data from input page
     acis_data_json = request.session.get('acis_data')
     location_info = request.session.get('acis_location', {})
     
@@ -2411,7 +2324,7 @@ def comparison_with_acis(request):
         env_canada_forecast = ec_df.to_dict('records')
         ec_city_name = city_name
         
-        print(f"✓ Environment Canada forecast fetched for {city_name}")
+        print(f"Environment Canada forecast fetched for {city_name}")
         
     except Exception as e:
         print(f"Could not fetch Environment Canada forecast: {e}")
@@ -2423,36 +2336,40 @@ def comparison_with_acis(request):
         # Get latitude from session
         latitude = location_info.get('latitude', 49.7)
         
-        # Ensure we have temperature columns
-        if 'Tmax' not in df.columns or 'Tmin' not in df.columns:
+        # We need temperature columns only when ET columns are not already present.
+        existing_et_columns = ['ET_PT', 'ET_PM', 'ET_Maule', 'ET_Hargreaves']
+        has_existing_et = any(col in df.columns for col in existing_et_columns)
+        if ('Tmax' not in df.columns or 'Tmin' not in df.columns) and not has_existing_et:
             raise ValueError("Missing temperature data")
         
-        # Calculate Tavg if not present
-        if 'Tavg' not in df.columns:
-            df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
+        # Calculate ET inputs only when ET series are not already available.
+        if not has_existing_et:
+            # Calculate Tavg if not present
+            if 'Tavg' not in df.columns:
+                df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
         
-        # Assign solar radiation
-        if 'Solar_Radiation' in df.columns:
-            df['Rs'] = df['Solar_Radiation']
-        elif 'Rs' not in df.columns:
-            # Estimate if not available
-            df['Rs'] = (df['Tmax'] - df['Tmin']) * 0.16 * np.sqrt(12)
-        
-        # Assign wind speed
-        if 'Wind_Speed' in df.columns:
-            df['u2'] = df['Wind_Speed']
-        elif 'u2' not in df.columns:
-            df['u2'] = 2.0  # Default
-        
-        # Assign relative humidity
-        if 'RH' not in df.columns:
-            df['RH'] = 65.0  # Default
-        
-        # Calculate extraterrestrial radiation
-        df['Ra'] = df.apply(
-            lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), 
-            axis=1
-        )
+            # Assign solar radiation
+            if 'Solar_Radiation' in df.columns:
+                df['Rs'] = df['Solar_Radiation']
+            elif 'Rs' not in df.columns:
+                # Estimate if not available
+                df['Rs'] = (df['Tmax'] - df['Tmin']) * 0.16 * np.sqrt(12)
+            
+            # Assign wind speed
+            if 'Wind_Speed' in df.columns:
+                df['u2'] = df['Wind_Speed']
+            elif 'u2' not in df.columns:
+                df['u2'] = 2.0  # Default
+            
+            # Assign relative humidity
+            if 'RH' not in df.columns:
+                df['RH'] = 65.0  # Default
+            
+            # Calculate extraterrestrial radiation
+            df['Ra'] = df.apply(
+                lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), 
+                axis=1
+            )
         
         # Calculate ET using all four methods (only if not already present)
         if 'ET_PT' not in df.columns:
@@ -2502,13 +2419,8 @@ def comparison_with_acis(request):
                 print(f"Hargreaves calculation failed: {e}")
                 df['ET_Hargreaves'] = np.nan
         
-        # KEEP ACIS ET if it exists
-        has_acis_et = 'ET_ACIS' in df.columns and df['ET_ACIS'].notna().sum() > 0
-        
-        # Remove rows with ALL NaN ET values (but keep ACIS ET)
+        # Remove rows with ALL NaN ET values across supported ET methods.
         et_columns = ['ET_PT', 'ET_PM', 'ET_Maule', 'ET_Hargreaves']
-        if has_acis_et:
-            et_columns.append('ET_ACIS')
         
         df = df.dropna(subset=et_columns, how='all')
         
@@ -2521,10 +2433,6 @@ def comparison_with_acis(request):
             if col in df.columns:
                 df[f'{col}_smooth'] = df[col].rolling(window=5, min_periods=1).mean()
         
-        # Also smooth ACIS ET if available
-        if has_acis_et:
-            df['ET_ACIS_smooth'] = df['ET_ACIS'].rolling(window=5, min_periods=1).mean()
-        
         # Calculate statistics for all methods with unit conversion
         et_stats = {}
         method_names = {
@@ -2532,7 +2440,6 @@ def comparison_with_acis(request):
             'PM': 'Penman-Monteith', 
             'Maule': 'Maulé',  
             'Hargreaves': 'Hargreaves-Samani',
-            'ACIS': 'ACIS Reference'
         }
         
         for method, name in method_names.items():
@@ -2561,7 +2468,7 @@ def comparison_with_acis(request):
         # Enhanced comparison statistics
         comparison_stats = {}
         available_methods = [
-            method for method in ['PT', 'PM', 'Maule', 'Hargreaves', 'ACIS'] 
+            method for method in ['PT', 'PM', 'Maule', 'Hargreaves']
             if f'ET_{method}' in df.columns and not df[f'ET_{method}'].isna().all()
         ]
         
@@ -2578,10 +2485,8 @@ def comparison_with_acis(request):
                         key = f'{method1} vs {method2}'
                         comparison_stats['correlations'][key] = corr_matrix.iloc[i, j]
             
-            # Calculate mean differences from ACIS if available, otherwise from PM
-            reference_method = 'ACIS' if 'ACIS' in available_methods else (
-                'PM' if 'PM' in available_methods else None
-            )
+            # Calculate mean differences from PM when available.
+            reference_method = 'PM' if 'PM' in available_methods else None
             
             if reference_method:
                 for method in available_methods:
@@ -2618,7 +2523,6 @@ def comparison_with_acis(request):
             'PM': '#087F8C', 
             'Maule': '#BB9F06',
             'Hargreaves': '#5AAA95',
-            'ACIS': '#FF6B6B'
         }
         
         for method in available_methods:
@@ -2640,26 +2544,18 @@ def comparison_with_acis(request):
                 plot_data = df[col]
                 plot_data_smooth = df[smooth_col] if smooth_col in df.columns else plot_data
             
-            # Use thicker line and different style for ACIS
-            if method == 'ACIS':
-                ax1.plot(
-                    df['Date'], plot_data_smooth, 
-                    label=f'{method_names[method]}', 
-                    color=colors[method], linewidth=3.5, alpha=1.0, linestyle='--'
-                )
-            else:
-                ax1.plot(
-                    df['Date'], plot_data, 
-                    label=f'{method_names[method]}', 
-                    color=colors[method], alpha=0.6, linewidth=1.5
-                )
-                ax1.plot(
-                    df['Date'], plot_data_smooth, 
-                    color=colors[method], linewidth=2.5, alpha=0.9
-                )
+            ax1.plot(
+                df['Date'], plot_data,
+                label=f'{method_names[method]}',
+                color=colors[method], alpha=0.6, linewidth=1.5
+            )
+            ax1.plot(
+                df['Date'], plot_data_smooth,
+                color=colors[method], linewidth=2.5, alpha=0.9
+            )
         
         # Add location info to title
-        location_desc = location_info.get('description', 'ACIS Data')
+        location_desc = location_info.get('description', 'Selected weather data')
         ax1.set_title(
             f'Evapotranspiration Method Comparison - {location_desc}', 
             fontsize=16, fontweight='bold', color='#095256', pad=20
@@ -2675,7 +2571,7 @@ def comparison_with_acis(request):
         
         # Method differences plot
         ax2.set_facecolor('#f8fffe')
-        reference_method = 'ACIS' if 'ACIS' in available_methods else 'PM'
+        reference_method = 'PM'
         
         if reference_method in available_methods and len(available_methods) > 1:
             for method in available_methods:
@@ -2693,9 +2589,8 @@ def comparison_with_acis(request):
                     )
             
             ax2.axhline(y=0, color='#095256', linestyle='--', alpha=0.8)
-            ref_name = 'ACIS Reference' if reference_method == 'ACIS' else 'Penman-Monteith'
             ax2.set_title(
-                f'Differences from {ref_name} (Reference Method)', 
+                'Differences from Penman-Monteith (Reference Method)',
                 fontsize=14, fontweight='bold', color='#095256'
             )
             ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
@@ -2732,8 +2627,8 @@ def comparison_with_acis(request):
         csv_columns = ['Date'] + [f'ET_{method}' for method in available_methods]
         request.session['et_data_csv'] = df[csv_columns].to_csv(index=False)
         
-        # Store the ET data for plot updates
-        request.session['acis_data'] = df[csv_columns].to_json(date_format='iso')
+        # Store ET-only data separately for plot updates (do not overwrite weather input data).
+        request.session['comparison_et_data'] = df[csv_columns].to_json(date_format='iso')
         
         # Prepare data for rendering with unit conversion
         et_data = []
@@ -2770,7 +2665,6 @@ def comparison_with_acis(request):
         'selected_unit': selected_unit,
         'unit_info': unit_info,
         'acis_location': location_info,
-        'has_acis_et': has_acis_et,
         'available_methods': available_methods,
         'env_canada_forecast': env_canada_forecast,
         'ec_city_name': ec_city_name,
@@ -2794,15 +2688,18 @@ def update_comparison_plot(request):
         
         unit_info = get_unit_info(selected_unit)
         
-        # Get data from session - CRITICAL: Use the correct session key
+        # Get data from session.
+        comparison_et_data_json = request.session.get('comparison_et_data')
         acis_data_json = request.session.get('acis_data')
         et_data_csv = request.session.get('et_data_csv')
         
-        if not acis_data_json and not et_data_csv:
+        if not comparison_et_data_json and not acis_data_json and not et_data_csv:
             return JsonResponse({'error': 'No data in session'}, status=400)
         
         # Load data
-        if acis_data_json:
+        if comparison_et_data_json:
+            df = pd.read_json(io.StringIO(comparison_et_data_json))
+        elif acis_data_json:
             df = pd.read_json(io.StringIO(acis_data_json))
         elif et_data_csv:
             df = pd.read_csv(io.StringIO(et_data_csv))
@@ -2849,7 +2746,6 @@ def update_comparison_plot(request):
             'PM': '#087F8C', 
             'Maule': '#BB9F06',
             'Hargreaves': '#5AAA95',
-            'ACIS': '#FF6B6B'
         }
         
         method_names = {
@@ -2857,7 +2753,6 @@ def update_comparison_plot(request):
             'PM': 'Penman-Monteith', 
             'Maule': 'Maulé',  
             'Hargreaves': 'Hargreaves-Samani',
-            'ACIS': 'ACIS Reference'
         }
         
         # Plot each selected method
@@ -2869,13 +2764,7 @@ def update_comparison_plot(request):
                 if selected_unit == 'inches':
                     values = values.apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
                 
-                # Plot with appropriate style
-                if method == 'ACIS':
-                    ax1.plot(df['Date'], values, color=colors[method], linewidth=3, 
-                            linestyle='--', alpha=0.9, label=method_names[method], zorder=10)
-                else:
-                    ax1.plot(df['Date'], values, color=colors[method], linewidth=2, 
-                            alpha=0.7, label=method_names[method])
+                ax1.plot(df['Date'], values, color=colors[method], linewidth=2, alpha=0.7, label=method_names[method])
         
         ax1.set_title('ET Method Comparison', fontsize=16, fontweight='bold', color='#095256')
         ax1.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
@@ -2886,8 +2775,7 @@ def update_comparison_plot(request):
         
         # Difference plot
         if len(available_methods) > 1:
-            # Use ACIS as reference if available, otherwise PM
-            reference_method = 'ACIS' if 'ACIS' in available_methods else ('PM' if 'PM' in available_methods else available_methods[0])
+            reference_method = 'PM' if 'PM' in available_methods else available_methods[0]
             
             for method in available_methods:
                 if method != reference_method:
@@ -2996,19 +2884,50 @@ def combine_day_night_forecasts(df_forecast):
     
     return combined
 
+def _resolve_city_lat_lon(city_name):
+    if city_name in ALBERTA_LOCATIONS:
+        loc = ALBERTA_LOCATIONS[city_name]
+        return loc["lat"], loc["lon"]
+    try:
+        geo = geocode_location(city_name)
+        return geo["latitude"], geo["longitude"]
+    except Exception:
+        # fallback near central Alberta
+        return 53.0, -114.0
+
+def _pt_daily_et_from_temperature(tmax, tmin, latitude, day_of_year):
+    """
+    Priestley-Taylor daily ET estimate using temperature-derived radiation.
+    """
+    tavg = (tmax + tmin) / 2.0
+    ra = calculate_extraterrestrial_radiation(latitude, day_of_year)
+    # Hargreaves-style radiation estimate used as input to PT net radiation.
+    temp_range = max(tmax - tmin, 0.5)
+    rs = 0.16 * np.sqrt(temp_range) * ra
+    rn = net_radiation_estimate(rs, tmax, tmin, RH=65.0)
+    et_pt = priestley_taylor_ET(tavg, rn)
+    return max(float(et_pt), 0.0) if not pd.isna(et_pt) else 0.0
+
 def env_canada_forecast_view(request):
     """
     Standalone view to display Environment Canada precipitation forecast
     """
     from .environment_canada_scraper import fetch_env_canada_forecast, EnvironmentCanadaScraper
-    import pandas as pd
-    import numpy as np
-    import math
     
     error_message = None
     df_forecast = None
     city_name = 'Calgary'  # Default
-    selected_days = 5  # Default
+    selected_days = 7  # Default
+    crop_type = 'wheat'
+    soil_type = 'loam'
+    crop_options = [
+        {"value": key, "label": key.replace("_", " ").title()}
+        for key in sorted(CROP_GDD_PROFILES.keys())
+    ]
+    soil_options = [
+        {"value": key, "label": key.replace("_", " ").title()}
+        for key in sorted(SOIL_IRRIGATION_FACTORS.keys())
+    ]
 
     # Get available cities
     scraper = EnvironmentCanadaScraper()
@@ -3044,49 +2963,24 @@ def env_canada_forecast_view(request):
     
     if request.method == 'POST':
         city_name = request.POST.get('city_name', 'Calgary').strip()
-        selected_days = int(request.POST.get('days', 5))
+        crop_type = request.POST.get('crop_type', 'wheat').strip().lower()
+        soil_type = request.POST.get('soil_type', 'loam').strip().lower()
+        if crop_type not in CROP_GDD_PROFILES:
+            crop_type = 'wheat'
+        if soil_type not in SOIL_IRRIGATION_FACTORS:
+            soil_type = 'loam'
+        try:
+            selected_days = int(request.POST.get('days', 7))
+        except (TypeError, ValueError):
+            selected_days = 7
+        selected_days = max(3, min(selected_days, 30))
         
         try:
             df = fetch_env_canada_forecast(city_name, selected_days)
             
-            # DEBUG: Print what we got from scraper
-            print(f"\n{'='*80}")
-            print(f"Raw DataFrame from scraper for {city_name}")
-            print(f"{'='*80}")
-            for idx, row in df.iterrows():
-                print(f"Row {idx}: Period={row['Period']}, High={row['Temp_High']}, Low={row['Temp_Low']}, Type High={type(row['Temp_High'])}, Type Low={type(row['Temp_Low'])}")
-            print(f"{'='*80}\n")
-            
-            # Helper function to safely check and convert temperature values
-            def safe_temp_convert(value):
-                """Convert temperature value to float or None"""
-                # Check if value is None
-                if value is None:
-                    return None
-                
-                # Check if it's a pandas NA
-                if pd.isna(value):
-                    return None
-                
-                # Check if it's a numpy nan
-                if isinstance(value, float):
-                    if math.isnan(value):
-                        return None
-                    else:
-                        return float(value)
-                
-                # Try to convert to float
-                try:
-                    temp_float = float(value)
-                    if math.isnan(temp_float):
-                        return None
-                    return temp_float
-                except (ValueError, TypeError):
-                    return None
-            
             # Convert to records for template
             df_forecast = []
-            for idx, row in df.iterrows():
+            for _, row in df.iterrows():
                 temp_high = safe_temp_convert(row['Temp_High'])
                 temp_low = safe_temp_convert(row['Temp_Low'])
                 precip = safe_temp_convert(row['Precipitation_mm'])
@@ -3099,26 +2993,81 @@ def env_canada_forecast_view(request):
                     'Precipitation_mm': precip if precip is not None else 0.0,
                     'Forecast': str(row['Forecast']) if row['Forecast'] else ''
                 }
-                
-                # DEBUG: Print converted values
-                print(f"Converted Row {idx}: High={forecast_dict['Temp_High']}, Low={forecast_dict['Temp_Low']}")
-                
                 df_forecast.append(forecast_dict)
             
-            # Calculate total precipitation
+            # PT + GDD recommendation on current forecast.
             total_precip = sum([f['Precipitation_mm'] for f in df_forecast])
-            
-            print(f"\n✓ Created {len(df_forecast)} forecast records")
-            print(f"✓ Total precipitation: {total_precip:.1f} mm\n")
-            if df_forecast:
-                df_forecast_combined = combine_day_night_forecasts(df_forecast)
-            else:
-                df_forecast_combined = []
+            lat, lon = _resolve_city_lat_lon(city_name)
+            _ = lon  # keep for potential future logging/use
+            estimated_et_total = 0.0
+            cumulative_gdd = 0.0
+            forecast_irrig_curve = []
+            running_irrig = 0.0
+            current_stage_label = "Early establishment"
+            soil_factor = SOIL_IRRIGATION_FACTORS.get(soil_type, 1.0)
+
+            for item in df_forecast:
+                tmax = item['Temp_High'] if item['Temp_High'] is not None else item['Temp_Low']
+                tmin = item['Temp_Low'] if item['Temp_Low'] is not None else item['Temp_High']
+                if tmax is None or tmin is None:
+                    continue
+                d = pd.to_datetime(item["Date"])
+                day_of_year = d.dayofyear
+                et_pt = _pt_daily_et_from_temperature(float(tmax), float(tmin), lat, day_of_year)
+                daily_gdd = calculate_daily_gdd(float(tmax), float(tmin))
+                cumulative_gdd += daily_gdd
+                stage_factor, current_stage_label = gdd_stage_factor(cumulative_gdd, crop_type)
+                adjusted_et = et_pt * stage_factor
+                estimated_et_total += adjusted_et
+                daily_irrig = max(adjusted_et - max(float(item["Precipitation_mm"]), 0.0), 0.0)
+                running_irrig += daily_irrig
+                forecast_irrig_curve.append(running_irrig)
+
+            net_water_balance = total_precip - estimated_et_total
+            irrigation_needed = running_irrig * soil_factor
+            recommendation_level = (
+                "low"
+                if irrigation_needed < 10
+                else "moderate"
+                if irrigation_needed < 25
+                else "high"
+            )
+
+            # 5-year historical baseline confidence band (sample areas around city).
+            historical_confidence = build_historical_confidence(
+                city_name,
+                selected_days,
+                crop_type,
+                _resolve_city_lat_lon,
+                _pt_daily_et_from_temperature,
+            )
+            forecast_curve_soil_adjusted = [v * soil_factor for v in forecast_irrig_curve]
+            rec_chart_url = build_irrigation_confidence_plot(
+                historical_confidence, forecast_curve_soil_adjusted
+            )
+            crop_label = next((item["label"] for item in crop_options if item["value"] == crop_type), "Wheat")
+            soil_label = next((item["label"] for item in soil_options if item["value"] == soil_type), "Loam")
+
             context = {
                 'city_name': city_name,
                 'selected_days': selected_days,
                 'df_forecast': df_forecast,
                 'total_precip': total_precip,
+                'estimated_et_total': estimated_et_total,
+                'net_water_balance': net_water_balance,
+                'irrigation_needed': irrigation_needed,
+                'recommendation_level': recommendation_level,
+                'gdd_total': cumulative_gdd,
+                'gdd_stage': current_stage_label,
+                'crop_type': crop_type,
+                'soil_type': soil_type,
+                'crop_label': crop_label,
+                'soil_label': soil_label,
+                'crop_options': crop_options,
+                'soil_options': soil_options,
+                'soil_factor': soil_factor,
+                'historical_confidence': historical_confidence,
+                'rec_chart_url': rec_chart_url,
                 'available_cities': all_cities,
                 'cities_by_region': cities_by_region,
             }
@@ -3137,6 +3086,12 @@ def env_canada_forecast_view(request):
         'error_message': error_message,
         'city_name': city_name,
         'selected_days': selected_days,
+        'crop_type': crop_type,
+        'soil_type': soil_type,
+        'crop_label': next((item["label"] for item in crop_options if item["value"] == crop_type), "Wheat"),
+        'soil_label': next((item["label"] for item in soil_options if item["value"] == soil_type), "Loam"),
+        'crop_options': crop_options,
+        'soil_options': soil_options,
         'available_cities': all_cities,
         'cities_by_region': cities_by_region,
     }

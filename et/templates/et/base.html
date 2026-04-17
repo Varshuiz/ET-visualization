@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}🌾 Agricultural ET Calculator{% endblock %}</title>
+    <title>{% block title %}Aqualys{% endblock %}</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
@@ -28,16 +28,16 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, var(--light-green) 0%, #f8fffe 100%);
+            background: #f4f7f6;
             min-height: 100vh;
             line-height: 1.6;
             color: var(--midnight-green);
         }
 
         .navbar {
-            background: linear-gradient(135deg, var(--midnight-green), var(--teal));
-            padding: 15px 0;
-            box-shadow: 0 5px 15px var(--shadow);
+            background: #0c4f54;
+            padding: 12px 0;
+            box-shadow: 0 2px 8px var(--shadow);
             position: sticky;
             top: 0;
             z-index: 1000;
@@ -55,18 +55,51 @@
         .nav-brand {
             color: white;
             text-decoration: none;
-            font-size: 1.5rem;
-            font-weight: 700;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: rgba(187, 159, 6, 0.18);
+            border: 1.5px solid rgba(187, 159, 6, 0.45);
+            flex-shrink: 0;
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .brand-name {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            line-height: 1;
+            color: white;
+        }
+
+        .brand-tagline {
+            color: #5DCAA5;
+            font-size: 0.72rem;
+            font-weight: 500;
+            letter-spacing: 0.03em;
         }
 
         .nav-links {
             display: flex;
             list-style: none;
-            gap: 30px;
+            gap: 10px;
             margin: 0;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         .nav-links li {
@@ -78,55 +111,60 @@
             text-decoration: none;
             font-weight: 500;
             transition: all 0.3s ease;
-            padding: 8px 16px;
-            border-radius: 25px;
+            padding: 7px 12px;
+            border-radius: 8px;
+            font-size: 0.92rem;
+        }
+
+        .nav-links i {
+            margin-right: 4px;
         }
 
         .nav-links a:hover,
         .nav-links a.active {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.16);
+            transform: none;
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 18px;
         }
 
         .card {
             background: var(--white);
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 8px 25px var(--shadow);
-            border: 1px solid rgba(90, 170, 149, 0.1);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px var(--shadow);
+            border: 1px solid #e3ece9;
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
         .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 40px var(--shadow);
+            transform: none;
+            box-shadow: 0 4px 14px var(--shadow);
         }
 
         .page-header {
             text-align: center;
-            margin-bottom: 40px;
-            padding: 30px 0;
-            background: linear-gradient(135deg, var(--midnight-green), var(--teal));
-            border-radius: 20px;
+            margin-bottom: 22px;
+            padding: 22px 14px;
+            background: #0f646a;
+            border-radius: 12px;
             color: white;
-            box-shadow: 0 10px 30px var(--shadow);
+            box-shadow: 0 4px 12px var(--shadow);
         }
 
         .page-header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
+            font-size: 2rem;
+            margin-bottom: 6px;
             font-weight: 700;
         }
 
         .page-header p {
-            font-size: 1.1rem;
+            font-size: 1rem;
             opacity: 0.9;
             max-width: 700px;
             margin: 0 auto;
@@ -141,7 +179,11 @@
 
         .file-upload-wrapper {
             position: relative;
-            display: inline-block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
             margin: 20px 0;
         }
 
@@ -172,22 +214,25 @@
         }
 
         .submit-btn {
-            background: linear-gradient(135deg, var(--teal), var(--midnight-green));
+            background: #0e6970;
             color: white;
-            padding: 15px 40px;
+            padding: 12px 24px;
             border: none;
-            border-radius: 50px;
-            font-size: 1.1rem;
+            border-radius: 8px;
+            font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            margin-left: 20px;
-            box-shadow: 0 5px 15px rgba(8, 127, 140, 0.3);
+            margin-left: 0;
+            box-shadow: none;
+            min-height: 46px;
+            min-width: 220px;
+            text-align: center;
         }
 
         .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(8, 127, 140, 0.4);
+            transform: none;
+            background: #0b5860;
         }
 
         .submit-btn:disabled {
@@ -253,16 +298,16 @@
             cursor: pointer;
         }
 
-        /* Unit Toggle Switch Styles - Fixed positioning */
         .unit-toggle-section {
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-end;
             gap: 15px;
-            margin: 20px 0;
-            padding: 15px;
-            background: linear-gradient(135deg, #e0f2f1, #f1f8f7);
-            border-radius: 15px;
+            margin: 10px 0 18px 0;
+            padding: 8px 12px;
+            background: #eef5f4;
+            border-radius: 10px;
+            border: 1px solid #d6e5e2;
         }
 
         .unit-label {
@@ -282,6 +327,36 @@
             display: inline-block;
             width: 60px;
             height: 34px;
+        }
+
+        .global-loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 40, 43, 0.35);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 5000;
+        }
+
+        .global-loading-overlay.active {
+            display: flex;
+        }
+
+        .global-loading-card {
+            background: white;
+            border-radius: 12px;
+            padding: 18px 20px;
+            min-width: 280px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            border: 1px solid #e1ece9;
+        }
+
+        .global-loading-card p {
+            margin-top: 10px;
+            color: #335d60;
+            font-weight: 600;
         }
 
         .toggle-switch input {
@@ -366,6 +441,7 @@
                 margin-top: 15px;
                 display: block;
                 width: 100%;
+                min-width: 0;
             }
 
             .unit-toggle-section {
@@ -384,38 +460,44 @@
     <nav class="navbar">
         <div class="nav-container">
             <a href="{% url 'et:enhanced_comparison' %}" class="nav-brand">
-                <i class="fas fa-seedling"></i> ET Calculator
+                <div class="brand-icon">
+                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M11 2C11 2 5 9 5 13.5C5 16.538 7.686 19 11 19C14.314 19 17 16.538 17 13.5C17 9 11 2 11 2Z" fill="#BB9F06" opacity="0.85"/>
+                        <path d="M11 8C11 8 7.5 12.5 7.5 14.5C7.5 16.157 9.067 17.5 11 17.5" stroke="rgba(255,255,255,0.5)" stroke-width="1" fill="none" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">Aqualys</span>
+                    <span class="brand-tagline">Smarter Water for Stronger Yields</span>
+                </div>
             </a>
             <ul class="nav-links" id="navLinks">
                 <li><a href="{% url 'et:acis_fetch' %}" {% if request.resolver_match.url_name == 'acis_fetch' %}class="active"{% endif %}>
-                    <i class="fas fa-satellite"></i> Fetch Data
-                </a></li>
-                <li><a href="{% url 'et:enhanced_comparison' %}" {% if request.resolver_match.url_name == 'enhanced_comparison' %}class="active"{% endif %}>
-                    <i class="fas fa-chart-line"></i> Compare Methods
+                    ET Setup
                 </a></li>
                 <li><a href="{% url 'et:env_canada_forecast' %}" {% if request.resolver_match.url_name == 'env_canada_forecast' %}class="active"{% endif %}>
-                    <i class="fas fa-cloud-sun-rain"></i> View Forecast
+                    Forecast & Water Plan
                 </a></li>
                 <li><a href="{% url 'et:aquacrop_simulation' %}" {% if request.resolver_match.url_name == 'aquacrop_simulation' %}class="active"{% endif %}>
-                    <i class="fas fa-seedling"></i> AquaCrop
+                    Crop Simulation
                 </a></li>
                 <li><a href="{% url 'et:priestley_taylor' %}" {% if request.resolver_match.url_name == 'priestley_taylor' %}class="active"{% endif %}>
-                    <i class="fas fa-leaf"></i> Priestley-Taylor
+                    Priestley-Taylor
                 </a></li>
                 <li><a href="{% url 'et:penman_monteith' %}" {% if request.resolver_match.url_name == 'penman_monteith' %}class="active"{% endif %}>
-                    <i class="fas fa-wind"></i> Penman-Monteith
+                    Penman-Monteith
                 </a></li>
                 <li><a href="{% url 'et:maule' %}" {% if request.resolver_match.url_name == 'maule' %}class="active"{% endif %}>
-                    <i class="fas fa-sun"></i> Maulé
+                    Maule
                 </a></li>
                 <li><a href="{% url 'et:hargreaves' %}" {% if request.resolver_match.url_name == 'hargreaves' %}class="active"{% endif %}>
-                    <i class="fas fa-thermometer-half"></i> Hargreaves
+                    Hargreaves
                 </a></li>
                 <li><a href="{% url 'et:method_info' %}" {% if request.resolver_match.url_name == 'method_info' %}class="active"{% endif %}>
-                    <i class="fas fa-info-circle"></i> Methods
+                    Method Guide
                 </a></li>
                 <li><a href="{% url 'et:help' %}" {% if request.resolver_match.url_name == 'help' %}class="active"{% endif %}>
-                    <i class="fas fa-question-circle"></i> Help
+                    Help
                 </a></li>
             </ul>
             <button class="mobile-menu-toggle" id="mobileMenuToggle">
@@ -423,6 +505,13 @@
             </button>
         </div>
     </nav>
+
+    <div class="global-loading-overlay" id="globalLoadingOverlay" aria-live="polite" aria-busy="true">
+        <div class="global-loading-card">
+            <div class="spinner"></div>
+            <p id="globalLoadingText">Processing data...</p>
+        </div>
+    </div>
 
     <div class="container">
         {% block content %}{% endblock %}
@@ -494,29 +583,33 @@
             });
         }
 
-        // Form submission with loading indicator
-        const uploadForm = document.getElementById('uploadForm');
-        if (uploadForm) {
-            uploadForm.addEventListener('submit', function(e) {
-                const loading = document.getElementById('loading');
-                const submitBtn = document.getElementById('submitBtn');
-                const fileInput = document.querySelector('input[type="file"]');
-                
-                if (!fileInput || !fileInput.files.length) {
-                    e.preventDefault();
-                    alert('Please select a CSV file first.');
-                    return;
+        // Global loading state for all form submissions
+        const globalLoadingOverlay = document.getElementById('globalLoadingOverlay');
+        const globalLoadingText = document.getElementById('globalLoadingText');
+        document.querySelectorAll('form').forEach(function(form) {
+            form.addEventListener('submit', function() {
+                if (globalLoadingOverlay) {
+                    const customText = form.getAttribute('data-loading-text');
+                    globalLoadingText.textContent = customText || 'Processing data...';
+                    globalLoadingOverlay.classList.add('active');
                 }
-                
-                if (loading) {
-                    loading.style.display = 'block';
-                }
-                if (submitBtn) {
-                    submitBtn.disabled = true;
-                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                const submitButtons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+                submitButtons.forEach(function(btn) {
+                    btn.disabled = true;
+                });
+            });
+        });
+
+        // Global loading state for navigation links that trigger processing pages.
+        document.querySelectorAll('[data-loading-link="true"]').forEach(function(link) {
+            link.addEventListener('click', function() {
+                if (globalLoadingOverlay) {
+                    const customText = link.getAttribute('data-loading-text');
+                    globalLoadingText.textContent = customText || 'Processing data...';
+                    globalLoadingOverlay.classList.add('active');
                 }
             });
-        }
+        });
 
         // Add fade-in animation to elements
         const observerOptions = {

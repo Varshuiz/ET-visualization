@@ -1,15 +1,15 @@
 {% extends 'et/base.html' %}
 
-{% block title %}Help Guide - ET Calculator{% endblock %}
+{% block title %}Help and Workflow Guide | Aqualys{% endblock %}
 
 {% block content %}
 <div class="page-header fade-in">
-    <h1><i class="fas fa-question-circle"></i> Help Guide</h1>
-    <p>Learn how to use the Agricultural ET Calculator effectively</p>
+    <h1>Help and Workflow Guide</h1>
+    <p>Step-by-step instructions for loading weather data and using ET outputs</p>
 </div>
 
 <div class="card fade-in">
-    <h2 style="color: var(--midnight-green); margin-bottom: 20px;"><i class="fas fa-upload"></i> Data Upload Guide</h2>
+    <h2 style="color: var(--midnight-green); margin-bottom: 20px;">Data Upload Guide</h2>
     
     <div style="background: var(--light-green); padding: 20px; border-radius: 15px; margin-bottom: 30px;">
         <h3 style="color: var(--midnight-green); margin-bottom: 15px;">CSV File Requirements</h3>
@@ -27,10 +27,10 @@
                 <h4 style="color: var(--teal); margin-bottom: 10px;">Column Names (flexible):</h4>
                 <ul style="color: var(--midnight-green); line-height: 1.6;">
                     <li><strong>Date:</strong> date, Date, DATE</li>
-                    <li><strong>Temperature:</strong> temp, temperature, air_temp</li>
+                    <li><strong>Temperature:</strong> tmax and tmin (or max/min temperature columns)</li>
                     <li><strong>Solar Radiation:</strong> solar, rad, radiation</li>
                     <li><strong>Humidity:</strong> rh, humidity, relative_humidity</li>
-                    <li><strong>Wind:</strong> wind, wind_speed, ws</li>
+                    <li><strong>Wind:</strong> wind_speed, ws, or u2</li>
                 </ul>
             </div>
         </div>
@@ -39,17 +39,17 @@
     <h3 style="color: var(--midnight-green); margin-bottom: 15px;">Sample CSV Structure</h3>
     <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 10px; padding: 15px; margin-bottom: 20px; overflow-x: auto;">
         <code style="font-family: 'Courier New', monospace; font-size: 0.9rem;">
-Date,Temperature,Solar_Radiation,Humidity,Wind_Speed<br>
-2024-01-01,22.5,18.2,65,2.1<br>
-2024-01-02,24.1,19.8,60,1.8<br>
-2024-01-03,21.3,16.5,70,2.4<br>
+Date,Tmax,Tmin,Solar_Radiation,Humidity,Wind_Speed<br>
+2024-01-01,25.5,14.3,18.2,65,2.1<br>
+2024-01-02,24.1,13.8,19.8,60,1.8<br>
+2024-01-03,21.3,10.9,16.5,70,2.4<br>
 ...
         </code>
     </div>
 </div>
 
 <div class="card fade-in">
-    <h2 style="color: var(--midnight-green); margin-bottom: 20px;"><i class="fas fa-cogs"></i> Using the Calculator</h2>
+    <h2 style="color: var(--midnight-green); margin-bottom: 20px;">Using the Calculator</h2>
     
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
         <div style="background: linear-gradient(135deg, #e8f5e8, #f0f8f0); padding: 20px; border-radius: 15px;">
@@ -75,10 +75,10 @@ Date,Temperature,Solar_Radiation,Humidity,Wind_Speed<br>
         <div style="background: linear-gradient(135deg, #f0f8ff, #f8f9ff); padding: 20px; border-radius: 15px;">
             <h3 style="color: var(--zomp); margin-bottom: 15px;"><i class="fas fa-chart-line"></i> Comparison</h3>
             <ol style="color: var(--midnight-green); line-height: 1.8;">
-                <li>Visit the Comparison page</li>
-                <li>Upload complete meteorological dataset</li>
-                <li>Click "Compare Methods"</li>
-                <li>Analyze side-by-side results</li>
+                <li>Open Compare ET Methods</li>
+                <li>Upload your weather CSV or fetch historical data</li>
+                <li>Run calculations for available methods</li>
+                <li>Review side-by-side ET results and download data</li>
             </ol>
         </div>
     </div>

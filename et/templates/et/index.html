@@ -1,6 +1,6 @@
 {% extends 'et/base.html' %}
 
-{% block title %}Priestley-Taylor ET Calculator{% endblock %}
+{% block title %}Priestley-Taylor ET Calculator | Aqualys{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -330,7 +330,7 @@
     <div class="instructions">
         <h3><i class="fas fa-info-circle"></i> How to Use</h3>
         <ul>
-            <li>Upload CSV files from ACIS (Applied Climate Information System) or similar weather data sources</li>
+            <li>Upload CSV files from your weather source or local station export</li>
             <li>Ensure your CSV contains columns for Air Temperature (°C) and Solar Radiation (MJ/m²/day)</li>
             <li>The tool will calculate ET₀ using the Priestley-Taylor method</li>
             <li>View results in table format and download processed data</li>
@@ -341,7 +341,7 @@
     <div class="upload-section">
         <h2><i class="fas fa-cloud-upload-alt"></i> Upload Weather Data</h2>
         
-        <form method="post" enctype="multipart/form-data" id="uploadForm">
+        <form method="post" enctype="multipart/form-data" id="uploadForm" data-loading-text="Calculating ET...">
             {% csrf_token %}
             <div class="file-upload-wrapper">
                 <label class="file-upload">

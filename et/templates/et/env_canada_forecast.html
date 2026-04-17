@@ -1,7 +1,7 @@
 {% extends 'et/base.html' %}
 {% load static %}
 
-{% block title %}Environment Canada Forecast{% endblock %}
+{% block title %}Forecast and Water Plan | Aqualys{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -15,8 +15,8 @@
     }
 
     .forecast-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 5px 20px rgba(9, 82, 86, 0.2);
+        transform: none;
+        box-shadow: 0 5px 20px rgba(9, 82, 86, 0.16);
     }
 
     .forecast-period {
@@ -102,6 +102,34 @@
         font-size: 1.1rem;
     }
 
+    .recommendation-box {
+        background: #ffffff;
+        border: 1px solid #dbe7e4;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+    }
+
+    .recommendation-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+    }
+
+    .recommendation-item {
+        background: #f6fbfa;
+        border-radius: 8px;
+        padding: 12px;
+    }
+
+    .recommendation-item strong {
+        display: block;
+        color: #095256;
+        margin-bottom: 4px;
+        font-size: 0.9rem;
+    }
+
     .city-selector {
         background: white;
         padding: 25px;
@@ -148,7 +176,6 @@
     .period-btn:hover {
         background: #087F8C;
         color: white;
-        transform: translateY(-2px);
     }
 
     .period-btn.selected {
@@ -243,26 +270,54 @@
     .form-controls {
         display: flex;
         gap: 15px;
-        align-items: center;
+        align-items: flex-end;
         flex-wrap: wrap;
     }
 
+    .selection-group {
+        display: flex;
+        flex-direction: column;
+        min-width: 180px;
+    }
+
+    .selection-group label {
+        font-weight: 600;
+        color: #095256;
+        margin-bottom: 6px;
+        font-size: 0.9rem;
+    }
+
+    .selection-group select {
+        border: 2px solid #e0f2f1;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 0.95rem;
+        color: #1f4f53;
+        background: #fff;
+        min-height: 44px;
+        width: 100%;
+    }
+
+
     .submit-btn-small {
-        background: linear-gradient(135deg, #5AAA95, #86A873);
+        background: #0e6970;
         color: white;
-        padding: 12px 30px;
+        padding: 12px 24px;
         border: none;
-        border-radius: 50px;
+        border-radius: 8px;
         font-size: 1rem;
         font-weight: 600;
         cursor: pointer;
         transition: all 0.3s ease;
-        box-shadow: 0 3px 10px rgba(90, 170, 149, 0.3);
+        box-shadow: none;
+        min-height: 46px;
+        min-width: 220px;
+        text-align: center;
     }
 
     .submit-btn-small:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(90, 170, 149, 0.4);
+        transform: none;
+        background: #0b5860;
     }
 
     @media (max-width: 768px) {
@@ -281,19 +336,19 @@
 {% block content %}
 <div class="container">
     <div class="page-header">
-        <h1>🌧️ Environment Canada Weather Forecast</h1>
-        <p class="subtitle">Official precipitation forecast for Alberta cities</p>
+        <h1>Environment Canada Forecast</h1>
+        <p class="subtitle">Weather outlook and irrigation planning for Alberta locations</p>
     </div>
 
     {% if error_message %}
     <div class="error-message">
-        ❌ {{ error_message }}
+        {{ error_message }}
     </div>
     {% endif %}
 
     <!-- Period Selector -->
     <div class="period-selector">
-        <label>📅 Forecast Period:</label>
+        <label>Forecast Period</label>
         <div class="period-buttons">
             <button type="button" class="period-btn {% if selected_days == 3 %}selected{% endif %}" 
                     onclick="selectPeriod(3)">
@@ -315,14 +370,22 @@
                     onclick="selectPeriod(14)">
                 14 Days
             </button>
+            <button type="button" class="period-btn {% if selected_days == 21 %}selected{% endif %}" 
+                    onclick="selectPeriod(21)">
+                21 Days
+            </button>
+            <button type="button" class="period-btn {% if selected_days == 30 %}selected{% endif %}" 
+                    onclick="selectPeriod(30)">
+                30 Days
+            </button>
         </div>
     </div>
 
     <!-- City Selector with Dropdown -->
     <div class="city-selector">
-        <h3 style="color: #095256; margin-bottom: 15px;">📍 Select a City ({{ available_cities|length }} cities available)</h3>
+        <h3 style="color: #095256; margin-bottom: 15px;">Select a city ({{ available_cities|length }} available)</h3>
         
-        <form method="post" id="forecastForm">
+        <form method="post" id="forecastForm" data-loading-text="Updating forecast and recommendations...">
             {% csrf_token %}
             <input type="hidden" name="city_name" id="city_name_input" value="{{ city_name }}">
             <input type="hidden" name="days" id="days_input" value="{{ selected_days }}">
@@ -333,7 +396,7 @@
                         type="text" 
                         class="city-input" 
                         id="citySearchInput" 
-                        placeholder="🔍 Search or select a city..."
+                        placeholder="Search or select a city..."
                         value="{{ city_name }}"
                         autocomplete="off"
                         onfocus="showDropdown()"
@@ -355,9 +418,25 @@
                         {% endfor %}
                     </div>
                 </div>
-                
+                <div class="selection-group">
+                    <label for="crop_type">Crop type</label>
+                    <select id="crop_type" name="crop_type">
+                        {% for crop in crop_options %}
+                        <option value="{{ crop.value }}" {% if crop.value == crop_type %}selected{% endif %}>{{ crop.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="selection-group">
+                    <label for="soil_type">Soil type</label>
+                    <select id="soil_type" name="soil_type">
+                        {% for soil in soil_options %}
+                        <option value="{{ soil.value }}" {% if soil.value == soil_type %}selected{% endif %}>{{ soil.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
                 <button type="submit" class="submit-btn-small" id="submitBtn">
-                    <i class="fas fa-search"></i> Get Forecast
+                    Get Forecast
                 </button>
             </div>
         </form>
@@ -366,10 +445,80 @@
     {% if df_forecast %}
     <!-- Summary -->
     <div class="summary-box">
-        <h2>💧 {{ total_precip|floatformat:1 }} mm</h2>
+        <h2>{{ total_precip|floatformat:1 }} mm</h2>
         <p>Total projected precipitation for {{ city_name }}</p>
         <p style="font-size: 0.9rem; opacity: 0.9;">Next {{ df_forecast|length }} days</p>
     </div>
+
+    <div class="recommendation-box">
+        <h3 style="color:#095256; margin:0 0 6px 0;">Water Use Recommendation</h3>
+        <p style="margin:0; color:#4b6466;">
+            Forecast-based planning guidance using estimated crop water demand.
+        </p>
+        <div class="recommendation-grid">
+            <div class="recommendation-item">
+                <strong>Estimated Crop Water Use</strong>
+                {{ estimated_et_total|floatformat:1 }} mm
+            </div>
+            <div class="recommendation-item">
+                <strong>Forecast Rainfall</strong>
+                {{ total_precip|floatformat:1 }} mm
+            </div>
+            <div class="recommendation-item">
+                <strong>Net Water Balance</strong>
+                {{ net_water_balance|floatformat:1 }} mm
+            </div>
+            <div class="recommendation-item">
+                <strong>Suggested Irrigation</strong>
+                {{ irrigation_needed|floatformat:1 }} mm ({{ recommendation_level }})
+            </div>
+            <div class="recommendation-item">
+                <strong>Cumulative GDD (base 5C)</strong>
+                {{ gdd_total|floatformat:1 }}
+            </div>
+            <div class="recommendation-item">
+                <strong>Estimated Crop Stage</strong>
+                {{ gdd_stage }}
+            </div>
+            <div class="recommendation-item">
+                <strong>Selected Crop</strong>
+                {{ crop_label }}
+            </div>
+            <div class="recommendation-item">
+                <strong>Selected Soil</strong>
+                {{ soil_label }} (factor {{ soil_factor|floatformat:2 }})
+            </div>
+        </div>
+        <p style="margin-top:10px; color:#5b6f70; font-size:0.9rem;">
+            Use this as planning guidance. Adjust by crop stage, soil type, and local field conditions.
+        </p>
+        <p style="margin-top:8px; color:#5b6f70; font-size:0.86rem;">
+            Basis: daily ET is computed with Priestley-Taylor, then adjusted by GDD-based crop stage. Irrigation recommendation is the cumulative positive difference between adjusted ET and forecast precipitation.
+        </p>
+        {% if historical_confidence %}
+        <p style="margin-top:8px; color:#5b6f70; font-size:0.86rem;">
+            Historical baseline: 5 years x representative nearby sample locations ({{ historical_confidence.scenario_count }} scenarios),
+            shown as 10th-90th percentile confidence range.
+        </p>
+        {% endif %}
+    </div>
+
+    {% if rec_chart_url %}
+    <div class="card">
+        <h3 style="margin-bottom:10px; color:#095256;">Irrigation Confidence Band</h3>
+        <p style="margin-bottom:14px; color:#5a6f70; font-size:0.92rem;">
+            Grey band shows uncertainty from historical year/location variation. Teal line is your current forecast-based recommendation.
+        </p>
+        <img src="data:image/png;base64,{{ rec_chart_url }}" alt="Irrigation recommendation confidence chart" style="width:100%; border-radius:8px; border:1px solid #d6e4e1;">
+        {% if historical_confidence %}
+        <p style="margin-top:10px; color:#5b6f70; font-size:0.86rem;">
+            Historical total recommendation range over {{ selected_days }} days:
+            {{ historical_confidence.total_p10|floatformat:1 }} to {{ historical_confidence.total_p90|floatformat:1 }} mm
+            (median {{ historical_confidence.total_p50|floatformat:1 }} mm).
+        </p>
+        {% endif %}
+    </div>
+    {% endif %}
 
     <!-- Forecast Cards -->
     <div>
@@ -380,7 +529,7 @@
             
             <div class="forecast-stats">
                 <div class="stat-box">
-                    <div class="stat-label">🌡️ High</div>
+                    <div class="stat-label">High</div>
                     <div class="stat-value">
                         {% if forecast.Temp_High is not None %}
                             {{ forecast.Temp_High|floatformat:0 }}°C
@@ -391,7 +540,7 @@
                 </div>
                 
                 <div class="stat-box">
-                    <div class="stat-label">❄️ Low</div>
+                    <div class="stat-label">Low</div>
                     <div class="stat-value">
                         {% if forecast.Temp_Low is not None %}
                             {{ forecast.Temp_Low|floatformat:0 }}°C
@@ -402,7 +551,7 @@
                 </div>
                 
                 <div class="stat-box {% if forecast.Precipitation_mm >= 10 %}precip-high{% elif forecast.Precipitation_mm >= 3 %}precip-medium{% else %}precip-low{% endif %}">
-                    <div class="stat-label">💧 Precipitation</div>
+                    <div class="stat-label">Precipitation</div>
                     <div class="stat-value">{{ forecast.Precipitation_mm|floatformat:1 }} mm</div>
                 </div>
             </div>
@@ -419,7 +568,7 @@
     <!-- Download Button -->
     <div style="text-align: center; margin-top: 30px;">
         <button onclick="downloadForecastCSV()" class="submit-btn">
-            📥 Download Forecast as CSV
+            Download Forecast CSV
         </button>
     </div>
     {% endif %}
