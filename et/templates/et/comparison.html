@@ -21,19 +21,19 @@
     }
 
     .method-card.priestley-taylor {
-        border-color: #86A873;
+        border-color: #1F77B4;
     }
 
     .method-card.penman-monteith {
-        border-color: #087F8C;
+        border-color: #D62728;
     }
 
     .method-card.maule {
-        border-color: #BB9F06;
+        border-color: #2CA02C;
     }
 
     .method-card.hargreaves {
-        border-color: #5AAA95;
+        border-color: #9467BD;
     }
 
 
@@ -61,19 +61,19 @@
     }
 
     .priestley-taylor .method-icon {
-        background: #86A873;
+        background: #1F77B4;
     }
 
     .penman-monteith .method-icon {
-        background: #087F8C;
+        background: #D62728;
     }
 
     .maule .method-icon {
-        background: #BB9F06;
+        background: #2CA02C;
     }
 
     .hargreaves .method-icon {
-        background: #5AAA95;
+        background: #9467BD;
     }
 
 
@@ -270,10 +270,10 @@
     }
     
     /* Color indicators for checkboxes */
-    .checkbox-item.pt { border-left: 4px solid #86A873; }
-    .checkbox-item.pm { border-left: 4px solid #087F8C; }
-    .checkbox-item.maule { border-left: 4px solid #BB9F06; }
-    .checkbox-item.hargreaves { border-left: 4px solid #5AAA95; }
+    .checkbox-item.pt { border-left: 4px solid #1F77B4; }
+    .checkbox-item.pm { border-left: 4px solid #D62728; }
+    .checkbox-item.maule { border-left: 4px solid #2CA02C; }
+    .checkbox-item.hargreaves { border-left: 4px solid #9467BD; }
     
     /* Select All button */
     .select-all-btn {
@@ -493,8 +493,8 @@
         <!-- Growing Season Plots -->
         {% if growing_season_plots.growing_season_analysis %}
         <div class="plot-container">
-            <h2 style="color: #095256; margin-bottom: 20px;">Growing Season Analysis</h2>
-            <img src="data:image/png;base64,{{ growing_season_plots.growing_season_analysis }}" alt="Growing Season Analysis">
+            <h2 style="color: #095256; margin-bottom: 20px;">Growing Season Analysis (Multi-Method)</h2>
+            <img id="growingSeasonPlot" src="data:image/png;base64,{{ growing_season_plots.growing_season_analysis }}" alt="Growing Season Analysis">
         </div>
         {% endif %}
 
@@ -641,10 +641,15 @@ function updatePlot() {
     
     // Show loading
     const plotImg = document.getElementById('comparisonPlot');
+    const growingSeasonImg = document.getElementById('growingSeasonPlot');
     if (!plotImg) return;
     
     plotImg.style.opacity = '0.5';
     plotImg.style.transition = 'opacity 0.3s';
+    if (growingSeasonImg) {
+        growingSeasonImg.style.opacity = '0.5';
+        growingSeasonImg.style.transition = 'opacity 0.3s';
+    }
     
     // Fetch updated plot
     fetch('{% url "et:update_comparison_plot" %}?' + params.toString())
@@ -653,16 +658,24 @@ function updatePlot() {
             if (data.plot_url) {
                 plotImg.src = 'data:image/png;base64,' + data.plot_url;
                 plotImg.style.opacity = '1';
+                if (growingSeasonImg && data.growing_season_plot_url) {
+                    growingSeasonImg.src = 'data:image/png;base64,' + data.growing_season_plot_url;
+                    growingSeasonImg.style.opacity = '1';
+                } else if (growingSeasonImg) {
+                    growingSeasonImg.style.opacity = '1';
+                }
             } else if (data.error) {
                 console.error('Server error:', data.error);
                 alert('Error updating plot: ' + data.error);
                 plotImg.style.opacity = '1';
+                if (growingSeasonImg) growingSeasonImg.style.opacity = '1';
             }
         })
         .catch(error => {
             console.error('Error updating plot:', error);
             alert('Failed to update plot. Please try again.');
             plotImg.style.opacity = '1';
+            if (growingSeasonImg) growingSeasonImg.style.opacity = '1';
         });
 }
 

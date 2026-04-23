@@ -137,6 +137,16 @@ class ETPlannerViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Optional: Upload Your Own Weather File")
 
+    def test_method_info_page_renders(self):
+        response = self.client.get(reverse("et:method_info"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ET Method Guide")
+
+    def test_comparison_alias_route_renders(self):
+        response = self.client.get(reverse("et:comparison"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ET Results")
+
     @patch("et.views.get_lethbridge_forecast", return_value=[])
     @patch("et.environment_canada_scraper.fetch_env_canada_forecast", return_value=pd.DataFrame())
     def test_et_results_unit_toggle_mm_to_inches_keeps_working(self, _mock_ec, _mock_forecast):

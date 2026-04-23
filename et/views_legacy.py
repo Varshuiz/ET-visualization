@@ -1,71 +1,3 @@
-"""Compatibility facade for split ET view modules.
-
-This module keeps `et.views.*` import paths stable for URL routing and tests
-while implementation progressively lives in focused modules.
-"""
-
-from .forecast_recommendations import build_historical_confidence, build_irrigation_confidence_plot
-from .views_aquacrop import aquacrop_api, aquacrop_simulation
-from .views_calculators import (
-    calculate_et_api,
-    convert_et_units_api,
-    download_comparison_csv,
-    download_et_csv,
-    download_method_csv,
-    enhanced_comparison_calculator,
-    hargreaves_only,
-    index,
-    maule_only,
-    penman_monteith_only,
-    priestley_taylor_only,
-    process_single_method,
-    process_single_method_enhanced,
-)
-from .views_comparison import comparison_with_acis, update_comparison_plot
-from .views_forecast import (
-    _pt_daily_et_from_temperature,
-    _resolve_city_lat_lon,
-    combine_day_night_forecasts,
-    env_canada_forecast_view,
-    get_lethbridge_forecast,
-    get_weather_forecast_api,
-)
-from .views_ingestion import acis_data_view
-from .views_legacy import location_search_api
-from .views_pages import about, help_guide, method_comparison_info
-
-__all__ = [
-    "index",
-    "enhanced_comparison_calculator",
-    "priestley_taylor_only",
-    "penman_monteith_only",
-    "maule_only",
-    "hargreaves_only",
-    "download_et_csv",
-    "download_comparison_csv",
-    "download_method_csv",
-    "calculate_et_api",
-    "get_weather_forecast_api",
-    "convert_et_units_api",
-    "method_comparison_info",
-    "help_guide",
-    "about",
-    "acis_data_view",
-    "comparison_with_acis",
-    "location_search_api",
-    "update_comparison_plot",
-    "env_canada_forecast_view",
-    "aquacrop_simulation",
-    "aquacrop_api",
-    "process_single_method",
-    "process_single_method_enhanced",
-    "get_lethbridge_forecast",
-    "combine_day_night_forecasts",
-    "_resolve_city_lat_lon",
-    "_pt_daily_et_from_temperature",
-    "build_historical_confidence",
-    "build_irrigation_confidence_plot",
-]
 import base64
 import calendar
 import io
@@ -85,11 +17,7 @@ import requests
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 
-from .et_growing_season import (
-    calculate_growing_season_stats,
-    create_growing_season_plots,
-    create_multi_method_growing_season_plots,
-)
+from .et_growing_season import calculate_growing_season_stats, create_growing_season_plots
 from .et_methods import (
     actual_vapor_pressure,
     calculate_extraterrestrial_radiation,
@@ -357,7 +285,6 @@ def process_single_method(request, method_code, method_name, template_name):
                         df['Tmax'] = pd.to_numeric(df[tmax_col], errors='coerce')
                         df['Tmin'] = pd.to_numeric(df[tmin_col], errors='coerce')
                     else:
-                        # Fallback split when only average temperature is available.
                         df['Tmax'] = df['Tavg'] + 5
                         df['Tmin'] = df['Tavg'] - 5
                     df['Ra'] = df.apply(
@@ -1644,14 +1571,6 @@ def comparison_with_acis(request):
         print(f"Could not fetch Environment Canada forecast: {e}")
     
     try:
-        # Clamp negative Tmax/Tavg (keep Tmin raw so temperature range is preserved).
-        if 'Tmax' in df.columns:
-            df['Tmax'] = pd.to_numeric(df['Tmax'], errors='coerce').clip(lower=0)
-        if 'Tmin' in df.columns:
-            df['Tmin'] = pd.to_numeric(df['Tmin'], errors='coerce')
-        if 'Tavg' in df.columns:
-            df['Tavg'] = pd.to_numeric(df['Tavg'], errors='coerce').clip(lower=0)
-
         # Add day of year column for radiation calculations
         df['day_of_year'] = df['Date'].dt.dayofyear
         
@@ -1703,7 +1622,7 @@ def comparison_with_acis(request):
                     axis=1
                 )
                 df['ET_PT'] = df.apply(
-                    lambda row: priestley_taylor_ET(row['Tavg'], row['Rn']),
+                    lambda row: priestley_taylor_ET(row['Tavg'], row['Rn']), 
                     axis=1
                 )
             except Exception as e:
@@ -1714,7 +1633,7 @@ def comparison_with_acis(request):
             try:
                 df['ET_PM'] = df.apply(
                     lambda row: penman_monteith_ET(
-                        max(row['Tmax'], 0), row['Tmin'], row['RH'], row['u2'], row['Rs'], row['Ra'], elevation=766
+                        row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs'], row['Ra'], elevation=766
                     ), 
                     axis=1
                 )
@@ -1726,8 +1645,8 @@ def comparison_with_acis(request):
             try:
                 df['ET_Maule'] = df.apply(
                     lambda row: maule_ET(
-                        max(row['Tmax'], 0),
-                        row['Tmin'],
+                        row['Tmax'], 
+                        row['Tmin'], 
                         row['Rs'], 
                         row['RH'] if not pd.isna(row['RH']) else None
                     ), 
@@ -1740,7 +1659,7 @@ def comparison_with_acis(request):
         if 'ET_Hargreaves' not in df.columns:
             try:
                 df['ET_Hargreaves'] = df.apply(
-                    lambda row: hargreaves_ET(max(row['Tmax'], 0), row['Tmin'], row['Ra']), 
+                    lambda row: hargreaves_ET(row['Tmax'], row['Tmin'], row['Ra']), 
                     axis=1
                 )
             except Exception as e:
@@ -1819,7 +1738,7 @@ def comparison_with_acis(request):
             if reference_method:
                 for method in available_methods:
                     if method != reference_method:
-                        diff_mm = (df[f'ET_{method}'] - df[f'ET_{reference_method}']).abs().mean()
+                        diff_mm = (df[f'ET_{method}'] - df[f'ET_{reference_method}']).mean()
                         if selected_unit == 'inches':
                             comparison_stats[f'{method}_{reference_method}_diff'] = convert_units(
                                 diff_mm, 'mm', 'inches'
@@ -1830,20 +1749,14 @@ def comparison_with_acis(request):
         # Calculate growing season statistics for primary method
         if 'ET_PM' in df.columns and not df['ET_PM'].isna().all():
             growing_season_stats = calculate_growing_season_stats(df, 'ET_PM', selected_unit)
-            growing_season_plots = create_multi_method_growing_season_plots(
-                df,
-                selected_methods=available_methods,
-                unit=selected_unit,
-            )
+            growing_season_plots = create_growing_season_plots(df, 'ET_PM', selected_unit)
         elif available_methods:
             primary_method = available_methods[0]
             growing_season_stats = calculate_growing_season_stats(
                 df, f'ET_{primary_method}', selected_unit
             )
-            growing_season_plots = create_multi_method_growing_season_plots(
-                df,
-                selected_methods=available_methods,
-                unit=selected_unit,
+            growing_season_plots = create_growing_season_plots(
+                df, f'ET_{primary_method}', selected_unit
             )
         
         # Create enhanced comparison plot
@@ -1853,10 +1766,10 @@ def comparison_with_acis(request):
         # Main ET comparison plot
         ax1.set_facecolor('#f8fffe')
         colors = {
-            'PT': '#1F77B4',
-            'PM': '#D62728',
-            'Maule': '#2CA02C',
-            'Hargreaves': '#9467BD',
+            'PT': '#86A873',
+            'PM': '#087F8C', 
+            'Maule': '#BB9F06',
+            'Hargreaves': '#5AAA95',
         }
         
         for method in available_methods:
@@ -1879,9 +1792,13 @@ def comparison_with_acis(request):
                 plot_data_smooth = df[smooth_col] if smooth_col in df.columns else plot_data
             
             ax1.plot(
+                df['Date'], plot_data,
+                label=f'{method_names[method]}',
+                color=colors[method], alpha=0.6, linewidth=1.5
+            )
+            ax1.plot(
                 df['Date'], plot_data_smooth,
-                color=colors[method], linewidth=2.5, alpha=0.9,
-                label=f'{method_names[method]}'
+                color=colors[method], linewidth=2.5, alpha=0.9
             )
         
         # Add location info to title
@@ -1907,7 +1824,7 @@ def comparison_with_acis(request):
             for method in available_methods:
                 if method != reference_method:
                     col = f'ET_{method}'
-                    diff = (df[f'ET_{reference_method}'] - df[col]).abs()
+                    diff = df[f'ET_{reference_method}'] - df[col]
                     if selected_unit == 'inches':
                         diff = diff.apply(
                             lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x
@@ -1915,11 +1832,12 @@ def comparison_with_acis(request):
                     
                     ax2.plot(
                         df['Date'], diff, color=colors[method], linewidth=2, alpha=0.7, 
-                        label=f'|{method_names[reference_method]} - {method_names[method]}|'
+                        label=f'{method_names[reference_method]} - {method_names[method]}'
                     )
             
+            ax2.axhline(y=0, color='#095256', linestyle='--', alpha=0.8)
             ax2.set_title(
-                'Absolute Differences from Penman-Monteith (Reference Method)',
+                'Differences from Penman-Monteith (Reference Method)',
                 fontsize=14, fontweight='bold', color='#095256'
             )
             ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
@@ -2071,10 +1989,10 @@ def update_comparison_plot(request):
         ax1.set_facecolor('#f8fffe')
         
         colors = {
-            'PT': '#1F77B4',
-            'PM': '#D62728',
-            'Maule': '#2CA02C',
-            'Hargreaves': '#9467BD',
+            'PT': '#86A873',
+            'PM': '#087F8C', 
+            'Maule': '#BB9F06',
+            'Hargreaves': '#5AAA95',
         }
         
         method_names = {
@@ -2110,14 +2028,15 @@ def update_comparison_plot(request):
                 if method != reference_method:
                     col = f'ET_{method}'
                     if col in df.columns and f'ET_{reference_method}' in df.columns:
-                        diff = (df[f'ET_{reference_method}'] - df[col]).abs()
+                        diff = df[f'ET_{reference_method}'] - df[col]
                         if selected_unit == 'inches':
                             diff = diff.apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
                         
                         ax2.plot(df['Date'], diff, color=colors.get(method, '#666'), linewidth=2, alpha=0.7, 
-                                label=f'|{method_names[reference_method]} - {method_names[method]}|')
+                                label=f'{method_names[reference_method]} - {method_names[method]}')
             
-            ax2.set_title(f'Absolute Differences from {method_names[reference_method]} (Reference)', 
+            ax2.axhline(y=0, color='#095256', linestyle='--', alpha=0.8)
+            ax2.set_title(f'Differences from {method_names[reference_method]} (Reference)', 
                          fontsize=14, fontweight='bold', color='#095256')
             ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
             ax2.set_ylabel(f'Difference ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
@@ -2142,15 +2061,8 @@ def update_comparison_plot(request):
         buf.close()
         plt.close()
         
-        growing_season_plots = create_multi_method_growing_season_plots(
-            df,
-            selected_methods=available_methods,
-            unit=selected_unit,
-        )
-
         return JsonResponse({
             'plot_url': plot_url,
-            'growing_season_plot_url': growing_season_plots.get('growing_season_analysis'),
             'selected_methods': selected_methods
         })
         
