@@ -161,6 +161,12 @@
         border-radius: 10px;
     }
 
+    .fallback-chart {
+        width: 100%;
+        min-height: 360px;
+        margin-top: 20px;
+    }
+
     .data-table {
         width: 100%;
         border-collapse: collapse;
@@ -500,6 +506,13 @@
                 </p>
             </div>
         </div>
+        {% elif et_data %}
+        <div class="plot-container">
+            <h2 style="color: #095256; margin-bottom: 20px;">ET Comparison Visualization</h2>
+            <p style="color: #5a6b6d; margin-bottom: 8px;">Using browser-rendered charts while server plots are unavailable.</p>
+            <canvas id="fallbackMainChart" class="fallback-chart"></canvas>
+            <canvas id="fallbackDiffChart" class="fallback-chart"></canvas>
+        </div>
         {% endif %}
 
         <!-- Growing Season Plots -->
@@ -568,6 +581,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Unit toggle functionality
@@ -599,7 +613,98 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }, 500);
     }
+
+    renderFallbackCharts();
 });
+
+function renderFallbackCharts() {
+    const mainCanvas = document.getElementById('fallbackMainChart');
+    const diffCanvas = document.getElementById('fallbackDiffChart');
+    if (!mainCanvas || !diffCanvas) return;
+
+    const rows = [
+        {% for row in et_data %}
+        {
+            date: "{{ row.Date|date:'Y-m-d' }}",
+            {% if 'PT' in available_methods %}PT: {{ row.ET_PT|default:"null" }},{% endif %}
+            {% if 'PM' in available_methods %}PM: {{ row.ET_PM|default:"null" }},{% endif %}
+            {% if 'Maule' in available_methods %}Maule: {{ row.ET_Maule|default:"null" }},{% endif %}
+            {% if 'Hargreaves' in available_methods %}Hargreaves: {{ row.ET_Hargreaves|default:"null" }},{% endif %}
+        },
+        {% endfor %}
+    ];
+
+    const labels = rows.map(r => r.date);
+    const colors = {
+        PT: '#1F77B4',
+        PM: '#D62728',
+        Maule: '#2CA02C',
+        Hargreaves: '#9467BD',
+    };
+    const methodNames = {
+        PT: 'Priestley-Taylor',
+        PM: 'Penman-Monteith',
+        Maule: 'Maule',
+        Hargreaves: 'Hargreaves-Samani',
+    };
+
+    const methods = ['PT', 'PM', 'Maule', 'Hargreaves'].filter(m => rows.some(r => r[m] !== undefined));
+    const datasets = methods.map(method => ({
+        label: methodNames[method],
+        data: rows.map(r => r[method] ?? null),
+        borderColor: colors[method],
+        backgroundColor: colors[method],
+        tension: 0.25,
+        spanGaps: true,
+        pointRadius: 0,
+        borderWidth: 2,
+    }));
+
+    new Chart(mainCanvas, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'top' } },
+            scales: {
+                x: { ticks: { maxTicksLimit: 10 } },
+                y: { title: { display: true, text: 'ET ({{ unit_info.daily_label }})' } }
+            }
+        }
+    });
+
+    const reference = methods.includes('PM') ? 'PM' : methods[0];
+    const diffDatasets = methods
+        .filter(m => m !== reference)
+        .map(method => ({
+            label: `|${methodNames[reference]} - ${methodNames[method]}|`,
+            data: rows.map(r => {
+                if (r[reference] == null || r[method] == null) return null;
+                return Math.abs(r[reference] - r[method]);
+            }),
+            borderColor: colors[method],
+            backgroundColor: colors[method],
+            tension: 0.25,
+            spanGaps: true,
+            pointRadius: 0,
+            borderWidth: 2,
+        }));
+
+    new Chart(diffCanvas, {
+        type: 'line',
+        data: { labels, datasets: diffDatasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'top' } },
+            scales: {
+                x: { ticks: { maxTicksLimit: 10 } },
+                y: { title: { display: true, text: 'Difference ({{ unit_info.daily_label }})' } }
+            }
+        }
+    });
+}
 
 // NEW: Interactive checkbox functions
 function toggleAllMethods() {
