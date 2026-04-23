@@ -1592,6 +1592,7 @@ def comparison_with_acis(request):
     growing_season_stats = None
     plot_url = None
     growing_season_plots = None
+    plot_warning = None
     
     # Get session data from input page
     acis_data_json = request.session.get('acis_data')
@@ -1828,138 +1829,135 @@ def comparison_with_acis(request):
                         else:
                             comparison_stats[f'{method}_{reference_method}_diff'] = diff_mm
         
+        # Persist ET outputs for table/download/update even if plotting fails.
+        csv_columns = ['Date'] + [f'ET_{method}' for method in available_methods]
+        request.session['et_data_csv'] = df[csv_columns].to_csv(index=False)
+        request.session['comparison_et_data'] = df[csv_columns].to_json(date_format='iso')
+
         # Calculate growing season statistics for primary method
         if 'ET_PM' in df.columns and not df['ET_PM'].isna().all():
             growing_season_stats = calculate_growing_season_stats(df, 'ET_PM', selected_unit)
-            growing_season_plots = create_multi_method_growing_season_plots(
-                df,
-                selected_methods=available_methods,
-                unit=selected_unit,
-            )
         elif available_methods:
             primary_method = available_methods[0]
             growing_season_stats = calculate_growing_season_stats(
                 df, f'ET_{primary_method}', selected_unit
             )
+        
+        try:
             growing_season_plots = create_multi_method_growing_season_plots(
                 df,
                 selected_methods=available_methods,
                 unit=selected_unit,
             )
-        
-        # Create enhanced comparison plot
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12))
-        fig.patch.set_facecolor('white')
-        
-        # Main ET comparison plot
-        ax1.set_facecolor('#f8fffe')
-        colors = {
-            'PT': '#1F77B4',
-            'PM': '#D62728',
-            'Maule': '#2CA02C',
-            'Hargreaves': '#9467BD',
-        }
-        
-        for method in available_methods:
-            col = f'ET_{method}'
-            smooth_col = f'{col}_smooth'
-            
-            # Convert data for plotting if needed
-            if selected_unit == 'inches':
-                plot_data = df[col].apply(
-                    lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x
-                )
-                if smooth_col in df.columns:
-                    plot_data_smooth = df[smooth_col].apply(
+
+            # Create enhanced comparison plot
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12))
+            fig.patch.set_facecolor('white')
+
+            # Main ET comparison plot
+            ax1.set_facecolor('#f8fffe')
+            colors = {
+                'PT': '#1F77B4',
+                'PM': '#D62728',
+                'Maule': '#2CA02C',
+                'Hargreaves': '#9467BD',
+            }
+
+            for method in available_methods:
+                col = f'ET_{method}'
+                smooth_col = f'{col}_smooth'
+
+                # Convert data for plotting if needed
+                if selected_unit == 'inches':
+                    plot_data = df[col].apply(
                         lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x
                     )
-                else:
-                    plot_data_smooth = plot_data
-            else:
-                plot_data = df[col]
-                plot_data_smooth = df[smooth_col] if smooth_col in df.columns else plot_data
-            
-            ax1.plot(
-                df['Date'], plot_data_smooth,
-                color=colors[method], linewidth=2.5, alpha=0.9,
-                label=f'{method_names[method]}'
-            )
-        
-        # Add location info to title
-        location_desc = location_info.get('description', 'Selected weather data')
-        ax1.set_title(
-            f'Evapotranspiration Method Comparison - {location_desc}', 
-            fontsize=16, fontweight='bold', color='#095256', pad=20
-        )
-        ax1.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
-        ax1.set_ylabel(
-            f'ET₀ ({unit_info["daily_label"]})', 
-            fontsize=12, fontweight='600', color='#095256'
-        )
-        ax1.grid(True, alpha=0.3, color='#5AAA95')
-        # Avoid shadow rendering path that can recurse under Python 3.14 + matplotlib.
-        ax1.legend(frameon=True, fancybox=True, shadow=False, loc='upper left', fontsize=10)
-        ax1.tick_params(axis='x', rotation=45)
-        
-        # Method differences plot
-        ax2.set_facecolor('#f8fffe')
-        reference_method = 'PM'
-        
-        if reference_method in available_methods and len(available_methods) > 1:
-            for method in available_methods:
-                if method != reference_method:
-                    col = f'ET_{method}'
-                    diff = (df[f'ET_{reference_method}'] - df[col]).abs()
-                    if selected_unit == 'inches':
-                        diff = diff.apply(
+                    if smooth_col in df.columns:
+                        plot_data_smooth = df[smooth_col].apply(
                             lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x
                         )
-                    
-                    ax2.plot(
-                        df['Date'], diff, color=colors[method], linewidth=2, alpha=0.7, 
-                        label=f'|{method_names[reference_method]} - {method_names[method]}|'
-                    )
-            
-            ax2.set_title(
-                'Absolute Differences from Penman-Monteith (Reference Method)',
-                fontsize=14, fontweight='bold', color='#095256'
+                    else:
+                        plot_data_smooth = plot_data
+                else:
+                    plot_data = df[col]
+                    plot_data_smooth = df[smooth_col] if smooth_col in df.columns else plot_data
+
+                ax1.plot(
+                    df['Date'], plot_data_smooth,
+                    color=colors[method], linewidth=2.5, alpha=0.9,
+                    label=f'{method_names[method]}'
+                )
+
+            # Add location info to title
+            location_desc = location_info.get('description', 'Selected weather data')
+            ax1.set_title(
+                f'Evapotranspiration Method Comparison - {location_desc}',
+                fontsize=16, fontweight='bold', color='#095256', pad=20
             )
-            ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
-            ax2.set_ylabel(
-                f'Difference ({unit_info["daily_label"]})', 
+            ax1.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
+            ax1.set_ylabel(
+                f'ET₀ ({unit_info["daily_label"]})',
                 fontsize=12, fontweight='600', color='#095256'
             )
-            ax2.grid(True, alpha=0.3, color='#5AAA95')
-            ax2.legend(frameon=True, fancybox=True, shadow=False, loc='upper left', fontsize=9)
-            ax2.tick_params(axis='x', rotation=45)
-        else:
-            ax2.text(
-                0.5, 0.5, 'Difference plot requires a reference method', 
-                ha='center', va='center', fontsize=14, color='#666'
+            ax1.grid(True, alpha=0.3, color='#5AAA95')
+            ax1.legend(frameon=True, fancybox=False, shadow=False, loc='upper left', fontsize=10)
+            ax1.tick_params(axis='x', rotation=45)
+
+            # Method differences plot
+            ax2.set_facecolor('#f8fffe')
+            reference_method = 'PM'
+
+            if reference_method in available_methods and len(available_methods) > 1:
+                for method in available_methods:
+                    if method != reference_method:
+                        col = f'ET_{method}'
+                        diff = (df[f'ET_{reference_method}'] - df[col]).abs()
+                        if selected_unit == 'inches':
+                            diff = diff.apply(
+                                lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x
+                            )
+
+                        ax2.plot(
+                            df['Date'], diff, color=colors[method], linewidth=2, alpha=0.7,
+                            label=f'|{method_names[reference_method]} - {method_names[method]}|'
+                        )
+
+                ax2.set_title(
+                    'Absolute Differences from Penman-Monteith (Reference Method)',
+                    fontsize=14, fontweight='bold', color='#095256'
+                )
+                ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
+                ax2.set_ylabel(
+                    f'Difference ({unit_info["daily_label"]})',
+                    fontsize=12, fontweight='600', color='#095256'
+                )
+                ax2.grid(True, alpha=0.3, color='#5AAA95')
+                ax2.legend(frameon=True, fancybox=False, shadow=False, loc='upper left', fontsize=9)
+                ax2.tick_params(axis='x', rotation=45)
+            else:
+                ax2.text(
+                    0.5, 0.5, 'Difference plot requires a reference method',
+                    ha='center', va='center', fontsize=14, color='#666'
+                )
+                ax2.set_xlim(0, 1)
+                ax2.set_ylim(0, 1)
+                ax2.axis('off')
+
+            plt.tight_layout()
+
+            # Convert plot to base64
+            buf = BytesIO()
+            plt.savefig(
+                buf, format='png', dpi=150, bbox_inches='tight',
+                facecolor='white', edgecolor='none'
             )
-            ax2.set_xlim(0, 1)
-            ax2.set_ylim(0, 1)
-            ax2.axis('off')
-        
-        plt.tight_layout()
-        
-        # Convert plot to base64
-        buf = BytesIO()
-        plt.savefig(
-            buf, format='png', dpi=150, bbox_inches='tight',
-            facecolor='white', edgecolor='none'
-        )
-        buf.seek(0)
-        plot_url = base64.b64encode(buf.read()).decode('utf-8')
-        buf.close()
-        plt.close()
-        
-        # Store enhanced CSV data in session
-        csv_columns = ['Date'] + [f'ET_{method}' for method in available_methods]
-        request.session['et_data_csv'] = df[csv_columns].to_csv(index=False)
-        
-        # Store ET-only data separately for plot updates (do not overwrite weather input data).
-        request.session['comparison_et_data'] = df[csv_columns].to_json(date_format='iso')
+            buf.seek(0)
+            plot_url = base64.b64encode(buf.read()).decode('utf-8')
+            buf.close()
+            plt.close()
+        except Exception as plot_error:
+            plt.close('all')
+            plot_warning = f"Plots are temporarily unavailable ({plot_error}). ET values are shown below."
         
         # Prepare data for rendering with unit conversion
         et_data = []
@@ -1991,6 +1989,7 @@ def comparison_with_acis(request):
         'comparison_stats': comparison_stats,
         'growing_season_stats': growing_season_stats,
         'plot_url': plot_url,
+        'plot_warning': plot_warning,
         'growing_season_plots': growing_season_plots,
         'forecast_data': forecast_data,
         'selected_unit': selected_unit,
