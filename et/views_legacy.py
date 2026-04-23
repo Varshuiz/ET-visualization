@@ -2164,7 +2164,7 @@ def env_canada_forecast_view(request):
     error_message = None
     df_forecast = None
     city_name = 'Calgary'  # Default
-    selected_days = 7  # Default
+    selected_days = 30  # Default planning horizon
     crop_type = 'wheat'
     soil_type = 'loam'
     crop_options = [
@@ -2217,15 +2217,18 @@ def env_canada_forecast_view(request):
         if soil_type not in SOIL_IRRIGATION_FACTORS:
             soil_type = 'loam'
         try:
-            selected_days = int(request.POST.get('days', 7))
+            selected_days = int(request.POST.get('days', 30))
         except (TypeError, ValueError):
-            selected_days = 7
+            selected_days = 30
         selected_days = max(3, min(selected_days, 30))
         
         try:
+            # Fetch requested horizon; scraper extends beyond citypage range when needed.
             df = fetch_env_canada_forecast(city_name, selected_days)
+            available_forecast_days = len(df)
+            planning_days = len(df)
             
-            # Convert to records for template
+            # Convert to records for template (daily detail for selected horizon)
             df_forecast = []
             for _, row in df.iterrows():
                 temp_high = safe_temp_convert(row['Temp_High'])
@@ -2241,6 +2244,30 @@ def env_canada_forecast_view(request):
                     'Forecast': str(row['Forecast']) if row['Forecast'] else ''
                 }
                 df_forecast.append(forecast_dict)
+
+            # Weekly summaries to improve readability for 30-day planning.
+            weekly_forecast = []
+            if selected_days == 30 and df_forecast:
+                for week_idx in range(4):
+                    start = week_idx * 7
+                    end = start + 7
+                    week_slice = df_forecast[start:end]
+                    if not week_slice:
+                        continue
+                    highs = [w['Temp_High'] for w in week_slice if w['Temp_High'] is not None]
+                    lows = [w['Temp_Low'] for w in week_slice if w['Temp_Low'] is not None]
+                    total_precip_week = sum(max(float(w.get('Precipitation_mm', 0.0) or 0.0), 0.0) for w in week_slice)
+                    start_date = pd.to_datetime(week_slice[0]['Date'])
+                    end_date = pd.to_datetime(week_slice[-1]['Date'])
+                    weekly_forecast.append({
+                        'week_label': f"Week {week_idx + 1}",
+                        'start_date': start_date,
+                        'end_date': end_date,
+                        'days_count': len(week_slice),
+                        'avg_high': (sum(highs) / len(highs)) if highs else None,
+                        'avg_low': (sum(lows) / len(lows)) if lows else None,
+                        'total_precip_mm': total_precip_week,
+                    })
             
             # PT + GDD recommendation on current forecast.
             total_precip = sum([f['Precipitation_mm'] for f in df_forecast])
@@ -2298,7 +2325,10 @@ def env_canada_forecast_view(request):
             context = {
                 'city_name': city_name,
                 'selected_days': selected_days,
+                'available_forecast_days': available_forecast_days,
+                'planning_days': planning_days,
                 'df_forecast': df_forecast,
+                'weekly_forecast': weekly_forecast,
                 'total_precip': total_precip,
                 'estimated_et_total': estimated_et_total,
                 'net_water_balance': net_water_balance,
@@ -2333,6 +2363,9 @@ def env_canada_forecast_view(request):
         'error_message': error_message,
         'city_name': city_name,
         'selected_days': selected_days,
+        'available_forecast_days': None,
+        'planning_days': None,
+        'weekly_forecast': [],
         'crop_type': crop_type,
         'soil_type': soil_type,
         'crop_label': next((item["label"] for item in crop_options if item["value"] == crop_type), "Wheat"),

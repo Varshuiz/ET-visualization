@@ -15,6 +15,10 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 import re
 from datetime import datetime, timedelta, timezone
+import time
+import numpy as np
+
+from .location_services import ALBERTA_LOCATIONS
 
 
 class EnvironmentCanadaScraper:
@@ -102,6 +106,9 @@ class EnvironmentCanadaScraper:
 
     BASE_URL_STABLE = "https://dd.weather.gc.ca/citypage_weather/xml/AB/{code}_e.xml"
     BASE_URL_TODAY  = "https://dd.weather.gc.ca/today/citypage_weather/AB/{hour}/"
+    ECCC_CLIMATE_DAILY_URL = "https://api.weather.gc.ca/collections/climate-daily/items"
+    CACHE_TTL_SECONDS = 600  # 10 minutes
+    _FORECAST_CACHE = {}
 
     def get_location_code(self, city_name):
         """Return the s0000XXX site code for a city."""
@@ -168,14 +175,15 @@ class EnvironmentCanadaScraper:
     # Main forecast fetch
     # ------------------------------------------------------------------
 
-    def fetch_forecast(self, city_name='Calgary', days=5):
+    def fetch_forecast(self, city_name='Calgary', days=None):
         """
         Fetch weather forecast from Environment Canada MSC Datamart XML.
 
         Parameters
         ----------
         city_name : str   e.g. 'Calgary', 'Edmonton'
-        days      : int   Number of daily forecast periods to return (default 5)
+        days      : int|None   Number of daily forecast periods to return.
+                               None returns full available range.
 
         Returns
         -------
@@ -183,74 +191,181 @@ class EnvironmentCanadaScraper:
             Date, Period, Temp_High, Temp_Low, Precipitation_mm, Forecast
         """
         try:
-            print(f"\n Fetching forecast from Environment Canada RSS...")
-            print(f"   Location: {city_name}")
-            print(f"   Forecast periods: {days}")
-
             site_code = self.get_location_code(city_name)
-            url, content = self._fetch_xml_content(site_code)
+            cache_key = site_code
+            now_ts = time.time()
 
-            root = ET.fromstring(content)
+            cached = self._FORECAST_CACHE.get(cache_key)
+            if cached and (now_ts - cached["ts"] <= self.CACHE_TTL_SECONDS):
+                full_df = cached["df"]
+            else:
+                url, content = self._fetch_xml_content(site_code)
+                _ = url  # keep for debugging hooks
+                root = ET.fromstring(content)
 
-            forecast_group = root.find('.//forecastGroup')
-            if forecast_group is None:
-                raise ValueError("No <forecastGroup> element found in XML response")
+                forecast_group = root.find('.//forecastGroup')
+                if forecast_group is None:
+                    raise ValueError("No <forecastGroup> element found in XML response")
 
-            forecasts_raw = forecast_group.findall('forecast')
-            print(f"   Found {len(forecasts_raw)} forecast periods")
+                forecasts_raw = forecast_group.findall('forecast')
+                forecast_data = []
+                for fc in forecasts_raw:
+                    period_el = fc.find('period')
+                    if period_el is None:
+                        continue
+                    period_name = period_el.get('textForecastName', '').strip()
+                    if not period_name:
+                        continue
 
-            forecast_data = []
-            for fc in forecasts_raw:
-                period_el = fc.find('period')
-                if period_el is None:
-                    continue
-                period_name = period_el.get('textForecastName', '').strip()
-                if not period_name:
-                    continue
+                    text_el = fc.find('textSummary')
+                    forecast_text = (text_el.text or '').strip() if text_el is not None else ''
+                    abbrev_el = fc.find('.//abbreviatedForecast/textSummary')
+                    abbrev_text = (abbrev_el.text or '').strip() if abbrev_el is not None else ''
+                    full_text = forecast_text or abbrev_text
 
-                # Full text summary
-                text_el = fc.find('textSummary')
-                forecast_text = (text_el.text or '').strip() if text_el is not None else ''
+                    temp_high = self._xml_temperature(fc, 'high')
+                    temp_low = self._xml_temperature(fc, 'low')
+                    if temp_high is None and temp_low is None:
+                        temp_high, temp_low = self._extract_temperatures(full_text)
 
-                # Abbreviated summary as fallback
-                abbrev_el = fc.find('.//abbreviatedForecast/textSummary')
-                abbrev_text = (abbrev_el.text or '').strip() if abbrev_el is not None else ''
+                    precip = self._xml_precipitation(fc)
+                    if precip == 0.0:
+                        precip = self._extract_precipitation(full_text)
 
-                full_text = forecast_text or abbrev_text
+                    forecast_data.append({
+                        'Period': period_name,
+                        'Temp_High': temp_high,
+                        'Temp_Low': temp_low,
+                        'Precipitation_mm': precip,
+                        'Forecast': full_text,
+                    })
 
-                # Temperatures: prefer XML values, fall back to text parsing
-                temp_high = self._xml_temperature(fc, 'high')
-                temp_low  = self._xml_temperature(fc, 'low')
-                if temp_high is None and temp_low is None:
-                    temp_high, temp_low = self._extract_temperatures(full_text)
+                if not forecast_data:
+                    raise ValueError("No forecast periods could be parsed from XML")
 
-                # Precipitation: prefer XML values, fall back to text parsing
-                precip = self._xml_precipitation(fc)
-                if precip == 0.0:
-                    precip = self._extract_precipitation(full_text)
+                full_df = self._group_by_day(pd.DataFrame(forecast_data), None)
+                self._FORECAST_CACHE[cache_key] = {"ts": now_ts, "df": full_df}
 
-                print(f"   ✓ {period_name}: {precip:.1f}mm precip")
+            if days is None:
+                return full_df.copy()
 
-                forecast_data.append({
-                    'Period':           period_name,
-                    'Temp_High':        temp_high,
-                    'Temp_Low':         temp_low,
-                    'Precipitation_mm': precip,
-                    'Forecast':         full_text,
-                })
+            target_days = max(1, int(days))
+            if len(full_df) >= target_days:
+                return full_df.head(target_days).copy()
 
-            if not forecast_data:
-                raise ValueError("No forecast periods could be parsed from XML")
-
-            df = pd.DataFrame(forecast_data)
-            df = self._group_by_day(df, days)
-
-            print(f"\n   Successfully fetched {len(df)} daily forecasts\n")
-            return df
+            # Extend beyond citypage horizon using ECCC climate-daily baseline.
+            extra_days = target_days - len(full_df)
+            extended_df = self._build_extended_outlook(
+                city_name=city_name,
+                start_date=full_df["Date"].max() + timedelta(days=1),
+                extra_days=extra_days,
+            )
+            if extended_df is None or extended_df.empty:
+                return full_df.copy()
+            return pd.concat([full_df, extended_df], ignore_index=True)
 
         except Exception as e:
             print(f"   Error: {e}\n")
             raise ValueError(f"Failed to fetch forecast: {e}")
+
+    def _resolve_city_coords(self, city_name):
+        loc = ALBERTA_LOCATIONS.get(city_name)
+        if loc:
+            return float(loc["lat"]), float(loc["lon"])
+        # fallback to Calgary
+        calg = ALBERTA_LOCATIONS.get("Calgary", {"lat": 51.05, "lon": -114.07})
+        return float(calg["lat"]), float(calg["lon"])
+
+    def _build_extended_outlook(self, city_name, start_date, extra_days):
+        """
+        Build extended day-level outlook from ECCC climate-daily recent observations.
+        This is a climate-based estimate when citypage forecast horizon is exceeded.
+        """
+        if extra_days <= 0:
+            return pd.DataFrame(columns=["Date", "Period", "Temp_High", "Temp_Low", "Precipitation_mm", "Forecast"])
+
+        lat, lon = self._resolve_city_coords(city_name)
+        bbox = f"{lon - 0.3},{lat - 0.3},{lon + 0.3},{lat + 0.3}"
+        hist_end = pd.Timestamp.utcnow().normalize() - pd.Timedelta(days=1)
+        hist_start = hist_end - pd.Timedelta(days=59)
+        params = {
+            "bbox": bbox,
+            "datetime": f"{hist_start.date()}/{hist_end.date()}",
+            "f": "json",
+            "limit": 5000,
+        }
+        try:
+            r = requests.get(self.ECCC_CLIMATE_DAILY_URL, params=params, timeout=8)
+            r.raise_for_status()
+            features = r.json().get("features", [])
+        except Exception:
+            return pd.DataFrame(columns=["Date", "Period", "Temp_High", "Temp_Low", "Precipitation_mm", "Forecast"])
+
+        rows = []
+        for feat in features:
+            props = feat.get("properties", {})
+            geom = feat.get("geometry", {})
+            coords = geom.get("coordinates", [None, None])
+            date_val = pd.to_datetime(props.get("LOCAL_DATE"), errors="coerce")
+            tmax = pd.to_numeric(props.get("MAX_TEMPERATURE"), errors="coerce")
+            tmin = pd.to_numeric(props.get("MIN_TEMPERATURE"), errors="coerce")
+            precip = pd.to_numeric(props.get("TOTAL_PRECIPITATION"), errors="coerce")
+            lon_s = pd.to_numeric(coords[0], errors="coerce")
+            lat_s = pd.to_numeric(coords[1], errors="coerce")
+            if pd.isna(date_val) or pd.isna(lon_s) or pd.isna(lat_s):
+                continue
+            rows.append(
+                {
+                    "Date": date_val.normalize(),
+                    "Temp_High": tmax,
+                    "Temp_Low": tmin,
+                    "Precipitation_mm": max(float(precip), 0.0) if not pd.isna(precip) else 0.0,
+                    "distance_sq": (lat_s - lat) ** 2 + (lon_s - lon) ** 2,
+                }
+            )
+
+        if not rows:
+            return pd.DataFrame(columns=["Date", "Period", "Temp_High", "Temp_Low", "Precipitation_mm", "Forecast"])
+
+        hist_df = pd.DataFrame(rows).sort_values(["Date", "distance_sq"]).groupby("Date", as_index=False).first()
+        if hist_df.empty:
+            return pd.DataFrame(columns=["Date", "Period", "Temp_High", "Temp_Low", "Precipitation_mm", "Forecast"])
+
+        hist_df["dow"] = pd.to_datetime(hist_df["Date"]).dt.dayofweek
+        dow_stats = hist_df.groupby("dow").agg(
+            Temp_High=("Temp_High", "mean"),
+            Temp_Low=("Temp_Low", "mean"),
+            Precipitation_mm=("Precipitation_mm", "mean"),
+        )
+        global_stats = {
+            "Temp_High": float(hist_df["Temp_High"].mean()) if not hist_df["Temp_High"].isna().all() else np.nan,
+            "Temp_Low": float(hist_df["Temp_Low"].mean()) if not hist_df["Temp_Low"].isna().all() else np.nan,
+            "Precipitation_mm": float(hist_df["Precipitation_mm"].mean()) if not hist_df["Precipitation_mm"].isna().all() else 0.0,
+        }
+
+        out = []
+        for i in range(extra_days):
+            d = (pd.to_datetime(start_date) + pd.Timedelta(days=i)).normalize()
+            dow = d.dayofweek
+            if dow in dow_stats.index:
+                tmax = dow_stats.loc[dow, "Temp_High"]
+                tmin = dow_stats.loc[dow, "Temp_Low"]
+                precip = dow_stats.loc[dow, "Precipitation_mm"]
+            else:
+                tmax = global_stats["Temp_High"]
+                tmin = global_stats["Temp_Low"]
+                precip = global_stats["Precipitation_mm"]
+            out.append(
+                {
+                    "Date": d,
+                    "Period": f"{d.strftime('%A')} (Extended)",
+                    "Temp_High": None if pd.isna(tmax) else float(tmax),
+                    "Temp_Low": None if pd.isna(tmin) else float(tmin),
+                    "Precipitation_mm": max(float(precip), 0.0) if not pd.isna(precip) else 0.0,
+                    "Forecast": "Extended outlook derived from recent ECCC climate-daily station patterns.",
+                }
+            )
+        return pd.DataFrame(out)
 
     # ------------------------------------------------------------------
     # XML helpers
@@ -286,7 +401,7 @@ class EnvironmentCanadaScraper:
     # Day grouping
     # ------------------------------------------------------------------
 
-    def _group_by_day(self, df, max_days=5):
+    def _group_by_day(self, df, max_days=None):
         """
         Merge daytime and nighttime periods into single daily rows.
         Daytime period provides Temp_High; nighttime provides Temp_Low.
@@ -333,8 +448,12 @@ class EnvironmentCanadaScraper:
             if row['Forecast']:
                 daily_data[day_name]['forecast_parts'].append(row['Forecast'])
 
+        day_values = list(daily_data.values())
+        if max_days is not None:
+            day_values = day_values[:max_days]
+
         result_data = []
-        for i, day_data in enumerate(list(daily_data.values())[:max_days]):
+        for i, day_data in enumerate(day_values):
             result_data.append({
                 'Date':             today + timedelta(days=i),
                 'Period':           day_data['day_name'],
@@ -449,7 +568,7 @@ class EnvironmentCanadaScraper:
 # Convenience functions — same API as before so views.py needs NO changes
 # ---------------------------------------------------------------------------
 
-def fetch_env_canada_forecast(city_name='Calgary', days=5):
+def fetch_env_canada_forecast(city_name='Calgary', days=None):
     """Drop-in replacement for the old RSS-based function."""
     scraper = EnvironmentCanadaScraper()
     return scraper.fetch_forecast(city_name, days)

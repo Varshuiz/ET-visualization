@@ -447,7 +447,12 @@
     <div class="summary-box">
         <h2>{{ total_precip|floatformat:1 }} mm</h2>
         <p>Total projected precipitation for {{ city_name }}</p>
-        <p style="font-size: 0.9rem; opacity: 0.9;">Next {{ df_forecast|length }} days</p>
+        <p style="font-size: 0.9rem; opacity: 0.9;">
+            Planning horizon: next {{ df_forecast|length }} day(s)
+            {% if available_forecast_days %}
+            ({{ available_forecast_days }} day(s) available from Environment Canada)
+            {% endif %}
+        </p>
     </div>
 
     <div class="recommendation-box">
@@ -517,6 +522,41 @@
             (median {{ historical_confidence.total_p50|floatformat:1 }} mm).
         </p>
         {% endif %}
+    </div>
+    {% endif %}
+
+    {% if weekly_forecast %}
+    <div class="card" style="margin-bottom: 20px;">
+        <h3 style="margin-bottom:10px; color:#095256;">4-Week Forecast Summary</h3>
+        <p style="margin-bottom:14px; color:#5a6f70; font-size:0.92rem;">
+            30-day outlook grouped into weekly planning windows.
+        </p>
+        {% for week in weekly_forecast %}
+        <div class="forecast-card">
+            <div class="forecast-period">{{ week.week_label }}</div>
+            <div class="forecast-date">
+                {{ week.start_date|date:"M d, Y" }} - {{ week.end_date|date:"M d, Y" }} ({{ week.days_count }} day{{ week.days_count|pluralize }})
+            </div>
+            <div class="forecast-stats">
+                <div class="stat-box">
+                    <div class="stat-label">Avg High</div>
+                    <div class="stat-value">
+                        {% if week.avg_high is not None %}{{ week.avg_high|floatformat:1 }}°C{% else %}--{% endif %}
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Avg Low</div>
+                    <div class="stat-value">
+                        {% if week.avg_low is not None %}{{ week.avg_low|floatformat:1 }}°C{% else %}--{% endif %}
+                    </div>
+                </div>
+                <div class="stat-box {% if week.total_precip_mm >= 25 %}precip-high{% elif week.total_precip_mm >= 10 %}precip-medium{% else %}precip-low{% endif %}">
+                    <div class="stat-label">Total Precipitation</div>
+                    <div class="stat-value">{{ week.total_precip_mm|floatformat:1 }} mm</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
     </div>
     {% endif %}
 
