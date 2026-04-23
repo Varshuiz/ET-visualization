@@ -213,6 +213,17 @@
                 </div>
                 
                 <div class="form-group">
+                    <label>City (ECCC Weather Source)</label>
+                    <select name="city_name" id="city_name">
+                        {% for city in available_cities %}
+                        <option value="{{ city }}" {% if selected_city == city %}selected{% endif %}>
+                            {{ city }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
                     <label>Irrigation Strategy</label>
                     <select name="irrigation" id="irrigation">
                         {% for value, label in irrigation_methods %}
@@ -249,7 +260,7 @@
                     <input type="file" name="weather_file" id="weather_file" accept=".csv,.xlsx,.xls">
                 </div>
                 <p style="margin-top: 10px; color: #666; font-size: 0.85rem;">
-                    If no file is uploaded, sample weather data will be generated.
+                    If no file is uploaded, weather is fetched from ECCC for the selected city and date range.
                 </p>
             </div>
             

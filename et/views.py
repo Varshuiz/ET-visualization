@@ -113,6 +113,7 @@ from .location_services import (
 )
 from .weather_ingestion import fetch_openmeteo_historical_data, normalize_uploaded_weather_dataframe
 from .eccc_weather import add_eccc_rh_to_dataframe
+from .eccc_weather import build_aquacrop_weather_from_eccc
 from .aquacrop_simulator import AquaCropSimulator, run_aquacrop_simulation
 from .aquacrop_aggregation import (
     aggregate_aquacrop_timeseries,
@@ -2438,9 +2439,16 @@ def aquacrop_simulation(request):
     View for AquaCrop crop growth simulation
     """
     
+    from .environment_canada_scraper import EnvironmentCanadaScraper
+    default_city = "Calgary"
+    available_cities = sorted(EnvironmentCanadaScraper.LOCATION_CODES.keys())
+
     context = {
         'crops': list(AquaCropSimulator.AVAILABLE_CROPS.keys()),
         'soil_types': list(AquaCropSimulator.SOIL_TYPES.keys()),
+        'available_cities': available_cities,
+        'selected_city': default_city,
+        'selected_irrigation': 'full',
         'irrigation_methods': [
             ('rainfed', 'Rainfed (No Irrigation)'),
             ('full', 'Full Irrigation (80% SMT)'),
@@ -2454,7 +2462,10 @@ def aquacrop_simulation(request):
             timestep = request.POST.get('timestep', 'weekly')
             crop = request.POST.get('crop', 'Wheat')
             soil = request.POST.get('soil', 'Loam')
-            irrigation = request.POST.get('irrigation', 'rainfed')
+            irrigation = request.POST.get('irrigation', 'full')
+            city_name = request.POST.get('city_name', default_city).strip()
+            if city_name not in available_cities:
+                city_name = default_city
             start_date = request.POST.get('start_date', '2024-05-01')
             end_date = request.POST.get('end_date', '2024-09-01')
             
@@ -2470,7 +2481,17 @@ def aquacrop_simulation(request):
                 else:
                     context['error_message'] = "Please upload a CSV or Excel file"
                     return render(request, 'et/aquacrop_simulation.html', context)
-            
+            else:
+                city_coords = ALBERTA_LOCATIONS.get(city_name)
+                if not city_coords:
+                    raise ValueError(f"No coordinates found for selected city: {city_name}")
+                weather_df = build_aquacrop_weather_from_eccc(
+                    latitude=city_coords['lat'],
+                    longitude=city_coords['lon'],
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+
             # Run simulation
             results = run_aquacrop_simulation(
                 crop=crop,
@@ -2514,6 +2535,7 @@ def aquacrop_simulation(request):
                 'selected_crop': crop,
                 'selected_soil': soil,
                 'selected_irrigation': irrigation,
+                'selected_city': city_name,
                 'start_date': start_date,
                 'end_date': end_date,
                 'has_results': True,
@@ -2535,13 +2557,22 @@ def aquacrop_api(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
+            city_name = data.get('city_name', 'Calgary')
+            city_coords = ALBERTA_LOCATIONS.get(city_name, ALBERTA_LOCATIONS.get('Calgary'))
+            weather_df = build_aquacrop_weather_from_eccc(
+                latitude=city_coords['lat'],
+                longitude=city_coords['lon'],
+                start_date=data.get('start_date', '2024/05/01'),
+                end_date=data.get('end_date', '2024/09/01'),
+            )
             
             results = run_aquacrop_simulation(
                 crop=data.get('crop', 'Wheat'),
                 soil=data.get('soil', 'Loam'),
                 start_date=data.get('start_date', '2024/05/01'),
                 end_date=data.get('end_date', '2024/09/01'),
-                irrigation=data.get('irrigation', 'rainfed'),
+                irrigation=data.get('irrigation', 'full'),
+                weather_df=weather_df,
             )
             
             # Convert DataFrames to JSON-serializable format

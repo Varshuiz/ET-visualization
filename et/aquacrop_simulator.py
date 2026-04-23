@@ -80,11 +80,13 @@ class AquaCropSimulator:
             print(f"Irrigation: {irrigation_method}")
             print(f"{'='*70}\n")
             
-            # Weather data - MUST be in official format
+            # Weather data - MUST be provided from observed/forecast sources.
             if weather_data is None:
-                weather_df = self._generate_sample_weather(start_dt, end_dt)
-            else:
-                weather_df = self._prepare_weather_data(weather_data)
+                raise ValueError(
+                    "AquaCrop requires weather input data. Please upload a weather file "
+                    "or use ECCC-backed auto-fetch in the simulation form."
+                )
+            weather_df = self._prepare_weather_data(weather_data)
             
             # Create components
             soil = Soil(soil_type=self.SOIL_TYPES.get(soil_type, 'Loam'))
@@ -193,12 +195,14 @@ class AquaCropSimulator:
                     found = True
                     break
             if not found:
-                # Defaults
-                defaults = {'MinTemp': 10, 'MaxTemp': 25, 'Precipitation': 0, 'ReferenceET': 5}
-                weather_df[target] = defaults[target]
+                raise ValueError(f"Missing required weather column for AquaCrop: {target}")
         
         # Date as datetime column
-        weather_df['Date'] = pd.to_datetime(df['Date'])
+        if 'Date' not in df.columns:
+            raise ValueError("Missing required weather column for AquaCrop: Date")
+        weather_df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        if weather_df['Date'].isna().any():
+            raise ValueError("Weather data contains invalid Date values")
         
         return weather_df
     
