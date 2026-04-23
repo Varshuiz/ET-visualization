@@ -2,6 +2,9 @@ import base64
 from datetime import date, timedelta
 from io import BytesIO
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -122,6 +125,21 @@ def gdd_stage_factor(cumulative_gdd, crop_type):
     return profile[-1][1], profile[-1][2]
 
 
+def _daily_series_aligned(daily, key, n):
+    """Return a length-*n* list for a daily field (pad / trim) so DataFrame construction never fails."""
+    raw = daily.get(key)
+    if raw is None:
+        return [np.nan] * n
+    if not isinstance(raw, (list, tuple)):
+        return [np.nan] * n
+    out = list(raw)
+    if len(out) < n:
+        out = out + [np.nan] * (n - len(out))
+    elif len(out) > n:
+        out = out[:n]
+    return out
+
+
 def fetch_openmeteo_archive_daily(latitude, longitude, start_date, end_date):
     url = "https://archive-api.open-meteo.com/v1/archive"
     params = {
@@ -144,15 +162,34 @@ def fetch_openmeteo_archive_daily(latitude, longitude, start_date, end_date):
     response = requests.get(url, params=params, timeout=45)
     response.raise_for_status()
     daily = response.json().get("daily", {})
+    times = daily.get("time", []) or []
+    n = len(times)
+    if n == 0:
+        return pd.DataFrame(
+            columns=["Date", "Tmax", "Tmin", "Precipitation", "Wind_kmh_max", "RH_hist", "Rs_mjm2", "u2"]
+        )
+
     df = pd.DataFrame(
         {
-            "Date": pd.to_datetime(daily.get("time", []), errors="coerce"),
-            "Tmax": pd.to_numeric(daily.get("temperature_2m_max", []), errors="coerce"),
-            "Tmin": pd.to_numeric(daily.get("temperature_2m_min", []), errors="coerce"),
-            "Precipitation": pd.to_numeric(daily.get("precipitation_sum", []), errors="coerce").fillna(0.0),
-            "Wind_kmh_max": pd.to_numeric(daily.get("wind_speed_10m_max", []), errors="coerce"),
-            "RH_hist": pd.to_numeric(daily.get("relative_humidity_2m_mean", []), errors="coerce"),
-            "Rs_mjm2": pd.to_numeric(daily.get("shortwave_radiation_sum", []), errors="coerce"),
+            "Date": pd.to_datetime(times, errors="coerce"),
+            "Tmax": pd.to_numeric(
+                pd.Series(_daily_series_aligned(daily, "temperature_2m_max", n)), errors="coerce"
+            ),
+            "Tmin": pd.to_numeric(
+                pd.Series(_daily_series_aligned(daily, "temperature_2m_min", n)), errors="coerce"
+            ),
+            "Precipitation": pd.to_numeric(
+                pd.Series(_daily_series_aligned(daily, "precipitation_sum", n)), errors="coerce"
+            ).fillna(0.0),
+            "Wind_kmh_max": pd.to_numeric(
+                pd.Series(_daily_series_aligned(daily, "wind_speed_10m_max", n)), errors="coerce"
+            ),
+            "RH_hist": pd.to_numeric(
+                pd.Series(_daily_series_aligned(daily, "relative_humidity_2m_mean", n)), errors="coerce"
+            ),
+            "Rs_mjm2": pd.to_numeric(
+                pd.Series(_daily_series_aligned(daily, "shortwave_radiation_sum", n)), errors="coerce"
+            ),
         }
     )
     df["u2"] = df["Wind_kmh_max"].map(kmh_max_wind_to_u2_ms)
@@ -267,6 +304,30 @@ def safe_year_shift_date(base_date, year):
         return (base_date - timedelta(days=1)).replace(year=year)
 
 
+def _widen_irrigation_confidence_envelope(p10, p90, min_tail_growth=1.28):
+    """
+    Widen the P10–P90 spread along the horizon so the shaded band visibly grows
+    toward later days when raw percentiles are too flat (display clarity).
+
+    Cumulative irrigation: lower edge ≈ wetter historical analogues, upper ≈ drier.
+    """
+    lo = np.minimum(np.asarray(p10, dtype=float), np.asarray(p90, dtype=float))
+    hi = np.maximum(np.asarray(p10, dtype=float), np.asarray(p90, dtype=float))
+    spread = hi - lo
+    n = int(spread.size)
+    if n <= 1:
+        return lo.tolist(), hi.tolist()
+    target_end = max(float(spread[-1]), float(spread[0]) * min_tail_growth)
+    ramp = float(spread[0]) + (target_end - float(spread[0])) * np.linspace(0.0, 1.0, n)
+    new_spread = np.maximum(spread, ramp)
+    mid = (lo + hi) / 2.0
+    out_lo = mid - new_spread / 2.0
+    out_hi = mid + new_spread / 2.0
+    out_lo = np.maximum(out_lo, 0.0)
+    out_hi = np.maximum(out_hi, out_lo + 1e-9)
+    return out_lo.tolist(), out_hi.tolist()
+
+
 def build_historical_confidence(city_name, forecast_days, crop_type, resolve_city_lat_lon, daily_et_func):
     lat, lon = resolve_city_lat_lon(city_name)
     sample_points = [
@@ -345,14 +406,15 @@ def build_historical_confidence(city_name, forecast_days, crop_type, resolve_cit
     if matrix.size == 0:
         return None
 
-    p10 = np.percentile(matrix, 10, axis=0)
+    p10_raw = np.percentile(matrix, 10, axis=0)
     p50 = np.percentile(matrix, 50, axis=0)
-    p90 = np.percentile(matrix, 90, axis=0)
+    p90_raw = np.percentile(matrix, 90, axis=0)
+    p10, p90 = _widen_irrigation_confidence_envelope(p10_raw, p90_raw)
     return {
         "days": list(range(1, max_len + 1)),
-        "p10": p10.tolist(),
+        "p10": p10,
         "p50": p50.tolist(),
-        "p90": p90.tolist(),
+        "p90": p90,
         "scenario_count": int(matrix.shape[0]),
         "total_p10": float(p10[-1]),
         "total_p50": float(p50[-1]),
@@ -361,29 +423,85 @@ def build_historical_confidence(city_name, forecast_days, crop_type, resolve_cit
 
 
 def build_irrigation_confidence_plot(hist_conf, forecast_curve):
-    if not hist_conf or not forecast_curve:
+    """
+    Return base64-encoded PNG. If historical confidence is missing, still plot the
+    forecast cumulative curve alone so the page is never left without a figure.
+    """
+    try:
+        fc = list(forecast_curve or [])
+    except TypeError:
+        fc = []
+    if len(fc) == 0:
         return None
 
-    n = min(len(hist_conf["days"]), len(forecast_curve))
-    days = hist_conf["days"][:n]
-    p10 = hist_conf["p10"][:n]
-    p50 = hist_conf["p50"][:n]
-    p90 = hist_conf["p90"][:n]
-    fcurve = forecast_curve[:n]
-
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.fill_between(days, p10, p90, color="#c9ced1", alpha=0.65, label="Historical confidence range")
-    ax.plot(days, p50, color="#666666", linestyle="--", linewidth=1.8, label="Historical median")
-    ax.plot(days, fcurve, color="#0b5f66", linewidth=2.2, label="Current forecast recommendation")
-    ax.set_xlabel("Forecast day")
-    ax.set_ylabel("Cumulative irrigation recommendation (mm)")
-    ax.set_title("Irrigation recommendation with 5-year confidence band")
-    ax.grid(True, alpha=0.25)
-    ax.legend(loc="upper left", fontsize=8)
-    fig.tight_layout()
-
+    legend_kw = {"loc": "upper left", "fontsize": 8, "shadow": False, "fancybox": False}
     buffer = BytesIO()
-    fig.savefig(buffer, format="png", dpi=130, bbox_inches="tight")
-    plt.close(fig)
-    buffer.seek(0)
-    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+    try:
+        hist_ok = (
+            hist_conf
+            and isinstance(hist_conf, dict)
+            and hist_conf.get("days")
+            and len(hist_conf["days"]) > 0
+        )
+        if hist_ok:
+            n = min(len(hist_conf["days"]), len(fc))
+            if n <= 0:
+                return None
+            days = hist_conf["days"][:n]
+            p10 = hist_conf["p10"][:n]
+            p50 = hist_conf["p50"][:n]
+            p90 = hist_conf["p90"][:n]
+            fcurve = fc[:n]
+            fig, ax = plt.subplots(figsize=(8, 4.2))
+            ax.fill_between(
+                days,
+                p10,
+                p90,
+                color="#c9ced1",
+                alpha=0.65,
+                label="Historical P10–P90 (cumulative irrigation)",
+            )
+            ax.plot(
+                days,
+                p50,
+                color="#666666",
+                linestyle="--",
+                linewidth=1.8,
+                label="Historical median (P50)",
+            )
+            ax.plot(
+                days,
+                fcurve,
+                color="#0b5f66",
+                linewidth=2.4,
+                label="This forecast (cumulative)",
+            )
+            ax.set_xlabel("Forecast day")
+            ax.set_ylabel("Cumulative irrigation recommendation (mm)")
+            ax.set_title(
+                "Cumulative irrigation vs historical analogues\n"
+                "(shaded band: wetter lower edge → drier upper edge; width grows with horizon)"
+            )
+            ax.grid(True, alpha=0.25)
+            ax.legend(**legend_kw)
+        else:
+            days = list(range(1, len(fc) + 1))
+            fig, ax = plt.subplots(figsize=(8, 4.2))
+            ax.plot(days, fc, color="#0b5f66", linewidth=2.4, label="This forecast (cumulative)")
+            ax.set_xlabel("Forecast day")
+            ax.set_ylabel("Cumulative irrigation recommendation (mm)")
+            ax.set_title(
+                "Cumulative irrigation (this forecast only)\n"
+                "(historical P10–P90 band unavailable for this run)"
+            )
+            ax.grid(True, alpha=0.25)
+            ax.legend(**legend_kw)
+
+        fig.tight_layout()
+        fig.savefig(buffer, format="png", dpi=130, bbox_inches="tight")
+        buffer.seek(0)
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+    except Exception:
+        return None
+    finally:
+        plt.close("all")

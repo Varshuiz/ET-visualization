@@ -2438,6 +2438,7 @@ def env_canada_forecast_view(request):
             rec_chart_url = build_irrigation_confidence_plot(
                 historical_confidence, forecast_curve_soil_adjusted
             )
+            chart_available = bool(rec_chart_url)
             crop_label = next((item["label"] for item in crop_options if item["value"] == crop_type), "Wheat")
             soil_label = next((item["label"] for item in soil_options if item["value"] == soil_type), "Loam")
 
@@ -2462,6 +2463,7 @@ def env_canada_forecast_view(request):
                 'soil_factor': soil_factor,
                 'historical_confidence': historical_confidence,
                 'rec_chart_url': rec_chart_url,
+                'chart_available': chart_available,
                 'available_cities': all_cities,
                 'cities_by_region': cities_by_region,
             }
@@ -2481,6 +2483,7 @@ def env_canada_forecast_view(request):
         'city_name': city_name,
         'selected_days': selected_days,
         'show_extended_horizon_caveat': False,
+        'chart_available': False,
         'crop_type': crop_type,
         'soil_type': soil_type,
         'crop_label': next((item["label"] for item in crop_options if item["value"] == crop_type), "Wheat"),

@@ -405,9 +405,6 @@
                 30 Days
             </button>
         </div>
-        <p style="margin: 14px 0 0 0; font-size: 0.88rem; color: #5a6570; max-width: 920px;">
-            <strong>Note:</strong> horizons <strong>longer than 7 days</strong> often blend the MSC city forecast with statistically extended days. <strong>Week two and beyond</strong> should be read as <em>high-uncertainty planning context</em>, not a precise irrigation prescription—use the chart’s grey band and the range under “Suggested irrigation” when applicable.
-        </p>
     </div>
 
     <!-- City Selector with Dropdown -->
@@ -476,12 +473,6 @@
     </div>
 
     {% if df_forecast %}
-    {% if show_extended_horizon_caveat %}
-    <div style="margin-bottom: 18px; padding: 14px 18px; background: #fff8e6; border: 1px solid #e8d4a8; border-radius: 10px; color: #4a3d0a;">
-        <strong>Extended horizon ({{ selected_days }} days):</strong>
-        totals after day 7 mix operational forecast with extension and are <strong>much less certain</strong> than a one-week outlook. Prefer the <strong>teal line vs grey band</strong> on the chart, and the <strong>historical cumulative range</strong> below, over a single headline millimetre value.
-    </div>
-    {% endif %}
     <!-- Summary -->
     <div class="summary-box">
         <h2>{{ total_precip|floatformat:1 }} mm</h2>
@@ -540,25 +531,24 @@
                 {{ soil_label }} (factor {{ soil_factor|floatformat:2 }})
             </div>
         </div>
-        <p style="margin-top:10px; color:#5b6f70; font-size:0.9rem;">
-            Use this as planning guidance. Adjust by crop stage, soil type, and local field conditions.
-        </p>
-        <p style="margin-top:8px; color:#5b6f70; font-size:0.86rem;">
-            Basis: daily reference evapotranspiration (ET₀) uses the FAO-56 Penman–Monteith equation. <strong>Global shortwave (Rₛ)</strong> uses Open-Meteo <strong>forecast</strong> daily <code>shortwave_radiation_sum</code> (MJ/m²) at the city coordinates when the API returns a value; only if that is missing does the model fall back to a simple temperature-based Rₛ estimate. <strong>Relative humidity</strong> prefers the MSC citypage value when present; otherwise it uses Open-Meteo <strong>relative_humidity_2m_mean</strong> for that date (not a fixed 65%). <strong>u₂</strong> prefers MSC wind (speed/gust, km/h) converted consistently with Open-Meteo <code>wind_speed_10m_max</code>, then Open-Meteo forecast wind if needed; a 2.0 m/s placeholder applies only if both fail.
-        </p>
-        <p style="margin-top:6px; color:#5b6f70; font-size:0.86rem;">
-            <strong>Crop type</strong> picks a crop-specific curve of growing-degree-days (GDD, base 5&nbsp;°C). Each day, GDD from forecast temperatures is added to a running total; that total falls into a growth stage, and a <strong>stage factor</strong> (roughly 0.55–1.25 depending on crop and stage) multiplies ET₀ for that day. That approximates higher crop water use in peak growth and lower in early or late season—it is a simple stage scaling, not a full crop-growth or soil-water model.
-        </p>
-        <p style="margin-top:6px; color:#5b6f70; font-size:0.86rem;">
-            <strong>Soil type</strong> applies a <strong>soil factor</strong> (loam = 1.00) to the <em>cumulative</em> irrigation need and to the teal chart line: sandier profiles use factors above 1 (more suggested irrigation, looser/shallower storage in this shorthand), while clay-rich types use factors below 1 (less suggested, more water retained in this shorthand). Precipitation and ET₀ are unchanged; only the interpreted irrigation total is scaled.
-        </p>
-        <p style="margin-top:6px; color:#5b6f70; font-size:0.86rem;">
-            The irrigation suggestion sums, day by day, only the shortfall when stage-adjusted ET exceeds forecast precipitation (no credit for “extra” rain beyond the daily need in this simple ledger).
-        </p>
-        {% if historical_confidence %}
-        <p style="margin-top:8px; color:#5b6f70; font-size:0.86rem;">
-            Historical baseline: 5 years × representative nearby sample locations ({{ historical_confidence.scenario_count }} scenarios),
-            using the same Penman–Monteith helper with Open-Meteo <strong>archive</strong> daily <code>shortwave_radiation_sum</code>, <code>wind_speed_10m_max</code>, and <code>relative_humidity_2m_mean</code> per day (no fixed wind; Rₛ is not temperature-estimated when archive data exist), shown as 10th–90th percentile range.
+        <div style="margin-top:10px; color:#5b6f70; font-size:0.9rem;">
+            <h4 style="margin:0 0 10px 0; color:#095256; font-size:1rem;">How the irrigation estimate is calculated</h4>
+            <p style="margin:0 0 10px 0;">
+                The daily water need is calculated from forecast temperature, sunlight, humidity, and wind. The estimate accounts for your crop's growth stage — young crops and crops nearing harvest need less water than crops at peak growth. Your soil type adjusts the final number: sandy soils need more frequent watering, clay soils hold moisture longer and need less.
+            </p>
+            <p style="margin:0 0 10px 0;">
+                Rain is subtracted from the daily need. If forecast rain covers the day's water demand, no irrigation is suggested for that day. There is no carry-over credit for extra rain beyond that day's need.
+            </p>
+            <p style="margin:0 0 10px 0;">
+                The grey band in the chart is built from 5 years of historical weather data for your area, run through the same calculation, so you can see how this season compares to past years at the same time of year.
+            </p>
+            <p style="margin:0;">
+                Use this as a planning guide alongside your own observations of field conditions.
+            </p>
+        </div>
+        {% if show_extended_horizon_caveat %}
+        <p style="margin-top:12px; color:#5b6f70; font-size:0.9rem;">
+            <strong>Note:</strong> Forecasts beyond 7 days are less reliable. Weather models lose accuracy the further out they go. Treat week two and beyond as a general planning heads-up, not a precise watering schedule. When in doubt, rely on the grey band in the chart and the historical range shown under "Suggested irrigation" rather than the single millimetre figure.
         </p>
         {% endif %}
     </div>
@@ -567,17 +557,37 @@
     <div class="card">
         <h3 style="margin-bottom:10px; color:#095256;">Irrigation Confidence Band</h3>
         <p style="margin-bottom:14px; color:#5a6f70; font-size:0.92rem;">
-            Grey band shows uncertainty from historical year/location variation. Teal line is your current forecast-based recommendation.
-            {% if show_extended_horizon_caveat %}<strong> Long horizons:</strong> read the band as especially important from week two onward.{% endif %}
+            {% if historical_confidence %}
+            The <strong>grey band</strong> is the 10th–90th percentile range of <em>cumulative irrigation need</em> from historical weather analogues (same model, past years + nearby points). The <strong>dashed line</strong> is the historical <strong>median (P50)</strong>. The <strong>teal line</strong> is this forecast’s cumulative need through the same horizon.
+            {% else %}
+            Grey historical band is unavailable (e.g. archive data did not yield scenarios); the teal line shows this run’s cumulative irrigation need only.
+            {% endif %}
         </p>
-        <img src="data:image/png;base64,{{ rec_chart_url }}" alt="Irrigation recommendation confidence chart" style="width:100%; border-radius:8px; border:1px solid #d6e4e1;">
+        <img src="data:image/png;base64,{{ rec_chart_url|safe }}" alt="Irrigation recommendation confidence chart" style="width:100%; border-radius:8px; border:1px solid #d6e4e1;">
         {% if historical_confidence %}
         <p style="margin-top:10px; color:#5b6f70; font-size:0.86rem;">
-            Historical total recommendation range over {{ selected_days }} days:
-            {{ historical_confidence.total_p10|floatformat:1 }} to {{ historical_confidence.total_p90|floatformat:1 }} mm
+            End-of-horizon cumulative irrigation from historical analogues (P10–P90 / median):
+            {{ historical_confidence.total_p10|floatformat:1 }}–{{ historical_confidence.total_p90|floatformat:1 }} mm
             (median {{ historical_confidence.total_p50|floatformat:1 }} mm).
         </p>
+        <div style="margin-top:14px; padding:14px 16px; background:#f7faf9; border:1px solid #dbe7e4; border-radius:10px; color:#3d4f52;">
+            <h4 style="margin:0 0 10px 0; color:#095256; font-size:1rem;">Reading this chart</h4>
+            <ul style="margin:0; padding-left:1.15rem; font-size:0.88rem; line-height:1.55;">
+                <li><strong>Grey band</strong> — Shows how much irrigation similar seasons in past years needed by each day. A <strong>narrow band</strong> means past years were consistent — you can plan with more confidence. A <strong>wide band</strong> means some years were much drier or wetter than others — treat the outlook as a rough guide, not a firm number.</li>
+                <li><strong>Dashed line</strong> — What a typical past season looked like. If the teal line is tracking <strong>above</strong> it, this season is shaping up <strong>drier than normal</strong>. <strong>Below</strong> it, <strong>wetter than normal</strong>.</li>
+                <li><strong>Teal line</strong> — Your current forecast. Running near the <strong>top of the grey band</strong> means prepare for <strong>more irrigation than usual</strong>. Near the <strong>bottom</strong>, you may need <strong>less than a typical year</strong>.</li>
+                <li><strong>Beyond day 7</strong> — The forecast becomes less reliable. The wider the band, the more you should hold off on firm decisions until you are closer to the date.</li>
+            </ul>
+        </div>
+
         {% endif %}
+    </div>
+    {% elif df_forecast %}
+    <div class="card" style="border:1px solid #e0e8e6;">
+        <h3 style="margin-bottom:10px; color:#095256;">Irrigation chart</h3>
+        <p style="color:#5a6f70; font-size:0.95rem;">
+            The irrigation figure could not be generated (for example, no cumulative irrigation points were computed from the forecast, or plotting failed on the server). The summary numbers above still reflect the model run when present.
+        </p>
     </div>
     {% endif %}
 
