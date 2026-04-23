@@ -91,15 +91,9 @@ STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Use server-side cache-backed sessions so large workflow state
-# (e.g., fetched weather data JSON) does not depend on DB session writes.
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "et-visualization-cache",
-    }
-}
-SESSION_ENGINE = "django.contrib.sessions.backends.cache"
-SESSION_CACHE_ALIAS = "default"
+# Use file-based server-side sessions for larger workflow payloads
+# without DB writes and without in-memory deepcopy behavior.
+SESSION_ENGINE = "django.contrib.sessions.backends.file"
+SESSION_FILE_PATH = os.environ.get("DJANGO_SESSION_FILE_PATH", "/tmp/django_sessions")
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
