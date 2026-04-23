@@ -242,7 +242,7 @@ def index(request):
                 plt.grid(True, alpha=0.3, color='#5AAA95')
                 
                 # Customize legend
-                plt.legend(frameon=True, fancybox=True, shadow=True, 
+                plt.legend(frameon=True, fancybox=True, shadow=False,
                           loc='upper left', fontsize=10)
                 
                 # Rotate x-axis labels for better readability
@@ -479,7 +479,7 @@ def process_single_method(request, method_code, method_name, template_name):
                 plt.xlabel('Date', fontsize=12, fontweight='600', color='#095256')
                 plt.ylabel(f'ET₀ ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
                 plt.grid(True, alpha=0.3, color='#5AAA95')
-                plt.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
+                plt.legend(frameon=True, fancybox=True, shadow=False, loc='upper left', fontsize=10)
                 plt.xticks(rotation=45, ha='right')
                 plt.tight_layout()
                 
@@ -927,7 +927,7 @@ def enhanced_comparison_calculator(request):
                 ax1.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
                 ax1.set_ylabel(f'ET₀ ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
                 ax1.grid(True, alpha=0.3, color='#5AAA95')
-                ax1.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
+                ax1.legend(frameon=True, fancybox=True, shadow=False, loc='upper left', fontsize=10)
                 ax1.tick_params(axis='x', rotation=45)
 
                 # Method differences from Penman-Monteith (reference) - only if PM exists
@@ -949,7 +949,7 @@ def enhanced_comparison_calculator(request):
                     ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
                     ax2.set_ylabel(f'Difference ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
                     ax2.grid(True, alpha=0.3, color='#5AAA95')
-                    ax2.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=9)
+                    ax2.legend(frameon=True, fancybox=True, shadow=False, loc='upper left', fontsize=9)
                     ax2.tick_params(axis='x', rotation=45)
                 else:
                     # If no PM or only one method, show a message
@@ -1253,7 +1253,7 @@ def process_single_method_enhanced(request, method_code, method_name, template_n
                 plt.xlabel('Date', fontsize=12, fontweight='600', color='#095256')
                 plt.ylabel(f'ET₀ ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
                 plt.grid(True, alpha=0.3, color='#5AAA95')
-                plt.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
+                plt.legend(frameon=True, fancybox=True, shadow=False, loc='upper left', fontsize=10)
                 plt.xticks(rotation=45, ha='right')
                 plt.tight_layout()
                 
