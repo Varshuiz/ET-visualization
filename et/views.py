@@ -1897,7 +1897,8 @@ def comparison_with_acis(request):
             fontsize=12, fontweight='600', color='#095256'
         )
         ax1.grid(True, alpha=0.3, color='#5AAA95')
-        ax1.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
+        # Avoid shadow rendering path that can recurse under Python 3.14 + matplotlib.
+        ax1.legend(frameon=True, fancybox=True, shadow=False, loc='upper left', fontsize=10)
         ax1.tick_params(axis='x', rotation=45)
         
         # Method differences plot
@@ -1929,7 +1930,7 @@ def comparison_with_acis(request):
                 fontsize=12, fontweight='600', color='#095256'
             )
             ax2.grid(True, alpha=0.3, color='#5AAA95')
-            ax2.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=9)
+            ax2.legend(frameon=True, fancybox=True, shadow=False, loc='upper left', fontsize=9)
             ax2.tick_params(axis='x', rotation=45)
         else:
             ax2.text(
@@ -2100,7 +2101,7 @@ def update_comparison_plot(request):
         ax1.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
         ax1.set_ylabel(f'ET ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
         ax1.grid(True, alpha=0.3, color='#5AAA95')
-        ax1.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=10)
+        ax1.legend(frameon=True, fancybox=True, shadow=False, loc='upper left', fontsize=10)
         ax1.tick_params(axis='x', rotation=45)
         
         # Difference plot
@@ -2123,7 +2124,7 @@ def update_comparison_plot(request):
             ax2.set_xlabel('Date', fontsize=12, fontweight='600', color='#095256')
             ax2.set_ylabel(f'Difference ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
             ax2.grid(True, alpha=0.3, color='#5AAA95')
-            ax2.legend(frameon=True, fancybox=True, shadow=True, loc='upper left', fontsize=9)
+            ax2.legend(frameon=True, fancybox=True, shadow=False, loc='upper left', fontsize=9)
             ax2.tick_params(axis='x', rotation=45)
         else:
             ax2.text(0.5, 0.5, 'Select multiple methods to see differences', 

@@ -319,6 +319,12 @@
         <span class="unit-label {% if selected_unit == 'inches' %}active{% endif %}">inches</span>
     </div>
 
+    {% if error_message %}
+    <div class="message error" style="margin-top: 20px; background: #fdecea; color: #7a1f1f; border: 1px solid #f5c2c7; border-radius: 10px; padding: 14px 16px;">
+        <strong>Could not generate ET comparison:</strong> {{ error_message }}
+    </div>
+    {% endif %}
+
     {% if et_data %}
     <div class="results-section">
         <!-- Method Statistics Cards -->
