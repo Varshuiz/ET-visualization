@@ -70,6 +70,7 @@ import base64
 import calendar
 import io
 import json
+import os
 import xml.etree.ElementTree as ET
 from datetime import datetime, date, timedelta
 from io import BytesIO, StringIO
@@ -82,6 +83,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import requests
+from django.core.cache import cache
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 
@@ -93,12 +95,18 @@ from .et_growing_season import (
 from .et_methods import (
     actual_vapor_pressure,
     calculate_extraterrestrial_radiation,
+    calculate_extraterrestrial_radiation_vec,
     delta_svp,
     hargreaves_ET,
+    hargreaves_ET_vec,
     maule_ET,
+    maule_ET_vec,
     net_radiation_estimate,
+    net_radiation_estimate_vec,
     penman_monteith_ET,
+    penman_monteith_ET_vec,
     priestley_taylor_ET,
+    priestley_taylor_ET_vec,
     psychrometric_constant,
     saturation_vapor_pressure,
 )
@@ -624,9 +632,23 @@ def about(request):
 def get_lethbridge_forecast():
     """Get weather forecast data for Lethbridge"""
     rss_url = "https://weather.gc.ca/rss/city/ab-52_e.xml"
+    cache_key = f"lethbridge_rss_forecast_v1:{rss_url}"
+    cache_ttl = int(os.environ.get("LETHBRIDGE_RSS_CACHE_SECONDS", "900"))
     
+    if cache_ttl > 0:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
     try:
-        feed = feedparser.parse(rss_url)
+        # feedparser can block for a long time if it fetches the URL itself.
+        r = requests.get(
+            rss_url,
+            timeout=(2, 4),
+            headers={"User-Agent": "Aqualys/1.0 (ET tool)"},
+        )
+        r.raise_for_status()
+        feed = feedparser.parse(r.content)
         forecast_data = []
         
         for entry in feed.entries:
@@ -640,7 +662,10 @@ def get_lethbridge_forecast():
                 "summary": summary
             })
 
-        return forecast_data[:5]  # Return first 5 entries
+        out = forecast_data[:5]  # Return first 5 entries
+        if cache_ttl > 0:
+            cache.set(cache_key, out, cache_ttl)
+        return out
         
     except Exception as e:
         print(f"Forecast fetch error: {e}")
@@ -1611,44 +1636,17 @@ def comparison_with_acis(request):
         selected_unit = 'mm'
     
     unit_info = get_unit_info(selected_unit)
-    forecast_data = get_lethbridge_forecast()
-    
-    # NEW: Fetch Environment Canada forecast
+    # This page does not render forecast sidebars; skip slow network calls here.
+    forecast_data = None
     env_canada_forecast = None
     ec_city_name = None
-    try:
-        from .environment_canada_scraper import fetch_env_canada_forecast
-        
-        # Extract city name from location description
-        location_desc = location_info.get('description', '')
-        city_name = location_desc.split('(')[0].strip().split(',')[0]
-        
-        # Common city name mappings
-        city_mapping = {
-            'Twp': 'Calgary',
-            'Township': 'Calgary',
-        }
-        
-        # Use mapped name if needed
-        for key, value in city_mapping.items():
-            if key in city_name:
-                city_name = value
-                break
-        
-        # Fetch forecast
-        ec_df = fetch_env_canada_forecast(city_name, days=5)
-        env_canada_forecast = ec_df.to_dict('records')
-        ec_city_name = city_name
-        
-        print(f"Environment Canada forecast fetched for {city_name}")
-        
-    except Exception as e:
-        print(f"Could not fetch Environment Canada forecast: {e}")
     
     try:
         # Clamp negative Tmax/Tavg (keep Tmin raw so temperature range is preserved).
         if 'Tmax' in df.columns:
             df['Tmax'] = pd.to_numeric(df['Tmax'], errors='coerce').clip(lower=0)
+            # Used by several ET methods; must exist even if ET columns are already present in session.
+            df['Tmax_clamped'] = df['Tmax'].clip(lower=0)
         if 'Tmin' in df.columns:
             df['Tmin'] = pd.to_numeric(df['Tmin'], errors='coerce')
         if 'Tavg' in df.columns:
@@ -1691,34 +1689,42 @@ def comparison_with_acis(request):
             else:
                 df['RH'] = pd.to_numeric(df['RH'], errors='coerce').fillna(65.0)
             
-            # Calculate extraterrestrial radiation
-            df['Ra'] = df.apply(
-                lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), 
-                axis=1
-            )
+            # Calculate extraterrestrial radiation (vectorized; major speedup)
+            df['Ra'] = calculate_extraterrestrial_radiation_vec(latitude, df['day_of_year'].to_numpy())
+        else:
+            # Session may include partial weather + partial ET; ensure required drivers exist
+            # for any still-missing ET method columns.
+            if 'Tavg' not in df.columns and {'Tmax', 'Tmin'}.issubset(df.columns):
+                df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
+            if 'Rs' not in df.columns and {'Tmax', 'Tmin'}.issubset(df.columns):
+                df['Rs'] = (df['Tmax'] - df['Tmin']) * 0.16 * np.sqrt(12)
+            if 'u2' not in df.columns:
+                if 'Wind_Speed' in df.columns:
+                    df['u2'] = df['Wind_Speed']
+                else:
+                    df['u2'] = 2.0
+            if 'RH' not in df.columns:
+                df['RH'] = 65.0
+            else:
+                df['RH'] = pd.to_numeric(df['RH'], errors='coerce').fillna(65.0)
+            if 'Ra' not in df.columns and 'day_of_year' in df.columns:
+                df['Ra'] = calculate_extraterrestrial_radiation_vec(latitude, df['day_of_year'].to_numpy())
         
         # Calculate ET using all four methods (only if not already present)
         if 'ET_PT' not in df.columns:
             try:
-                df['Rn'] = df.apply(
-                    lambda row: net_radiation_estimate(row['Rs'], row['Tmax'], row['Tmin'], row['Ra'], row['RH'], elevation=766),
-                    axis=1
+                df['Rn'] = net_radiation_estimate_vec(
+                    df['Rs'], df['Tmax'], df['Tmin'], df['Ra'], df['RH'], elevation=766
                 )
-                df['ET_PT'] = df.apply(
-                    lambda row: priestley_taylor_ET(row['Tavg'], row['Rn']),
-                    axis=1
-                )
+                df['ET_PT'] = priestley_taylor_ET_vec(df['Tavg'], df['Rn'])
             except Exception as e:
                 print(f"PT calculation failed: {e}")
                 df['ET_PT'] = np.nan
         
         if 'ET_PM' not in df.columns:
             try:
-                df['ET_PM'] = df.apply(
-                    lambda row: penman_monteith_ET(
-                        max(row['Tmax'], 0), row['Tmin'], row['RH'], row['u2'], row['Rs'], row['Ra'], elevation=766
-                    ), 
-                    axis=1
+                df['ET_PM'] = penman_monteith_ET_vec(
+                    df['Tmax_clamped'], df['Tmin'], df['RH'], df['u2'], df['Rs'], df['Ra'], elevation=766
                 )
             except Exception as e:
                 print(f"PM calculation failed: {e}")
@@ -1726,25 +1732,14 @@ def comparison_with_acis(request):
         
         if 'ET_Maule' not in df.columns:
             try:
-                df['ET_Maule'] = df.apply(
-                    lambda row: maule_ET(
-                        max(row['Tmax'], 0),
-                        row['Tmin'],
-                        row['Rs'], 
-                        row['RH'] if not pd.isna(row['RH']) else None
-                    ), 
-                    axis=1
-                )
+                df['ET_Maule'] = maule_ET_vec(df['Tmax_clamped'], df['Tmin'], df['Rs'], df['RH'], latitude=latitude)
             except Exception as e:
                 print(f"Maule calculation failed: {e}")
                 df['ET_Maule'] = np.nan
         
         if 'ET_Hargreaves' not in df.columns:
             try:
-                df['ET_Hargreaves'] = df.apply(
-                    lambda row: hargreaves_ET(max(row['Tmax'], 0), row['Tmin'], row['Ra']), 
-                    axis=1
-                )
+                df['ET_Hargreaves'] = hargreaves_ET_vec(df['Tmax_clamped'], df['Tmin'], df['Ra'], latitude=latitude)
             except Exception as e:
                 print(f"Hargreaves calculation failed: {e}")
                 df['ET_Hargreaves'] = np.nan
@@ -1960,19 +1955,19 @@ def comparison_with_acis(request):
             print(f"Plot rendering fallback enabled: {plot_error}")
             plot_warning = "Using browser-rendered charts."
         
-        # Prepare data for rendering with unit conversion
-        et_data = []
-        for _, row in df.iterrows():
-            data_row = {'Date': row['Date']}
-            
-            for method in available_methods:
-                col = f'ET_{method}'
-                val = row[col] if not pd.isna(row[col]) else 0
-                if selected_unit == 'inches' and val:
-                    val = convert_units(val, 'mm', 'inches')
-                data_row[f'ET_{method}'] = round(val, unit_info['decimal_places']) if val else 0
-            
-            et_data.append(data_row)
+        # Prepare data for rendering with unit conversion (avoid slow iterrows)
+        et_cols = [f'ET_{m}' for m in available_methods if f'ET_{m}' in df.columns]
+        table_df = df[['Date'] + et_cols].copy()
+        for col in et_cols:
+            table_df[col] = pd.to_numeric(table_df[col], errors='coerce').fillna(0.0)
+            if selected_unit == 'inches':
+                table_df[col] = table_df[col].apply(
+                    lambda v: convert_units(v, 'mm', 'inches') if v else 0.0
+                )
+            table_df[col] = table_df[col].apply(
+                lambda v: round(float(v), unit_info['decimal_places']) if v else 0
+            )
+        et_data = table_df.to_dict('records')
     
     except Exception as e:
         print(f"Calculation error: {e}")
@@ -1992,13 +1987,10 @@ def comparison_with_acis(request):
         'plot_url': plot_url,
         'plot_warning': plot_warning,
         'growing_season_plots': growing_season_plots,
-        'forecast_data': forecast_data,
         'selected_unit': selected_unit,
         'unit_info': unit_info,
         'acis_location': location_info,
         'available_methods': available_methods,
-        'env_canada_forecast': env_canada_forecast,
-        'ec_city_name': ec_city_name,
     }
     
     return render(request, 'et/comparison.html', context)
@@ -2245,6 +2237,34 @@ def _pt_daily_et_from_temperature(tmax, tmin, latitude, day_of_year):
     et_pt = priestley_taylor_ET(tavg, rn)
     return max(float(et_pt), 0.0) if not pd.isna(et_pt) else 0.0
 
+
+def _pm_daily_et_from_temperature(tmax, tmin, latitude, day_of_year, rh=65.0, u2=2.0, elevation=766):
+    """
+    Penman–Monteith (FAO-56) daily ET0 using the same simple radiation
+    parameterization as the previous PT forecast helper (Hargreaves-style Rs from temps).
+    """
+    tmax_c = max(float(tmax), 0.0)
+    tmin_c = float(tmin)
+    rh_use = 65.0
+    if rh is not None and not pd.isna(rh):
+        try:
+            rh_use = float(rh)
+        except (TypeError, ValueError):
+            rh_use = 65.0
+    ra = calculate_extraterrestrial_radiation(latitude, int(day_of_year))
+    temp_range = max(tmax_c - tmin_c, 0.5)
+    rs = 0.16 * np.sqrt(temp_range) * ra
+    et0 = penman_monteith_ET(
+        tmax_c,
+        tmin_c,
+        float(rh_use),
+        float(u2),
+        float(rs),
+        float(ra),
+        elevation=elevation,
+    )
+    return max(float(et0), 0.0) if not pd.isna(et0) else 0.0
+
 def env_canada_forecast_view(request):
     """
     Standalone view to display Environment Canada precipitation forecast
@@ -2321,18 +2341,20 @@ def env_canada_forecast_view(request):
                 temp_high = safe_temp_convert(row['Temp_High'])
                 temp_low = safe_temp_convert(row['Temp_Low'])
                 precip = safe_temp_convert(row['Precipitation_mm'])
+                rh_pct = safe_temp_convert(row.get('RH_percent'))
                 
                 forecast_dict = {
                     'Date': row['Date'],
                     'Period': row['Period'],
                     'Temp_High': temp_high,
                     'Temp_Low': temp_low,
+                    'RH_percent': rh_pct,
                     'Precipitation_mm': precip if precip is not None else 0.0,
                     'Forecast': str(row['Forecast']) if row['Forecast'] else ''
                 }
                 df_forecast.append(forecast_dict)
             
-            # PT + GDD recommendation on current forecast.
+            # Penman–Monteith + GDD recommendation on current forecast.
             total_precip = sum([f['Precipitation_mm'] for f in df_forecast])
             lat, lon = _resolve_city_lat_lon(city_name)
             _ = lon  # keep for potential future logging/use
@@ -2350,11 +2372,13 @@ def env_canada_forecast_view(request):
                     continue
                 d = pd.to_datetime(item["Date"])
                 day_of_year = d.dayofyear
-                et_pt = _pt_daily_et_from_temperature(float(tmax), float(tmin), lat, day_of_year)
+                et0 = _pm_daily_et_from_temperature(
+                    float(tmax), float(tmin), lat, day_of_year, rh=item.get("RH_percent")
+                )
                 daily_gdd = calculate_daily_gdd(float(tmax), float(tmin))
                 cumulative_gdd += daily_gdd
                 stage_factor, current_stage_label = gdd_stage_factor(cumulative_gdd, crop_type)
-                adjusted_et = et_pt * stage_factor
+                adjusted_et = et0 * stage_factor
                 estimated_et_total += adjusted_et
                 daily_irrig = max(adjusted_et - max(float(item["Precipitation_mm"]), 0.0), 0.0)
                 running_irrig += daily_irrig
@@ -2376,7 +2400,7 @@ def env_canada_forecast_view(request):
                 selected_days,
                 crop_type,
                 _resolve_city_lat_lon,
-                _pt_daily_et_from_temperature,
+                _pm_daily_et_from_temperature,
             )
             forecast_curve_soil_adjusted = [v * soil_factor for v in forecast_irrig_curve]
             rec_chart_url = build_irrigation_confidence_plot(

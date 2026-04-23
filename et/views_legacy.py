@@ -2156,6 +2156,34 @@ def _pt_daily_et_from_temperature(tmax, tmin, latitude, day_of_year):
     et_pt = priestley_taylor_ET(tavg, rn)
     return max(float(et_pt), 0.0) if not pd.isna(et_pt) else 0.0
 
+
+def _pm_daily_et_from_temperature(tmax, tmin, latitude, day_of_year, rh=65.0, u2=2.0, elevation=766):
+    """
+    Penman–Monteith (FAO-56) daily ET0 using the same simple radiation
+    parameterization as the previous PT forecast helper (Hargreaves-style Rs from temps).
+    """
+    tmax_c = max(float(tmax), 0.0)
+    tmin_c = float(tmin)
+    rh_use = 65.0
+    if rh is not None and not pd.isna(rh):
+        try:
+            rh_use = float(rh)
+        except (TypeError, ValueError):
+            rh_use = 65.0
+    ra = calculate_extraterrestrial_radiation(latitude, int(day_of_year))
+    temp_range = max(tmax_c - tmin_c, 0.5)
+    rs = 0.16 * np.sqrt(temp_range) * ra
+    et0 = penman_monteith_ET(
+        tmax_c,
+        tmin_c,
+        float(rh_use),
+        float(u2),
+        float(rs),
+        float(ra),
+        elevation=elevation,
+    )
+    return max(float(et0), 0.0) if not pd.isna(et0) else 0.0
+
 def env_canada_forecast_view(request):
     """
     Standalone view to display Environment Canada precipitation forecast
@@ -2235,12 +2263,14 @@ def env_canada_forecast_view(request):
                 temp_high = safe_temp_convert(row['Temp_High'])
                 temp_low = safe_temp_convert(row['Temp_Low'])
                 precip = safe_temp_convert(row['Precipitation_mm'])
+                rh_pct = safe_temp_convert(row.get('RH_percent'))
                 
                 forecast_dict = {
                     'Date': row['Date'],
                     'Period': row['Period'],
                     'Temp_High': temp_high,
                     'Temp_Low': temp_low,
+                    'RH_percent': rh_pct,
                     'Precipitation_mm': precip if precip is not None else 0.0,
                     'Forecast': str(row['Forecast']) if row['Forecast'] else ''
                 }
@@ -2270,7 +2300,7 @@ def env_canada_forecast_view(request):
                         'total_precip_mm': total_precip_week,
                     })
             
-            # PT + GDD recommendation on current forecast.
+            # Penman–Monteith + GDD recommendation on current forecast.
             total_precip = sum([f['Precipitation_mm'] for f in df_forecast])
             lat, lon = _resolve_city_lat_lon(city_name)
             _ = lon  # keep for potential future logging/use
@@ -2288,11 +2318,13 @@ def env_canada_forecast_view(request):
                     continue
                 d = pd.to_datetime(item["Date"])
                 day_of_year = d.dayofyear
-                et_pt = _pt_daily_et_from_temperature(float(tmax), float(tmin), lat, day_of_year)
+                et0 = _pm_daily_et_from_temperature(
+                    float(tmax), float(tmin), lat, day_of_year, rh=item.get("RH_percent")
+                )
                 daily_gdd = calculate_daily_gdd(float(tmax), float(tmin))
                 cumulative_gdd += daily_gdd
                 stage_factor, current_stage_label = gdd_stage_factor(cumulative_gdd, crop_type)
-                adjusted_et = et_pt * stage_factor
+                adjusted_et = et0 * stage_factor
                 estimated_et_total += adjusted_et
                 daily_irrig = max(adjusted_et - max(float(item["Precipitation_mm"]), 0.0), 0.0)
                 running_irrig += daily_irrig
@@ -2314,7 +2346,7 @@ def env_canada_forecast_view(request):
                 selected_days,
                 crop_type,
                 _resolve_city_lat_lon,
-                _pt_daily_et_from_temperature,
+                _pm_daily_et_from_temperature,
             )
             forecast_curve_soil_adjusted = [v * soil_factor for v in forecast_irrig_curve]
             rec_chart_url = build_irrigation_confidence_plot(

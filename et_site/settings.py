@@ -113,3 +113,12 @@ SESSION_FILE_PATH = os.environ.get("DJANGO_SESSION_FILE_PATH", default_session_d
 os.makedirs(SESSION_FILE_PATH, exist_ok=True)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# In-process cache (per web worker) for small, frequently-hit forecast URLs.
+# For multi-worker production this is still effective at reducing hot-path latency.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "et-locmem",
+    }
+}

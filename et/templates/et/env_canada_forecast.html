@@ -498,7 +498,7 @@
             Use this as planning guidance. Adjust by crop stage, soil type, and local field conditions.
         </p>
         <p style="margin-top:8px; color:#5b6f70; font-size:0.86rem;">
-            Basis: daily ET is computed with Priestley-Taylor, then adjusted by GDD-based crop stage. Irrigation recommendation is the cumulative positive difference between adjusted ET and forecast precipitation.
+            Basis: daily reference evapotranspiration (ET₀) uses the FAO-56 Penman–Monteith equation with a simple temperature-based estimate of incoming solar radiation, <strong>relative humidity from the Environment Canada city forecast when it is present in the feed</strong> (otherwise a 65% placeholder for that day), and 2 m wind speed held at 2.0 m/s. ET₀ is then scaled by a growing-degree-day crop stage factor. The irrigation suggestion sums, day by day, only the shortfall when adjusted ET exceeds forecast precipitation (no credit for “extra” rain beyond the daily ET need in this simple ledger).
         </p>
         {% if historical_confidence %}
         <p style="margin-top:8px; color:#5b6f70; font-size:0.86rem;">
@@ -586,6 +586,17 @@
                             {{ forecast.Temp_Low|floatformat:0 }}°C
                         {% else %}
                             <span style="font-size: 0.85rem; color: #999;">Not Available</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-label">Rel. humidity (forecast)</div>
+                    <div class="stat-value">
+                        {% if forecast.RH_percent is not None %}
+                            {{ forecast.RH_percent|floatformat:0 }}%
+                        {% else %}
+                            <span style="font-size: 0.85rem; color: #999;">Not in feed</span>
                         {% endif %}
                     </div>
                 </div>
@@ -711,16 +722,17 @@ function downloadForecastCSV() {
     
     const forecasts = JSON.parse(forecastDataElement.textContent);
     
-    let csv = 'Date,Period,High (°C),Low (°C),Precipitation (mm),Forecast\n';
+    let csv = 'Date,Period,High (°C),Low (°C),RH (%),Precipitation (mm),Forecast\n';
     
     forecasts.forEach(f => {
         const date = new Date(f.Date).toISOString().split('T')[0];
         const high = f.Temp_High !== null ? f.Temp_High : 'Not Available';
         const low = f.Temp_Low !== null ? f.Temp_Low : 'Not Available';
+        const rh = f.RH_percent !== null && f.RH_percent !== undefined ? f.RH_percent : 'Not Available';
         const precip = (f.Precipitation_mm || 0).toFixed(1);
         const forecast = (f.Forecast || '').replace(/"/g, '""');
         
-        csv += `"${date}","${f.Period}","${high}","${low}","${precip}","${forecast}"\n`;
+        csv += `"${date}","${f.Period}","${high}","${low}","${rh}","${precip}","${forecast}"\n`;
     });
     
     const blob = new Blob([csv], { type: 'text/csv' });

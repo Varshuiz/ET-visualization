@@ -151,7 +151,7 @@ def safe_year_shift_date(base_date, year):
         return (base_date - timedelta(days=1)).replace(year=year)
 
 
-def build_historical_confidence(city_name, forecast_days, crop_type, resolve_city_lat_lon, pt_daily_et_func):
+def build_historical_confidence(city_name, forecast_days, crop_type, resolve_city_lat_lon, daily_et_func):
     lat, lon = resolve_city_lat_lon(city_name)
     sample_points = [
         (lat, lon),
@@ -185,10 +185,10 @@ def build_historical_confidence(city_name, forecast_days, crop_type, resolve_cit
                 cumulative_irrig = []
                 for _, row in hdf.head(forecast_days).iterrows():
                     day_of_year = pd.to_datetime(row["Date"]).dayofyear
-                    et_pt = pt_daily_et_func(float(row["Tmax"]), float(row["Tmin"]), p_lat, day_of_year)
+                    et0 = daily_et_func(float(row["Tmax"]), float(row["Tmin"]), p_lat, day_of_year)
                     cumulative_gdd += calculate_daily_gdd(float(row["Tmax"]), float(row["Tmin"]))
                     stage_factor, _ = gdd_stage_factor(cumulative_gdd, crop_type)
-                    adjusted_et = et_pt * stage_factor
+                    adjusted_et = et0 * stage_factor
                     irrig_req = max(adjusted_et - max(float(row["Precipitation"]), 0.0), 0.0)
                     running_irrig += irrig_req
                     cumulative_irrig.append(running_irrig)

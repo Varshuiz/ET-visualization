@@ -188,7 +188,7 @@ class EnvironmentCanadaScraper:
         Returns
         -------
         pandas.DataFrame with columns:
-            Date, Period, Temp_High, Temp_Low, Precipitation_mm, Forecast
+            Date, Period, Temp_High, Temp_Low, RH_percent, Precipitation_mm, Forecast
         """
         try:
             site_code = self.get_location_code(city_name)
@@ -232,10 +232,15 @@ class EnvironmentCanadaScraper:
                     if precip == 0.0:
                         precip = self._extract_precipitation(full_text)
 
+                    rh = self._xml_relative_humidity(fc)
+                    if rh is None:
+                        rh = self._extract_relative_humidity(full_text)
+
                     forecast_data.append({
                         'Period': period_name,
                         'Temp_High': temp_high,
                         'Temp_Low': temp_low,
+                        'RH_percent': rh,
                         'Precipitation_mm': precip,
                         'Forecast': full_text,
                     })
@@ -281,8 +286,9 @@ class EnvironmentCanadaScraper:
         Build extended day-level outlook from ECCC climate-daily recent observations.
         This is a climate-based estimate when citypage forecast horizon is exceeded.
         """
+        empty_cols = ["Date", "Period", "Temp_High", "Temp_Low", "RH_percent", "Precipitation_mm", "Forecast"]
         if extra_days <= 0:
-            return pd.DataFrame(columns=["Date", "Period", "Temp_High", "Temp_Low", "Precipitation_mm", "Forecast"])
+            return pd.DataFrame(columns=empty_cols)
 
         lat, lon = self._resolve_city_coords(city_name)
         bbox = f"{lon - 0.3},{lat - 0.3},{lon + 0.3},{lat + 0.3}"
@@ -299,7 +305,7 @@ class EnvironmentCanadaScraper:
             r.raise_for_status()
             features = r.json().get("features", [])
         except Exception:
-            return pd.DataFrame(columns=["Date", "Period", "Temp_High", "Temp_Low", "Precipitation_mm", "Forecast"])
+            return pd.DataFrame(columns=empty_cols)
 
         rows = []
         for feat in features:
@@ -325,11 +331,11 @@ class EnvironmentCanadaScraper:
             )
 
         if not rows:
-            return pd.DataFrame(columns=["Date", "Period", "Temp_High", "Temp_Low", "Precipitation_mm", "Forecast"])
+            return pd.DataFrame(columns=empty_cols)
 
         hist_df = pd.DataFrame(rows).sort_values(["Date", "distance_sq"]).groupby("Date", as_index=False).first()
         if hist_df.empty:
-            return pd.DataFrame(columns=["Date", "Period", "Temp_High", "Temp_Low", "Precipitation_mm", "Forecast"])
+            return pd.DataFrame(columns=empty_cols)
 
         hist_df["dow"] = pd.to_datetime(hist_df["Date"]).dt.dayofweek
         dow_stats = hist_df.groupby("dow").agg(
@@ -361,6 +367,8 @@ class EnvironmentCanadaScraper:
                     "Period": f"{d.strftime('%A')} (Extended)",
                     "Temp_High": None if pd.isna(tmax) else float(tmax),
                     "Temp_Low": None if pd.isna(tmin) else float(tmin),
+                    # Climate-daily extension does not currently carry RH; leave blank for PM to use other fallbacks upstream.
+                    "RH_percent": None,
                     "Precipitation_mm": max(float(precip), 0.0) if not pd.isna(precip) else 0.0,
                     "Forecast": "Extended outlook derived from recent ECCC climate-daily station patterns.",
                 }
@@ -396,6 +404,42 @@ class EnvironmentCanadaScraper:
             except (TypeError, ValueError):
                 pass
         return total
+
+    def _xml_relative_humidity(self, forecast_el):
+        """
+        Best-effort relative humidity (%) extraction from MSC citypage XML.
+
+        Citypage schemas vary; we scan descendant elements for plausible humidity fields.
+        """
+        candidates = []
+        for el in forecast_el.iter():
+            tag = (el.tag or "").lower()
+            if "humid" not in tag and "rh" not in tag:
+                continue
+            # Common patterns: <humidity units="%">65</humidity> or attributes
+            txt = (el.text or "").strip()
+            if txt:
+                try:
+                    candidates.append(float(txt))
+                except (TypeError, ValueError):
+                    pass
+            for attr in ("value", "percent", "humidity", "rh"):
+                val = el.get(attr)
+                if val is None:
+                    continue
+                try:
+                    candidates.append(float(val))
+                except (TypeError, ValueError):
+                    pass
+        if not candidates:
+            return None
+        # If multiple values exist (e.g., daytime/nighttime), use a simple mean.
+        rh = float(np.mean(candidates))
+        if rh > 1.0:  # assume percent
+            rh = max(0.0, min(rh, 100.0))
+        else:  # rare fractional form
+            rh = max(0.0, min(rh * 100.0, 100.0))
+        return rh
 
     # ------------------------------------------------------------------
     # Day grouping
@@ -433,6 +477,7 @@ class EnvironmentCanadaScraper:
                     'day_name':       day_name,
                     'temp_high':      None,
                     'temp_low':       None,
+                    'rh_values':      [],
                     'precipitation':  0.0,
                     'forecast_parts': [],
                 }
@@ -445,6 +490,12 @@ class EnvironmentCanadaScraper:
                     daily_data[day_name]['temp_high'] = row['Temp_High']
 
             daily_data[day_name]['precipitation'] += row['Precipitation_mm']
+            rh = row.get('RH_percent', None)
+            if rh is not None and not pd.isna(rh):
+                try:
+                    daily_data[day_name]['rh_values'].append(float(rh))
+                except (TypeError, ValueError):
+                    pass
             if row['Forecast']:
                 daily_data[day_name]['forecast_parts'].append(row['Forecast'])
 
@@ -454,11 +505,14 @@ class EnvironmentCanadaScraper:
 
         result_data = []
         for i, day_data in enumerate(day_values):
+            rh_vals = day_data.get('rh_values') or []
+            rh_day = float(np.mean(rh_vals)) if rh_vals else None
             result_data.append({
                 'Date':             today + timedelta(days=i),
                 'Period':           day_data['day_name'],
                 'Temp_High':        day_data['temp_high'],
                 'Temp_Low':         day_data['temp_low'],
+                'RH_percent':       rh_day,
                 'Precipitation_mm': day_data['precipitation'],
                 'Forecast':         ' '.join(day_data['forecast_parts']),
             })
@@ -494,6 +548,26 @@ class EnvironmentCanadaScraper:
             return 20.0 if 'heavy' in t else (3.0 if 'light' in t else 8.0)
 
         return 0.0
+
+    def _extract_relative_humidity(self, text):
+        """Extract relative humidity (%) from forecast text as a fallback."""
+        if not text:
+            return None
+        patterns = [
+            r"relative\s+humidity[^0-9]{0,12}(\d{1,3})\s*%",
+            r"humidity[^0-9]{0,12}(\d{1,3})\s*%",
+            r"\brh\b[^0-9]{0,12}(\d{1,3})\s*%",
+            r"\b(\d{1,3})\s*%\s*relative\s+humidity",
+        ]
+        for pat in patterns:
+            m = re.search(pat, text, re.I)
+            if m:
+                try:
+                    rh = float(m.group(1))
+                    return max(0.0, min(rh, 100.0))
+                except (TypeError, ValueError):
+                    continue
+        return None
 
     def _extract_temperatures(self, text):
         """Extract high/low temperatures from forecast text as a fallback."""
