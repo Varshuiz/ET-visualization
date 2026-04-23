@@ -581,7 +581,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Unit toggle functionality
@@ -634,7 +633,6 @@ function renderFallbackCharts() {
         {% endfor %}
     ];
 
-    const labels = rows.map(r => r.date);
     const colors = {
         PT: '#1F77B4',
         PM: '#D62728',
@@ -649,60 +647,122 @@ function renderFallbackCharts() {
     };
 
     const methods = ['PT', 'PM', 'Maule', 'Hargreaves'].filter(m => rows.some(r => r[m] !== undefined));
-    const datasets = methods.map(method => ({
-        label: methodNames[method],
-        data: rows.map(r => r[method] ?? null),
-        borderColor: colors[method],
-        backgroundColor: colors[method],
-        tension: 0.25,
-        spanGaps: true,
-        pointRadius: 0,
-        borderWidth: 2,
-    }));
-
-    new Chart(mainCanvas, {
-        type: 'line',
-        data: { labels, datasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'top' } },
-            scales: {
-                x: { ticks: { maxTicksLimit: 10 } },
-                y: { title: { display: true, text: 'ET ({{ unit_info.daily_label }})' } }
-            }
-        }
-    });
+    if (!methods.length || !rows.length) return;
 
     const reference = methods.includes('PM') ? 'PM' : methods[0];
-    const diffDatasets = methods
+    const mainSeries = methods.map(method => ({
+        label: methodNames[method],
+        color: colors[method],
+        values: rows.map(r => (r[method] == null ? null : Number(r[method])))
+    }));
+    const diffSeries = methods
         .filter(m => m !== reference)
         .map(method => ({
             label: `|${methodNames[reference]} - ${methodNames[method]}|`,
-            data: rows.map(r => {
+            color: colors[method],
+            values: rows.map(r => {
                 if (r[reference] == null || r[method] == null) return null;
-                return Math.abs(r[reference] - r[method]);
-            }),
-            borderColor: colors[method],
-            backgroundColor: colors[method],
-            tension: 0.25,
-            spanGaps: true,
-            pointRadius: 0,
-            borderWidth: 2,
+                return Math.abs(Number(r[reference]) - Number(r[method]));
+            })
         }));
 
-    new Chart(diffCanvas, {
-        type: 'line',
-        data: { labels, datasets: diffDatasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'top' } },
-            scales: {
-                x: { ticks: { maxTicksLimit: 10 } },
-                y: { title: { display: true, text: 'Difference ({{ unit_info.daily_label }})' } }
+    drawSimpleLineChart(mainCanvas, rows.map(r => r.date), mainSeries, 'ET ({{ unit_info.daily_label }})');
+    drawSimpleLineChart(diffCanvas, rows.map(r => r.date), diffSeries, 'Difference ({{ unit_info.daily_label }})');
+}
+
+function drawSimpleLineChart(canvas, labels, series, yLabel) {
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(600, Math.floor(rect.width || 900));
+    const height = 360;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    canvas.style.height = `${height}px`;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.clearRect(0, 0, width, height);
+    if (!series.length) return;
+
+    const pad = { top: 20, right: 20, bottom: 42, left: 56 };
+    const plotW = width - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+    const vals = series.flatMap(s => s.values.filter(v => v != null));
+    if (!vals.length) return;
+    let minY = Math.min(...vals);
+    let maxY = Math.max(...vals);
+    if (minY === maxY) {
+        minY -= 1;
+        maxY += 1;
+    }
+    const xFor = i => pad.left + (i / Math.max(labels.length - 1, 1)) * plotW;
+    const yFor = v => pad.top + (1 - (v - minY) / (maxY - minY)) * plotH;
+
+    // grid
+    ctx.strokeStyle = '#e7efef';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const y = pad.top + (i / 4) * plotH;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(width - pad.right, y);
+        ctx.stroke();
+    }
+
+    // axes
+    ctx.strokeStyle = '#9ab4b6';
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top);
+    ctx.lineTo(pad.left, height - pad.bottom);
+    ctx.lineTo(width - pad.right, height - pad.bottom);
+    ctx.stroke();
+
+    // y label
+    ctx.fillStyle = '#5e6f72';
+    ctx.font = '12px Arial';
+    ctx.fillText(yLabel, 8, 16);
+
+    // x ticks (sparse)
+    const tickCount = Math.min(6, labels.length);
+    for (let t = 0; t < tickCount; t++) {
+        const idx = Math.floor((t / Math.max(tickCount - 1, 1)) * (labels.length - 1));
+        const x = xFor(idx);
+        ctx.fillStyle = '#6b7f81';
+        ctx.font = '11px Arial';
+        ctx.fillText(labels[idx], x - 28, height - 20);
+    }
+
+    // series lines
+    series.forEach(s => {
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        let started = false;
+        s.values.forEach((v, i) => {
+            if (v == null) return;
+            const x = xFor(i);
+            const y = yFor(v);
+            if (!started) {
+                ctx.moveTo(x, y);
+                started = true;
+            } else {
+                ctx.lineTo(x, y);
             }
-        }
+        });
+        ctx.stroke();
+    });
+
+    // legend
+    let lx = pad.left;
+    const ly = height - 8;
+    series.forEach(s => {
+        ctx.fillStyle = s.color;
+        ctx.fillRect(lx, ly - 9, 10, 4);
+        lx += 14;
+        ctx.fillStyle = '#445a5d';
+        ctx.font = '11px Arial';
+        ctx.fillText(s.label, lx, ly - 5);
+        lx += ctx.measureText(s.label).width + 14;
     });
 }
 
