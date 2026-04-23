@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import tempfile
 try:
     import dj_database_url
 except ImportError:
@@ -107,6 +108,8 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # Use file-based server-side sessions for larger workflow payloads
 # without DB writes and without in-memory deepcopy behavior.
 SESSION_ENGINE = "django.contrib.sessions.backends.file"
-SESSION_FILE_PATH = os.environ.get("DJANGO_SESSION_FILE_PATH", "/tmp/django_sessions")
+default_session_dir = os.path.join(tempfile.gettempdir(), "django_sessions")
+SESSION_FILE_PATH = os.environ.get("DJANGO_SESSION_FILE_PATH", default_session_dir)
+os.makedirs(SESSION_FILE_PATH, exist_ok=True)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
