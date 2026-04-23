@@ -81,9 +81,10 @@ class ETPlannerViewTests(TestCase):
             "total_p90": 3.0,
         },
     )
+    @patch("et.views.merge_openmeteo_forecast_drivers", side_effect=lambda df, lat, lon: df)
     @patch("et.environment_canada_scraper.fetch_env_canada_forecast")
     def test_forecast_post_uses_crop_and_soil_selection(
-        self, mock_fetch_forecast, _mock_hist, _mock_plot
+        self, mock_fetch_forecast, _mock_merge, _mock_hist, _mock_plot
     ):
         mock_fetch_forecast.return_value = pd.DataFrame(
             {

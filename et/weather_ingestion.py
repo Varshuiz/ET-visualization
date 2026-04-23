@@ -4,6 +4,23 @@ import requests
 from .eccc_weather import add_eccc_rh_to_dataframe
 
 
+def kmh_max_wind_to_u2_ms(wind_kmh_max):
+    """
+    Convert a daily maximum 10 m wind speed (km/h) to 2 m wind speed u2 (m/s),
+    matching the Open-Meteo historical pipeline in this project.
+    """
+    if wind_kmh_max is None or pd.isna(wind_kmh_max):
+        return None
+    try:
+        kmh = float(wind_kmh_max)
+    except (TypeError, ValueError):
+        return None
+    if kmh < 0:
+        return None
+    u10_ms = kmh / 3.6
+    return float(u10_ms * 0.748)
+
+
 def fetch_openmeteo_historical_data(latitude, longitude, start_date, end_date):
     """Fetch historical daily weather data from Open-Meteo archive API."""
     url = "https://archive-api.open-meteo.com/v1/archive"
@@ -50,9 +67,10 @@ def fetch_openmeteo_historical_data(latitude, longitude, start_date, end_date):
     if df.empty:
         raise ValueError("No usable daily records returned from Open-Meteo")
 
-    u10_ms = df["Wind_Speed_kmh"].fillna(0) / 3.6
-    df["Wind_Speed"] = u10_ms * 0.748
-    df["u2"] = df["Wind_Speed"]
+    df["u2"] = pd.to_numeric(
+        df["Wind_Speed_kmh"].map(kmh_max_wind_to_u2_ms), errors="coerce"
+    ).fillna(0.0)
+    df["Wind_Speed"] = df["u2"]
     # Prefer ECCC RH where available for matching dates/stations.
     df = add_eccc_rh_to_dataframe(df, latitude=latitude, longitude=longitude, prefer_eccc=True)
     df["RH"] = df["RH"].fillna(65.0)

@@ -405,6 +405,9 @@
                 30 Days
             </button>
         </div>
+        <p style="margin: 14px 0 0 0; font-size: 0.88rem; color: #5a6570; max-width: 920px;">
+            <strong>Note:</strong> horizons <strong>longer than 7 days</strong> often blend the MSC city forecast with statistically extended days. <strong>Week two and beyond</strong> should be read as <em>high-uncertainty planning context</em>, not a precise irrigation prescription—use the chart’s grey band and the range under “Suggested irrigation” when applicable.
+        </p>
     </div>
 
     <!-- City Selector with Dropdown -->
@@ -473,6 +476,12 @@
     </div>
 
     {% if df_forecast %}
+    {% if show_extended_horizon_caveat %}
+    <div style="margin-bottom: 18px; padding: 14px 18px; background: #fff8e6; border: 1px solid #e8d4a8; border-radius: 10px; color: #4a3d0a;">
+        <strong>Extended horizon ({{ selected_days }} days):</strong>
+        totals after day 7 mix operational forecast with extension and are <strong>much less certain</strong> than a one-week outlook. Prefer the <strong>teal line vs grey band</strong> on the chart, and the <strong>historical cumulative range</strong> below, over a single headline millimetre value.
+    </div>
+    {% endif %}
     <!-- Summary -->
     <div class="summary-box">
         <h2>{{ total_precip|floatformat:1 }} mm</h2>
@@ -506,6 +515,13 @@
             <div class="recommendation-item">
                 <strong>Suggested Irrigation</strong>
                 {{ irrigation_needed|floatformat:1 }} mm ({{ recommendation_level }})
+                {% if show_extended_horizon_caveat and historical_confidence %}
+                <span style="display:block;margin-top:6px;font-size:0.82rem;color:#5b6f70;font-weight:500;">
+                    Historical analogue spread (same horizon, soil-adjusted curve envelope): about
+                    {{ historical_confidence.total_p10|floatformat:1 }}–{{ historical_confidence.total_p90|floatformat:1 }} mm
+                    (median {{ historical_confidence.total_p50|floatformat:1 }} mm). Your teal line is one deterministic run, not a confidence interval.
+                </span>
+                {% endif %}
             </div>
             <div class="recommendation-item">
                 <strong>Cumulative GDD (base 5C)</strong>
@@ -528,7 +544,7 @@
             Use this as planning guidance. Adjust by crop stage, soil type, and local field conditions.
         </p>
         <p style="margin-top:8px; color:#5b6f70; font-size:0.86rem;">
-            Basis: daily reference evapotranspiration (ET₀) uses the FAO-56 Penman–Monteith equation with a simple temperature-based estimate of incoming solar radiation, <strong>relative humidity from the Environment Canada city forecast when it is present in the feed</strong> (otherwise a 65% placeholder for that day), and 2 m wind speed held at 2.0 m/s.
+            Basis: daily reference evapotranspiration (ET₀) uses the FAO-56 Penman–Monteith equation. <strong>Global shortwave (Rₛ)</strong> uses Open-Meteo <strong>forecast</strong> daily <code>shortwave_radiation_sum</code> (MJ/m²) at the city coordinates when the API returns a value; only if that is missing does the model fall back to a simple temperature-based Rₛ estimate. <strong>Relative humidity</strong> prefers the MSC citypage value when present; otherwise it uses Open-Meteo <strong>relative_humidity_2m_mean</strong> for that date (not a fixed 65%). <strong>u₂</strong> prefers MSC wind (speed/gust, km/h) converted consistently with Open-Meteo <code>wind_speed_10m_max</code>, then Open-Meteo forecast wind if needed; a 2.0 m/s placeholder applies only if both fail.
         </p>
         <p style="margin-top:6px; color:#5b6f70; font-size:0.86rem;">
             <strong>Crop type</strong> picks a crop-specific curve of growing-degree-days (GDD, base 5&nbsp;°C). Each day, GDD from forecast temperatures is added to a running total; that total falls into a growth stage, and a <strong>stage factor</strong> (roughly 0.55–1.25 depending on crop and stage) multiplies ET₀ for that day. That approximates higher crop water use in peak growth and lower in early or late season—it is a simple stage scaling, not a full crop-growth or soil-water model.
@@ -541,8 +557,8 @@
         </p>
         {% if historical_confidence %}
         <p style="margin-top:8px; color:#5b6f70; font-size:0.86rem;">
-            Historical baseline: 5 years x representative nearby sample locations ({{ historical_confidence.scenario_count }} scenarios),
-            shown as 10th-90th percentile confidence range.
+            Historical baseline: 5 years × representative nearby sample locations ({{ historical_confidence.scenario_count }} scenarios),
+            using the same Penman–Monteith helper with Open-Meteo <strong>archive</strong> daily <code>shortwave_radiation_sum</code>, <code>wind_speed_10m_max</code>, and <code>relative_humidity_2m_mean</code> per day (no fixed wind; Rₛ is not temperature-estimated when archive data exist), shown as 10th–90th percentile range.
         </p>
         {% endif %}
     </div>
@@ -552,6 +568,7 @@
         <h3 style="margin-bottom:10px; color:#095256;">Irrigation Confidence Band</h3>
         <p style="margin-bottom:14px; color:#5a6f70; font-size:0.92rem;">
             Grey band shows uncertainty from historical year/location variation. Teal line is your current forecast-based recommendation.
+            {% if show_extended_horizon_caveat %}<strong> Long horizons:</strong> read the band as especially important from week two onward.{% endif %}
         </p>
         <img src="data:image/png;base64,{{ rec_chart_url }}" alt="Irrigation recommendation confidence chart" style="width:100%; border-radius:8px; border:1px solid #d6e4e1;">
         {% if historical_confidence %}
@@ -576,6 +593,11 @@
             <div class="forecast-date">
                 {{ week.start_date|date:"M d, Y" }} - {{ week.end_date|date:"M d, Y" }} ({{ week.days_count }} day{{ week.days_count|pluralize }})
             </div>
+            {% if week.week_index >= 1 %}
+            <p style="margin: 0 0 12px 0; font-size: 0.85rem; color: #8a5a00; background: #fff8e6; padding: 8px 10px; border-radius: 6px; border: 1px solid #f0e0b8;">
+                <strong>Week 2+:</strong> these windows sit in the higher-uncertainty tail of the outlook; treat averages and precipitation as indicative, not operational precision.
+            </p>
+            {% endif %}
             <div class="forecast-stats">
                 <div class="stat-box">
                     <div class="stat-label">Avg High</div>
@@ -630,12 +652,37 @@
                 </div>
 
                 <div class="stat-box">
-                    <div class="stat-label">Rel. humidity (forecast)</div>
+                    <div class="stat-label">Rel. humidity (MSC or Open-Meteo)</div>
                     <div class="stat-value">
                         {% if forecast.RH_percent is not None %}
                             {{ forecast.RH_percent|floatformat:0 }}%
                         {% else %}
-                            <span style="font-size: 0.85rem; color: #999;">Not in feed</span>
+                            <span style="font-size: 0.85rem; color: #999;">Not available</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-label">Solar (Rₛ for PM)</div>
+                    <div class="stat-value">
+                        {% if forecast.Rs_mjm2 is not None %}
+                            {{ forecast.Rs_mjm2|floatformat:1 }} MJ/m²
+                        {% else %}
+                            <span style="font-size: 0.85rem; color: #999;">Temp. estimate</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-label">Wind (u₂ for PM)</div>
+                    <div class="stat-value" style="font-size:1.05rem;">
+                        {% if forecast.u2_ms is not None %}
+                            {{ forecast.u2_ms|floatformat:2 }} m/s
+                            {% if forecast.Wind_kmh_max is not None %}
+                                <span style="display:block;font-size:0.78rem;color:#666;font-weight:500;">(~{{ forecast.Wind_kmh_max|floatformat:0 }} km/h max)</span>
+                            {% endif %}
+                        {% else %}
+                            <span style="font-size: 0.85rem; color: #999;">Not available</span>
                         {% endif %}
                     </div>
                 </div>
@@ -761,17 +808,20 @@ function downloadForecastCSV() {
     
     const forecasts = JSON.parse(forecastDataElement.textContent);
     
-    let csv = 'Date,Period,High (°C),Low (°C),RH (%),Precipitation (mm),Forecast\n';
+    let csv = 'Date,Period,High (°C),Low (°C),RH (%),Rs (MJ/m²),u2 (m/s),Wind max (km/h),Precipitation (mm),Forecast\n';
     
     forecasts.forEach(f => {
         const date = new Date(f.Date).toISOString().split('T')[0];
         const high = f.Temp_High !== null ? f.Temp_High : 'Not Available';
         const low = f.Temp_Low !== null ? f.Temp_Low : 'Not Available';
         const rh = f.RH_percent !== null && f.RH_percent !== undefined ? f.RH_percent : 'Not Available';
+        const rs = f.Rs_mjm2 !== null && f.Rs_mjm2 !== undefined ? Number(f.Rs_mjm2).toFixed(2) : 'Not Available';
+        const u2 = f.u2_ms !== null && f.u2_ms !== undefined ? Number(f.u2_ms).toFixed(2) : 'Not Available';
+        const wkmh = f.Wind_kmh_max !== null && f.Wind_kmh_max !== undefined ? f.Wind_kmh_max : 'Not Available';
         const precip = (f.Precipitation_mm || 0).toFixed(1);
         const forecast = (f.Forecast || '').replace(/"/g, '""');
         
-        csv += `"${date}","${f.Period}","${high}","${low}","${rh}","${precip}","${forecast}"\n`;
+        csv += `"${date}","${f.Period}","${high}","${low}","${rh}","${rs}","${u2}","${wkmh}","${precip}","${forecast}"\n`;
     });
     
     const blob = new Blob([csv], { type: 'text/csv' });

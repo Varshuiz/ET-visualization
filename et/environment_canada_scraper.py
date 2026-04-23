@@ -19,6 +19,7 @@ import time
 import numpy as np
 
 from .location_services import ALBERTA_LOCATIONS
+from .weather_ingestion import kmh_max_wind_to_u2_ms
 
 
 class EnvironmentCanadaScraper:
@@ -188,7 +189,9 @@ class EnvironmentCanadaScraper:
         Returns
         -------
         pandas.DataFrame with columns:
-            Date, Period, Temp_High, Temp_Low, RH_percent, Precipitation_mm, Forecast
+            Date, Period, Temp_High, Temp_Low, RH_percent, Wind_kmh_max, u2_ms,
+            Rs_mjm2 (filled downstream via Open-Meteo merge),
+            Precipitation_mm, Forecast
         """
         try:
             site_code = self.get_location_code(city_name)
@@ -236,11 +239,16 @@ class EnvironmentCanadaScraper:
                     if rh is None:
                         rh = self._extract_relative_humidity(full_text)
 
+                    wind_kmh = self._xml_wind_kmh_max(fc)
+                    if wind_kmh is None:
+                        wind_kmh = self._extract_wind_kmh_max(full_text)
+
                     forecast_data.append({
                         'Period': period_name,
                         'Temp_High': temp_high,
                         'Temp_Low': temp_low,
                         'RH_percent': rh,
+                        'Wind_kmh_max': wind_kmh,
                         'Precipitation_mm': precip,
                         'Forecast': full_text,
                     })
@@ -286,7 +294,10 @@ class EnvironmentCanadaScraper:
         Build extended day-level outlook from ECCC climate-daily recent observations.
         This is a climate-based estimate when citypage forecast horizon is exceeded.
         """
-        empty_cols = ["Date", "Period", "Temp_High", "Temp_Low", "RH_percent", "Precipitation_mm", "Forecast"]
+        empty_cols = [
+            "Date", "Period", "Temp_High", "Temp_Low", "RH_percent",
+            "Wind_kmh_max", "u2_ms", "Rs_mjm2", "Precipitation_mm", "Forecast",
+        ]
         if extra_days <= 0:
             return pd.DataFrame(columns=empty_cols)
 
@@ -367,8 +378,11 @@ class EnvironmentCanadaScraper:
                     "Period": f"{d.strftime('%A')} (Extended)",
                     "Temp_High": None if pd.isna(tmax) else float(tmax),
                     "Temp_Low": None if pd.isna(tmin) else float(tmin),
-                    # Climate-daily extension does not currently carry RH; leave blank for PM to use other fallbacks upstream.
+                    # Climate-daily extension does not carry RH or wind; filled via Open-Meteo merge in the view.
                     "RH_percent": None,
+                    "Wind_kmh_max": None,
+                    "u2_ms": None,
+                    "Rs_mjm2": None,
                     "Precipitation_mm": max(float(precip), 0.0) if not pd.isna(precip) else 0.0,
                     "Forecast": "Extended outlook derived from recent ECCC climate-daily station patterns.",
                 }
@@ -441,6 +455,45 @@ class EnvironmentCanadaScraper:
             rh = max(0.0, min(rh * 100.0, 100.0))
         return rh
 
+    def _xml_wind_kmh_max(self, forecast_el):
+        """
+        Maximum wind speed (km/h) from MSC citypage <wind> blocks in this period.
+
+        Uses the greater of reported speed and gust when both exist (conservative for ET).
+        """
+        vals = []
+        for wnd in forecast_el.findall(".//wind"):
+            for child in list(wnd):
+                tag = (child.tag or "").rsplit("}", 1)[-1].lower()
+                if tag not in ("speed", "gust"):
+                    continue
+                units = (child.get("units") or "").lower()
+                try:
+                    v = float((child.text or "").strip())
+                except (TypeError, ValueError):
+                    continue
+                if "m/s" in units or units == "m_s":
+                    vals.append(v * 3.6)
+                else:
+                    vals.append(v)
+        if not vals:
+            return None
+        return float(max(vals))
+
+    def _extract_wind_kmh_max(self, text):
+        """Extract a representative max wind speed (km/h) from English forecast text."""
+        if not text:
+            return None
+        t = text.lower()
+        vals = []
+        for m in re.finditer(r"gust(?:ing)?\s+to\s+(\d+)\s*km/h", t):
+            vals.append(float(m.group(1)))
+        for m in re.finditer(r"(\d+)\s*km/h", t):
+            vals.append(float(m.group(1)))
+        if not vals:
+            return None
+        return float(max(vals))
+
     # ------------------------------------------------------------------
     # Day grouping
     # ------------------------------------------------------------------
@@ -478,6 +531,7 @@ class EnvironmentCanadaScraper:
                     'temp_high':      None,
                     'temp_low':       None,
                     'rh_values':      [],
+                    'wind_kmh_values': [],
                     'precipitation':  0.0,
                     'forecast_parts': [],
                 }
@@ -496,6 +550,12 @@ class EnvironmentCanadaScraper:
                     daily_data[day_name]['rh_values'].append(float(rh))
                 except (TypeError, ValueError):
                     pass
+            wk = row.get("Wind_kmh_max", None)
+            if wk is not None and not pd.isna(wk):
+                try:
+                    daily_data[day_name]["wind_kmh_values"].append(float(wk))
+                except (TypeError, ValueError):
+                    pass
             if row['Forecast']:
                 daily_data[day_name]['forecast_parts'].append(row['Forecast'])
 
@@ -507,12 +567,18 @@ class EnvironmentCanadaScraper:
         for i, day_data in enumerate(day_values):
             rh_vals = day_data.get('rh_values') or []
             rh_day = float(np.mean(rh_vals)) if rh_vals else None
+            wk_vals = day_data.get("wind_kmh_values") or []
+            wind_kmh_day = float(max(wk_vals)) if wk_vals else None
+            u2_day = kmh_max_wind_to_u2_ms(wind_kmh_day)
             result_data.append({
                 'Date':             today + timedelta(days=i),
                 'Period':           day_data['day_name'],
                 'Temp_High':        day_data['temp_high'],
                 'Temp_Low':         day_data['temp_low'],
                 'RH_percent':       rh_day,
+                'Wind_kmh_max':     wind_kmh_day,
+                'u2_ms':            u2_day,
+                'Rs_mjm2':          None,
                 'Precipitation_mm': day_data['precipitation'],
                 'Forecast':         ' '.join(day_data['forecast_parts']),
             })

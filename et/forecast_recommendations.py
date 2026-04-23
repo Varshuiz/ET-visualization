@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 import requests
 
+from .weather_ingestion import kmh_max_wind_to_u2_ms
+
 
 CROP_GDD_PROFILES = {
     "wheat": [
@@ -127,7 +129,16 @@ def fetch_openmeteo_archive_daily(latitude, longitude, start_date, end_date):
         "longitude": longitude,
         "start_date": start_date,
         "end_date": end_date,
-        "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
+        "daily": ",".join(
+            [
+                "temperature_2m_max",
+                "temperature_2m_min",
+                "precipitation_sum",
+                "wind_speed_10m_max",
+                "relative_humidity_2m_mean",
+                "shortwave_radiation_sum",
+            ]
+        ),
         "timezone": "auto",
     }
     response = requests.get(url, params=params, timeout=45)
@@ -139,9 +150,114 @@ def fetch_openmeteo_archive_daily(latitude, longitude, start_date, end_date):
             "Tmax": pd.to_numeric(daily.get("temperature_2m_max", []), errors="coerce"),
             "Tmin": pd.to_numeric(daily.get("temperature_2m_min", []), errors="coerce"),
             "Precipitation": pd.to_numeric(daily.get("precipitation_sum", []), errors="coerce").fillna(0.0),
+            "Wind_kmh_max": pd.to_numeric(daily.get("wind_speed_10m_max", []), errors="coerce"),
+            "RH_hist": pd.to_numeric(daily.get("relative_humidity_2m_mean", []), errors="coerce"),
+            "Rs_mjm2": pd.to_numeric(daily.get("shortwave_radiation_sum", []), errors="coerce"),
         }
     )
+    df["u2"] = df["Wind_kmh_max"].map(kmh_max_wind_to_u2_ms)
     return df.dropna(subset=["Date", "Tmax", "Tmin"]).reset_index(drop=True)
+
+
+def merge_openmeteo_forecast_drivers(df, latitude, longitude, timeout=30):
+    """
+    Enrich forecast rows using Open-Meteo *forecast* API at the city coordinates:
+
+    - wind_speed_10m_max → u₂ (after km/h → m/s conversion) when MSC wind is missing
+    - relative_humidity_2m_mean → RH_percent when ECCC humidity is missing
+    - shortwave_radiation_sum → Rs_mjm2 (MJ/m²/day) for Penman–Monteith (measured Rs)
+    """
+    if df is None or df.empty:
+        return df
+    out = df.copy()
+    for col in ("Wind_kmh_max", "u2_ms", "RH_percent", "Rs_mjm2"):
+        if col not in out.columns:
+            out[col] = np.nan
+
+    mask_u2 = out["u2_ms"].isna() & out["Wind_kmh_max"].notna()
+    out.loc[mask_u2, "u2_ms"] = out.loc[mask_u2, "Wind_kmh_max"].map(kmh_max_wind_to_u2_ms)
+
+    dates = pd.to_datetime(out["Date"], errors="coerce")
+    if dates.isna().all():
+        return out
+    start = dates.min().strftime("%Y-%m-%d")
+    end = dates.max().strftime("%Y-%m-%d")
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": float(latitude),
+        "longitude": float(longitude),
+        "start_date": start,
+        "end_date": end,
+        "daily": "wind_speed_10m_max,relative_humidity_2m_mean,shortwave_radiation_sum",
+        "timezone": "auto",
+    }
+    try:
+        r = requests.get(url, params=params, timeout=timeout)
+        r.raise_for_status()
+        daily = r.json().get("daily", {})
+        tlist = daily.get("time", [])
+        if not tlist:
+            return out
+        wlist = daily.get("wind_speed_10m_max") or []
+        rhlist = daily.get("relative_humidity_2m_mean") or []
+        rslist = daily.get("shortwave_radiation_sum") or []
+    except Exception:
+        return out
+
+    n = len(tlist)
+
+    def _take(series, i):
+        if i < len(series):
+            return series[i]
+        return None
+
+    wind_by_date = {}
+    rh_by_date = {}
+    rs_by_date = {}
+    for i, t in enumerate(tlist):
+        d = pd.to_datetime(t, errors="coerce")
+        if pd.isna(d):
+            continue
+        key = d.normalize()
+        wv = _take(wlist, i)
+        if wv is not None:
+            try:
+                wind_by_date[key] = float(wv)
+            except (TypeError, ValueError):
+                pass
+        rhv = _take(rhlist, i)
+        if rhv is not None:
+            try:
+                rh_by_date[key] = float(rhv)
+            except (TypeError, ValueError):
+                pass
+        rsv = _take(rslist, i)
+        if rsv is not None:
+            try:
+                rs_by_date[key] = float(rsv)
+            except (TypeError, ValueError):
+                pass
+
+    dnorm = pd.to_datetime(out["Date"], errors="coerce").dt.normalize()
+    fill_kmh = dnorm.map(wind_by_date)
+    fill_u2 = fill_kmh.map(kmh_max_wind_to_u2_ms)
+    still_u2 = out["u2_ms"].isna()
+    out.loc[still_u2, "u2_ms"] = fill_u2.loc[still_u2]
+    still_w = still_u2 & out["Wind_kmh_max"].isna()
+    out.loc[still_w, "Wind_kmh_max"] = fill_kmh.loc[still_w]
+
+    fill_rh = dnorm.map(rh_by_date)
+    still_rh = out["RH_percent"].isna()
+    out.loc[still_rh, "RH_percent"] = fill_rh.loc[still_rh]
+
+    fill_rs = dnorm.map(rs_by_date)
+    out.loc[fill_rs.notna(), "Rs_mjm2"] = fill_rs.loc[fill_rs.notna()]
+    return out
+
+
+def merge_openmeteo_forecast_wind(df, latitude, longitude, timeout=25):
+    """Backward-compatible alias for merge_openmeteo_forecast_drivers."""
+    return merge_openmeteo_forecast_drivers(df, latitude, longitude, timeout=timeout)
 
 
 def safe_year_shift_date(base_date, year):
@@ -185,7 +301,30 @@ def build_historical_confidence(city_name, forecast_days, crop_type, resolve_cit
                 cumulative_irrig = []
                 for _, row in hdf.head(forecast_days).iterrows():
                     day_of_year = pd.to_datetime(row["Date"]).dayofyear
-                    et0 = daily_et_func(float(row["Tmax"]), float(row["Tmin"]), p_lat, day_of_year)
+                    rh_val = row.get("RH_hist")
+                    if rh_val is None or pd.isna(rh_val):
+                        rh_val = 65.0
+                    else:
+                        rh_val = float(rh_val)
+                    u2_val = row.get("u2")
+                    if u2_val is None or pd.isna(u2_val):
+                        u2_val = None
+                    else:
+                        u2_val = float(u2_val)
+                    rs_val = row.get("Rs_mjm2")
+                    if rs_val is None or pd.isna(rs_val):
+                        rs_val = None
+                    else:
+                        rs_val = float(rs_val)
+                    et0 = daily_et_func(
+                        float(row["Tmax"]),
+                        float(row["Tmin"]),
+                        p_lat,
+                        day_of_year,
+                        rh=rh_val,
+                        u2=u2_val,
+                        rs=rs_val,
+                    )
                     cumulative_gdd += calculate_daily_gdd(float(row["Tmax"]), float(row["Tmin"]))
                     stage_factor, _ = gdd_stage_factor(cumulative_gdd, crop_type)
                     adjusted_et = et0 * stage_factor

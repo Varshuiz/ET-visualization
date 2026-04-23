@@ -138,6 +138,7 @@ from .forecast_recommendations import (
     build_irrigation_confidence_plot,
     calculate_daily_gdd,
     gdd_stage_factor,
+    merge_openmeteo_forecast_drivers,
     safe_temp_convert,
 )
 from .stations import ALBERTA_STATIONS_COORDS, find_nearest_alberta_station
@@ -2238,10 +2239,13 @@ def _pt_daily_et_from_temperature(tmax, tmin, latitude, day_of_year):
     return max(float(et_pt), 0.0) if not pd.isna(et_pt) else 0.0
 
 
-def _pm_daily_et_from_temperature(tmax, tmin, latitude, day_of_year, rh=65.0, u2=2.0, elevation=766):
+def _pm_daily_et_from_temperature(tmax, tmin, latitude, day_of_year, rh=65.0, u2=None, rs=None, elevation=766):
     """
-    Penman–Monteith (FAO-56) daily ET0 using the same simple radiation
-    parameterization as the previous PT forecast helper (Hargreaves-style Rs from temps).
+    Penman–Monteith (FAO-56) daily ET0. Prefer measured daily shortwave (Rs, MJ/m²/day)
+    from Open-Meteo when *rs* is provided; otherwise fall back to Hargreaves-style Rs
+    from temperature range and extraterrestrial radiation.
+
+    u2 is 2 m wind (m/s) from ECCC/MSC and/or Open-Meteo wind_speed_10m_max.
     """
     tmax_c = max(float(tmax), 0.0)
     tmin_c = float(tmin)
@@ -2251,15 +2255,30 @@ def _pm_daily_et_from_temperature(tmax, tmin, latitude, day_of_year, rh=65.0, u2
             rh_use = float(rh)
         except (TypeError, ValueError):
             rh_use = 65.0
+    u2_use = None
+    if u2 is not None and not pd.isna(u2):
+        try:
+            u2_use = max(float(u2), 0.25)
+        except (TypeError, ValueError):
+            u2_use = None
+    if u2_use is None:
+        u2_use = 2.0
     ra = calculate_extraterrestrial_radiation(latitude, int(day_of_year))
     temp_range = max(tmax_c - tmin_c, 0.5)
-    rs = 0.16 * np.sqrt(temp_range) * ra
+    rs_use = None
+    if rs is not None and not pd.isna(rs):
+        try:
+            rs_use = float(rs)
+        except (TypeError, ValueError):
+            rs_use = None
+    if rs_use is None or rs_use <= 0:
+        rs_use = 0.16 * np.sqrt(temp_range) * ra
     et0 = penman_monteith_ET(
         tmax_c,
         tmin_c,
         float(rh_use),
-        float(u2),
-        float(rs),
+        float(u2_use),
+        float(rs_use),
         float(ra),
         elevation=elevation,
     )
@@ -2334,7 +2353,10 @@ def env_canada_forecast_view(request):
         
         try:
             df = fetch_env_canada_forecast(city_name, selected_days)
-            
+            lat, lon = _resolve_city_lat_lon(city_name)
+            _ = lon
+            df = merge_openmeteo_forecast_drivers(df, lat, lon)
+
             # Convert to records for template
             df_forecast = []
             for _, row in df.iterrows():
@@ -2342,13 +2364,19 @@ def env_canada_forecast_view(request):
                 temp_low = safe_temp_convert(row['Temp_Low'])
                 precip = safe_temp_convert(row['Precipitation_mm'])
                 rh_pct = safe_temp_convert(row.get('RH_percent'))
-                
+                u2_ms = safe_temp_convert(row.get('u2_ms'))
+                wind_kmh = safe_temp_convert(row.get('Wind_kmh_max'))
+                rs_mj = safe_temp_convert(row.get('Rs_mjm2'))
+
                 forecast_dict = {
                     'Date': row['Date'],
                     'Period': row['Period'],
                     'Temp_High': temp_high,
                     'Temp_Low': temp_low,
                     'RH_percent': rh_pct,
+                    'u2_ms': u2_ms,
+                    'Wind_kmh_max': wind_kmh,
+                    'Rs_mjm2': rs_mj,
                     'Precipitation_mm': precip if precip is not None else 0.0,
                     'Forecast': str(row['Forecast']) if row['Forecast'] else ''
                 }
@@ -2356,8 +2384,6 @@ def env_canada_forecast_view(request):
             
             # Penman–Monteith + GDD recommendation on current forecast.
             total_precip = sum([f['Precipitation_mm'] for f in df_forecast])
-            lat, lon = _resolve_city_lat_lon(city_name)
-            _ = lon  # keep for potential future logging/use
             estimated_et_total = 0.0
             cumulative_gdd = 0.0
             forecast_irrig_curve = []
@@ -2373,7 +2399,13 @@ def env_canada_forecast_view(request):
                 d = pd.to_datetime(item["Date"])
                 day_of_year = d.dayofyear
                 et0 = _pm_daily_et_from_temperature(
-                    float(tmax), float(tmin), lat, day_of_year, rh=item.get("RH_percent")
+                    float(tmax),
+                    float(tmin),
+                    lat,
+                    day_of_year,
+                    rh=item.get("RH_percent"),
+                    u2=item.get("u2_ms"),
+                    rs=item.get("Rs_mjm2"),
                 )
                 daily_gdd = calculate_daily_gdd(float(tmax), float(tmin))
                 cumulative_gdd += daily_gdd
@@ -2412,6 +2444,7 @@ def env_canada_forecast_view(request):
             context = {
                 'city_name': city_name,
                 'selected_days': selected_days,
+                'show_extended_horizon_caveat': selected_days > 7,
                 'df_forecast': df_forecast,
                 'total_precip': total_precip,
                 'estimated_et_total': estimated_et_total,
@@ -2447,6 +2480,7 @@ def env_canada_forecast_view(request):
         'error_message': error_message,
         'city_name': city_name,
         'selected_days': selected_days,
+        'show_extended_horizon_caveat': False,
         'crop_type': crop_type,
         'soil_type': soil_type,
         'crop_label': next((item["label"] for item in crop_options if item["value"] == crop_type), "Wheat"),
