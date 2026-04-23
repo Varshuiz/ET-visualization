@@ -197,8 +197,13 @@ def penman_monteith_ET_vec(Tmax, Tmin, RH, u2, Rs, Ra, elevation=766):
     with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
         delta = 4098.0 * (0.6108 * np.exp((17.27 * tmean) / (tmean + 237.3))) / (tmean + 237.3) ** 2
         gamma = psychrometric_constant(elevation)
-        es = (saturation_vapor_pressure(tmax) + saturation_vapor_pressure(tmin)) / 2.0
-        ea = actual_vapor_pressure(tmean, rh)
+        # Vector-safe saturation vapour pressure (avoid math.exp on arrays).
+        es = (
+            0.6108 * np.exp((17.27 * tmax) / (tmax + 237.3))
+            + 0.6108 * np.exp((17.27 * tmin) / (tmin + 237.3))
+        ) / 2.0
+        es_tmean = 0.6108 * np.exp((17.27 * tmean) / (tmean + 237.3))
+        ea = es_tmean * (rh / 100.0)
         rn = net_radiation_estimate_vec(rs, tmax, tmin, ra, rh, elevation)
 
         wind_term = 900.0 / (tmean + 273.0) * u2a * (es - ea)

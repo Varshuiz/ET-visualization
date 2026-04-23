@@ -147,163 +147,215 @@ from .stations import ALBERTA_STATIONS_COORDS, find_nearest_alberta_station
 
 # Add unit toggle support to other views as well
 def index(request):
-    """Original simple ET calculator (Priestley-Taylor only) with unit toggle"""
+    """Home ET calculator: Priestley–Taylor (user Rn column) plus Penman–Monteith when drivers can be built."""
     et_data = None
-    et_stats = None
+    et_stats_pt = None
+    et_stats_pm = None
     plot_url = None
-    
+
     # Get selected unit from request (default to mm)
     selected_unit = request.GET.get('unit', 'mm')
     if selected_unit not in ['mm', 'inches']:
         selected_unit = 'mm'
-    
+
     unit_info = get_unit_info(selected_unit)
 
     forecast_data = get_lethbridge_forecast()
+
+    def _stats_for_series(series_mm):
+        if selected_unit == 'inches':
+            return {
+                'avg': convert_units(series_mm.mean(), 'mm', 'inches'),
+                'max': convert_units(series_mm.max(), 'mm', 'inches'),
+                'min': convert_units(series_mm.min(), 'mm', 'inches'),
+                'std': convert_units(series_mm.std(), 'mm', 'inches'),
+            }
+        return {
+            'avg': float(series_mm.mean()),
+            'max': float(series_mm.max()),
+            'min': float(series_mm.min()),
+            'std': float(series_mm.std()),
+        }
 
     if request.method == 'POST':
         form = UploadFileForm(request.POST, request.FILES)
         if form.is_valid():
             csv_file = request.FILES['file']
             try:
-                # [Previous processing code...]
-                # Decode and read CSV safely
                 csv_bytes = csv_file.read()
                 csv_str = csv_bytes.decode('utf-8', errors='replace')
                 df = pd.read_csv(io.StringIO(csv_str))
 
-                # Clean and normalize column names
                 df.columns = df.columns.str.strip().str.replace(r"[^\w\s]", "", regex=True).str.replace(" ", "_")
 
-                # Parse Date column safely
                 date_col = [col for col in df.columns if 'date' in col.lower()]
                 if date_col:
                     df['Date'] = pd.to_datetime(df[date_col[0]], errors='coerce')
                 else:
                     df['Date'] = pd.date_range(start='2024-01-01', periods=len(df), freq='D')
 
-                # Find temperature and radiation columns
-                temp_cols = [col for col in df.columns if any(term in col.lower() for term in ['temp', 'air_temp', 'temperature'])]
+                temp_cols = [
+                    col for col in df.columns if any(term in col.lower() for term in ['temp', 'air_temp', 'temperature'])
+                ]
+                tmax_cols = [
+                    col for col in df.columns if any(term in col.lower() for term in ['tmax', 'max_temp', 'maximum_temp'])
+                ]
+                tmin_cols = [
+                    col for col in df.columns if any(term in col.lower() for term in ['tmin', 'min_temp', 'minimum_temp'])
+                ]
                 rad_cols = [col for col in df.columns if any(term in col.lower() for term in ['solar', 'rad', 'radiation'])]
-                
-                if temp_cols and rad_cols:
-                    df['Tavg'] = pd.to_numeric(df[temp_cols[0]], errors='coerce')
-                    df['Rn'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
-                else:
+                wind_cols = [col for col in df.columns if any(term in col.lower() for term in ['wind', 'wind_speed', 'ws'])]
+                rh_cols = [col for col in df.columns if any(term in col.lower() for term in ['rh', 'humidity', 'relative_humidity'])]
+
+                if not temp_cols or not rad_cols:
                     raise ValueError("Could not find temperature and solar radiation columns")
 
-                # Compute ET using Priestley-Taylor method only
-                df['ET'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Rn']), axis=1)
-                
-                # Remove rows with NaN ET values
+                df['Tavg'] = pd.to_numeric(df[temp_cols[0]], errors='coerce')
+                df['Rn'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+
+                # Priestley–Taylor (unchanged semantics: radiation column is treated as net radiation Rn).
+                df['ET'] = priestley_taylor_ET_vec(df['Tavg'], df['Rn'])
+
+                # Penman–Monteith: treat the same radiation column as shortwave Rs (typical station export).
+                if tmax_cols and tmin_cols:
+                    df['Tmax'] = pd.to_numeric(df[tmax_cols[0]], errors='coerce').clip(lower=0)
+                    df['Tmin'] = pd.to_numeric(df[tmin_cols[0]], errors='coerce')
+                else:
+                    df['Tmax'] = df['Tavg'] + 5.0
+                    df['Tmin'] = df['Tavg'] - 5.0
+                df['Tmax_clamped'] = df['Tmax'].clip(lower=0)
+                df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                if wind_cols:
+                    df['u2'] = pd.to_numeric(df[wind_cols[0]], errors='coerce').fillna(2.0)
+                else:
+                    df['u2'] = 2.0
+                if rh_cols:
+                    df['RH'] = pd.to_numeric(df[rh_cols[0]], errors='coerce').fillna(65.0)
+                else:
+                    df['RH'] = 65.0
+                df['day_of_year'] = df['Date'].dt.dayofyear
+                lat_home = 49.7
+                df['Ra'] = calculate_extraterrestrial_radiation_vec(lat_home, df['day_of_year'].to_numpy())
+                try:
+                    df['ET_PM'] = penman_monteith_ET_vec(
+                        df['Tmax_clamped'], df['Tmin'], df['RH'], df['u2'], df['Rs'], df['Ra'], elevation=766
+                    )
+                except Exception:
+                    df['ET_PM'] = np.nan
+
                 df = df.dropna(subset=['ET'])
-                
+
                 if len(df) == 0:
                     raise ValueError("No valid ET values could be calculated")
 
-                # Compute 5-day rolling average for smoothing
                 df['ET_smooth'] = df['ET'].rolling(window=5, min_periods=1).mean()
-
-                # Calculate statistics with unit conversion
-                if selected_unit == 'inches':
-                    et_stats = {
-                        'avg': convert_units(df['ET'].mean(), 'mm', 'inches'),
-                        'max': convert_units(df['ET'].max(), 'mm', 'inches'),
-                        'min': convert_units(df['ET'].min(), 'mm', 'inches'),
-                        'std': convert_units(df['ET'].std(), 'mm', 'inches')
-                    }
+                pm_ok = 'ET_PM' in df.columns and not df['ET_PM'].isna().all()
+                if pm_ok:
+                    df['ET_PM_smooth'] = df['ET_PM'].rolling(window=5, min_periods=1).mean()
                 else:
-                    et_stats = {
-                        'avg': df['ET'].mean(),
-                        'max': df['ET'].max(),
-                        'min': df['ET'].min(),
-                        'std': df['ET'].std()
-                    }
+                    df['ET_PM_smooth'] = np.nan
 
-                # Create the plot with unit conversion
+                et_stats_pt = _stats_for_series(df['ET'])
+                if pm_ok:
+                    et_stats_pm = _stats_for_series(df['ET_PM'])
+
                 plt.figure(figsize=(12, 6))
                 plt.style.use('default')
-                
-                # Set the background color
                 plt.gca().set_facecolor('#f8fffe')
-                
-                # Convert data for plotting if needed
+
                 if selected_unit == 'inches':
-                    plot_et = df['ET'].apply(lambda x: convert_units(x, 'mm', 'inches'))
-                    plot_et_smooth = df['ET_smooth'].apply(lambda x: convert_units(x, 'mm', 'inches'))
+                    plot_et = df['ET'].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                    plot_et_smooth = df['ET_smooth'].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
                 else:
                     plot_et = df['ET']
                     plot_et_smooth = df['ET_smooth']
-                
-                # Plot the data
-                plt.plot(df['Date'], plot_et, 
-                        label='Daily ET₀', color='#86A873', alpha=0.6, linewidth=1.5)
-                plt.plot(df['Date'], plot_et_smooth, 
-                        label='5-day Rolling Average', color='#087F8C', linewidth=3)
-                
-                # Customize the plot
-                plt.title('Evapotranspiration (ET₀) Over Time', 
-                         fontsize=16, fontweight='bold', color='#095256', pad=20)
+
+                plt.plot(df['Date'], plot_et, label='Priestley–Taylor daily', color='#86A873', alpha=0.55, linewidth=1.4)
+                plt.plot(df['Date'], plot_et_smooth, label='Priestley–Taylor (5-day avg)', color='#087F8C', linewidth=2.6)
+                if pm_ok:
+                    if selected_unit == 'inches':
+                        plot_pm = df['ET_PM'].apply(lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x)
+                        plot_pm_smooth = df['ET_PM_smooth'].apply(
+                            lambda x: convert_units(x, 'mm', 'inches') if not pd.isna(x) else x
+                        )
+                    else:
+                        plot_pm = df['ET_PM']
+                        plot_pm_smooth = df['ET_PM_smooth']
+                    plt.plot(df['Date'], plot_pm, label='Penman–Monteith daily', color='#D62728', alpha=0.5, linewidth=1.4)
+                    plt.plot(df['Date'], plot_pm_smooth, label='Penman–Monteith (5-day avg)', color='#A50F15', linewidth=2.4)
+
+                plt.title(
+                    'Evapotranspiration (ET₀) — Priestley–Taylor & Penman–Monteith',
+                    fontsize=16,
+                    fontweight='bold',
+                    color='#095256',
+                    pad=20,
+                )
                 plt.xlabel('Date', fontsize=12, fontweight='600', color='#095256')
                 plt.ylabel(f'ET₀ ({unit_info["daily_label"]})', fontsize=12, fontweight='600', color='#095256')
-                
-                # Customize grid
                 plt.grid(True, alpha=0.3, color='#5AAA95')
-                
-                # Customize legend
-                plt.legend(frameon=True, fancybox=True, shadow=False,
-                          loc='upper left', fontsize=10)
-                
-                # Rotate x-axis labels for better readability
+                plt.legend(frameon=True, fancybox=True, shadow=False, loc='upper left', fontsize=9)
                 plt.xticks(rotation=45, ha='right')
-                
-                # Adjust layout
                 plt.tight_layout()
-                
-                # Convert the plot to base64 string for HTML rendering
+
                 buf = BytesIO()
-                plt.savefig(buf, format='png', dpi=150, bbox_inches='tight',
-                           facecolor='white', edgecolor='none')
+                plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='white', edgecolor='none')
                 buf.seek(0)
                 plot_url = base64.b64encode(buf.read()).decode('utf-8')
                 buf.close()
                 plt.close()
 
-                # Store CSV data in session for download
-                request.session['et_data_csv'] = df[['Date', 'ET', 'ET_smooth']].to_csv(index=False)
+                download_cols = ['Date', 'ET', 'ET_smooth']
+                if pm_ok:
+                    download_cols.extend(['ET_PM', 'ET_PM_smooth'])
+                request.session['et_data_csv'] = df[download_cols].to_csv(index=False)
 
-                # Prepare data for rendering with unit conversion
                 et_data = []
                 for _, row in df.iterrows():
                     et_val = row['ET'] if not pd.isna(row['ET']) else 0
                     if selected_unit == 'inches' and et_val:
                         et_val = convert_units(et_val, 'mm', 'inches')
-                    
-                    et_data.append({
+                    row_dict = {
                         'Date': row['Date'],
-                        'ET': round(et_val, unit_info['decimal_places']) if et_val else 0
-                    })
+                        'ET': round(float(et_val), unit_info['decimal_places']) if et_val else 0,
+                    }
+                    if pm_ok and not pd.isna(row['ET_PM']):
+                        pm_val = row['ET_PM']
+                        if selected_unit == 'inches':
+                            pm_val = convert_units(pm_val, 'mm', 'inches')
+                        row_dict['ET_PM'] = round(float(pm_val), unit_info['decimal_places'])
+                    else:
+                        row_dict['ET_PM'] = None
+                    et_data.append(row_dict)
 
             except Exception as e:
                 print(f"File processing error: {e}")
-                return render(request, 'et/index.html', {
-                    'form': form,
-                    'error_message': f"Error processing file: {str(e)}. Please check your CSV format."
-                })
+                return render(
+                    request,
+                    'et/index.html',
+                    {
+                        'form': form,
+                        'error_message': f"Error processing file: {str(e)}. Please check your CSV format.",
+                        'selected_unit': selected_unit,
+                        'unit_info': unit_info,
+                    },
+                )
 
     else:
         form = UploadFileForm()
-    
+
     context = {
         'form': form,
         'et_data': et_data,
-        'et_stats': et_stats,
+        'et_stats': et_stats_pt,
+        'et_stats_pt': et_stats_pt,
+        'et_stats_pm': et_stats_pm,
         'plot_url': plot_url,
         'forecast_data': forecast_data,
         'selected_unit': selected_unit,
         'unit_info': unit_info,
     }
-    
+
     return render(request, 'et/index.html', context)
 
 def priestley_taylor_only(request):
@@ -1722,8 +1774,13 @@ def comparison_with_acis(request):
                 print(f"PT calculation failed: {e}")
                 df['ET_PT'] = np.nan
         
-        if 'ET_PM' not in df.columns:
+        need_pm = 'ET_PM' not in df.columns
+        if not need_pm:
+            need_pm = bool(df['ET_PM'].isna().all())
+        if need_pm:
             try:
+                if 'Tmax' in df.columns and 'Tmax_clamped' not in df.columns:
+                    df['Tmax_clamped'] = pd.to_numeric(df['Tmax'], errors='coerce').clip(lower=0)
                 df['ET_PM'] = penman_monteith_ET_vec(
                     df['Tmax_clamped'], df['Tmin'], df['RH'], df['u2'], df['Rs'], df['Ra'], elevation=766
                 )

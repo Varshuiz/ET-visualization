@@ -42,6 +42,32 @@ class ETPlannerViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("et:acis_fetch"), response.url)
 
+    def test_et_results_recomputes_pm_when_column_missing(self):
+        """Session weather with PT only should still yield PM for comparison UI."""
+        df = pd.DataFrame(
+            {
+                "Date": pd.to_datetime(["2025-06-01", "2025-06-02"]),
+                "Tmax": [22.0, 23.0],
+                "Tmin": [10.0, 11.0],
+                "RH": [60.0, 58.0],
+                "Wind_Speed": [2.0, 2.0],
+                "Solar_Radiation": [20.0, 19.0],
+                "ET_PT": [3.5, 3.6],
+            }
+        )
+        session = self.client.session
+        session["acis_data"] = df.to_json(date_format="iso")
+        session["acis_location"] = {
+            "description": "Test",
+            "latitude": 51.0,
+            "start_date": "2025-06-01",
+            "end_date": "2025-06-02",
+        }
+        session.save()
+        response = self.client.get(reverse("et:comparison_with_acis"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("PM", response.context["available_methods"])
+
     @patch("et.views.get_lethbridge_forecast", return_value=[])
     @patch("et.environment_canada_scraper.fetch_env_canada_forecast")
     def test_et_results_renders_from_session_data(self, mock_fetch_ec, _mock_forecast):

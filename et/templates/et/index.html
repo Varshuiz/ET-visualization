@@ -1,6 +1,6 @@
 {% extends 'et/base.html' %}
 
-{% block title %}Priestley-Taylor ET Calculator | Aqualys{% endblock %}
+{% block title %}ET₀ calculator (PT &amp; PM) | Aqualys{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -297,7 +297,7 @@
 {% block content %}
 <div class="page-header fade-in">
     <h1><i class="fas fa-leaf"></i> Priestley-Taylor ET Calculator</h1>
-    <p>Calculate evapotranspiration using the Priestley-Taylor method with temperature and solar radiation data</p>
+    <p>Calculate evapotranspiration with Priestley–Taylor (your net radiation column) and Penman–Monteith (same column used as shortwave Rₛ plus optional wind and humidity).</p>
 </div>
 
 <div class="card fade-in">
@@ -331,8 +331,8 @@
         <h3><i class="fas fa-info-circle"></i> How to Use</h3>
         <ul>
             <li>Upload CSV files from your weather source or local station export</li>
-            <li>Ensure your CSV contains columns for Air Temperature (°C) and Solar Radiation (MJ/m²/day)</li>
-            <li>The tool will calculate ET₀ using the Priestley-Taylor method</li>
+            <li>Ensure your CSV contains columns for air temperature (°C) and radiation (MJ/m²/day). For Penman–Monteith, max/min temperature columns are used when present; otherwise daily range is estimated from the average column.</li>
+            <li>The tool calculates ET₀ with Priestley–Taylor and Penman–Monteith side by side</li>
             <li>View results in table format and download processed data</li>
             <li>For more comprehensive analysis, try the <a href="{% url 'et:enhanced_comparison' %}" style="color: var(--teal); text-decoration: none; font-weight: 600;">Four-Method Comparison</a></li>
         </ul>
@@ -360,7 +360,7 @@
 
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>Processing your weather data using Priestley-Taylor method...</p>
+            <p>Processing your weather data (Priestley–Taylor and Penman–Monteith)...</p>
         </div>
     </div>
 </div>
@@ -381,25 +381,41 @@
     </div>
     
     <div class="results-section">
-        <h2><i class="fas fa-chart-line"></i> Priestley-Taylor ET Results</h2>
+        <h2><i class="fas fa-chart-line"></i> ET₀ results (Priestley–Taylor &amp; Penman–Monteith)</h2>
         
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-value">{{ et_data|length }}</div>
                 <div class="stat-label">Total Records</div>
             </div>
+            {% if et_stats_pt %}
             <div class="stat-card">
-                <div class="stat-value">{{ et_stats.avg|floatformat:unit_info.decimal_places }}</div>
-                <div class="stat-label">Avg ET₀ ({{ unit_info.daily_label }})</div>
+                <div class="stat-value">{{ et_stats_pt.avg|floatformat:unit_info.decimal_places }}</div>
+                <div class="stat-label">Avg ET₀ PT ({{ unit_info.daily_label }})</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ et_stats.max|floatformat:unit_info.decimal_places }}</div>
-                <div class="stat-label">Max ET₀ ({{ unit_info.daily_label }})</div>
+                <div class="stat-value">{{ et_stats_pt.max|floatformat:unit_info.decimal_places }}</div>
+                <div class="stat-label">Max ET₀ PT ({{ unit_info.daily_label }})</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ et_stats.min|floatformat:unit_info.decimal_places }}</div>
-                <div class="stat-label">Min ET₀ ({{ unit_info.daily_label }})</div>
+                <div class="stat-value">{{ et_stats_pt.min|floatformat:unit_info.decimal_places }}</div>
+                <div class="stat-label">Min ET₀ PT ({{ unit_info.daily_label }})</div>
             </div>
+            {% endif %}
+            {% if et_stats_pm %}
+            <div class="stat-card">
+                <div class="stat-value">{{ et_stats_pm.avg|floatformat:unit_info.decimal_places }}</div>
+                <div class="stat-label">Avg ET₀ PM ({{ unit_info.daily_label }})</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ et_stats_pm.max|floatformat:unit_info.decimal_places }}</div>
+                <div class="stat-label">Max ET₀ PM ({{ unit_info.daily_label }})</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ et_stats_pm.min|floatformat:unit_info.decimal_places }}</div>
+                <div class="stat-label">Min ET₀ PM ({{ unit_info.daily_label }})</div>
+            </div>
+            {% endif %}
         </div>
 
         {% if plot_url %}
@@ -420,7 +436,10 @@
                 <thead>
                     <tr>
                         <th><i class="fas fa-calendar"></i> Date</th>
-                        <th><i class="fas fa-tint"></i> ET₀ ({{ unit_info.daily_label }})</th>
+                        <th><i class="fas fa-tint"></i> ET₀ PT ({{ unit_info.daily_label }})</th>
+                        {% if et_stats_pm %}
+                        <th><i class="fas fa-tint"></i> ET₀ PM ({{ unit_info.daily_label }})</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -434,6 +453,9 @@
                             {% endif %}
                         </td>
                         <td>{{ row.ET|floatformat:unit_info.decimal_places }}</td>
+                        {% if et_stats_pm %}
+                        <td>{% if row.ET_PM is not None %}{{ row.ET_PM|floatformat:unit_info.decimal_places }}{% else %}—{% endif %}</td>
+                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
