@@ -1957,7 +1957,8 @@ def comparison_with_acis(request):
             plt.close()
         except Exception as plot_error:
             plt.close('all')
-            plot_warning = f"Plots are temporarily unavailable ({plot_error}). ET values are shown below."
+            print(f"Plot rendering fallback enabled: {plot_error}")
+            plot_warning = "Using browser-rendered charts."
         
         # Prepare data for rendering with unit conversion
         et_data = []
