@@ -11,7 +11,20 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-d*g&f7)@f!#m!m93u5m8s
 
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost 127.0.0.1').split(' ')
+
+def _parse_env_list(raw_value: str):
+    """Parse env lists that may be comma- or space-separated."""
+    normalized = raw_value.replace(",", " ")
+    return [item.strip() for item in normalized.split() if item.strip()]
+
+
+default_hosts = "localhost 127.0.0.1 .onrender.com"
+ALLOWED_HOSTS = _parse_env_list(os.environ.get("ALLOWED_HOSTS", default_hosts))
+
+default_csrf_origins = "https://*.onrender.com"
+CSRF_TRUSTED_ORIGINS = _parse_env_list(
+    os.environ.get("CSRF_TRUSTED_ORIGINS", default_csrf_origins)
+)
 
 INSTALLED_APPS = [
     'django.contrib.admin',
