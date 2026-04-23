@@ -186,15 +186,20 @@
     /* Dropdown/Autocomplete Styles */
     .city-input-wrapper {
         position: relative;
-        margin-bottom: 20px;
+    }
+
+    .city-selector .form-controls .city-input-wrapper {
+        margin-bottom: 0;
     }
 
     .city-input {
         width: 100%;
-        padding: 15px 20px;
-        font-size: 1.1rem;
+        box-sizing: border-box;
+        padding: 12px 14px;
+        font-size: 1rem;
+        min-height: 48px;
         border: 2px solid #e0f2f1;
-        border-radius: 10px;
+        border-radius: 8px;
         transition: all 0.3s ease;
         background: white;
     }
@@ -274,10 +279,15 @@
         flex-wrap: wrap;
     }
 
+    .selection-group-city {
+        flex: 1 1 300px;
+        min-width: 260px;
+    }
+
     .selection-group {
         display: flex;
         flex-direction: column;
-        min-width: 180px;
+        min-width: 160px;
     }
 
     .selection-group label {
@@ -290,19 +300,34 @@
     .selection-group select {
         border: 2px solid #e0f2f1;
         border-radius: 8px;
-        padding: 10px 12px;
+        padding: 12px 12px;
         font-size: 0.95rem;
         color: #1f4f53;
         background: #fff;
-        min-height: 44px;
+        box-sizing: border-box;
+        min-height: 48px;
         width: 100%;
     }
 
+    .form-controls-submit {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .form-controls-submit .form-controls-label-spacer {
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+        min-height: 1.2em;
+        line-height: 1.2;
+        visibility: hidden;
+    }
 
     .submit-btn-small {
         background: #0e6970;
         color: white;
-        padding: 12px 24px;
+        padding: 12px 20px;
         border: none;
         border-radius: 8px;
         font-size: 1rem;
@@ -310,8 +335,9 @@
         cursor: pointer;
         transition: all 0.3s ease;
         box-shadow: none;
-        min-height: 46px;
-        min-width: 220px;
+        box-sizing: border-box;
+        min-height: 48px;
+        min-width: 150px;
         text-align: center;
     }
 
@@ -391,7 +417,9 @@
             <input type="hidden" name="days" id="days_input" value="{{ selected_days }}">
             
             <div class="form-controls">
-                <div class="city-input-wrapper" style="flex: 1; min-width: 300px;">
+                <div class="selection-group selection-group-city">
+                    <label for="citySearchInput">City</label>
+                    <div class="city-input-wrapper">
                     <input 
                         type="text" 
                         class="city-input" 
@@ -417,6 +445,7 @@
                         </div>
                         {% endfor %}
                     </div>
+                    </div>
                 </div>
                 <div class="selection-group">
                     <label for="crop_type">Crop type</label>
@@ -435,9 +464,10 @@
                     </select>
                 </div>
 
-                <button type="submit" class="submit-btn-small" id="submitBtn">
-                    Get Forecast
-                </button>
+                <div class="form-controls-submit">
+                    <span class="form-controls-label-spacer" aria-hidden="true">&nbsp;</span>
+                    <button type="submit" class="submit-btn-small" id="submitBtn">Get Forecast</button>
+                </div>
             </div>
         </form>
     </div>
@@ -498,7 +528,16 @@
             Use this as planning guidance. Adjust by crop stage, soil type, and local field conditions.
         </p>
         <p style="margin-top:8px; color:#5b6f70; font-size:0.86rem;">
-            Basis: daily reference evapotranspiration (ET₀) uses the FAO-56 Penman–Monteith equation with a simple temperature-based estimate of incoming solar radiation, <strong>relative humidity from the Environment Canada city forecast when it is present in the feed</strong> (otherwise a 65% placeholder for that day), and 2 m wind speed held at 2.0 m/s. ET₀ is then scaled by a growing-degree-day crop stage factor. The irrigation suggestion sums, day by day, only the shortfall when adjusted ET exceeds forecast precipitation (no credit for “extra” rain beyond the daily ET need in this simple ledger).
+            Basis: daily reference evapotranspiration (ET₀) uses the FAO-56 Penman–Monteith equation with a simple temperature-based estimate of incoming solar radiation, <strong>relative humidity from the Environment Canada city forecast when it is present in the feed</strong> (otherwise a 65% placeholder for that day), and 2 m wind speed held at 2.0 m/s.
+        </p>
+        <p style="margin-top:6px; color:#5b6f70; font-size:0.86rem;">
+            <strong>Crop type</strong> picks a crop-specific curve of growing-degree-days (GDD, base 5&nbsp;°C). Each day, GDD from forecast temperatures is added to a running total; that total falls into a growth stage, and a <strong>stage factor</strong> (roughly 0.55–1.25 depending on crop and stage) multiplies ET₀ for that day. That approximates higher crop water use in peak growth and lower in early or late season—it is a simple stage scaling, not a full crop-growth or soil-water model.
+        </p>
+        <p style="margin-top:6px; color:#5b6f70; font-size:0.86rem;">
+            <strong>Soil type</strong> applies a <strong>soil factor</strong> (loam = 1.00) to the <em>cumulative</em> irrigation need and to the teal chart line: sandier profiles use factors above 1 (more suggested irrigation, looser/shallower storage in this shorthand), while clay-rich types use factors below 1 (less suggested, more water retained in this shorthand). Precipitation and ET₀ are unchanged; only the interpreted irrigation total is scaled.
+        </p>
+        <p style="margin-top:6px; color:#5b6f70; font-size:0.86rem;">
+            The irrigation suggestion sums, day by day, only the shortfall when stage-adjusted ET exceeds forecast precipitation (no credit for “extra” rain beyond the daily need in this simple ledger).
         </p>
         {% if historical_confidence %}
         <p style="margin-top:8px; color:#5b6f70; font-size:0.86rem;">
