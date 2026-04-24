@@ -86,28 +86,32 @@
     .summary-box {
         background: linear-gradient(135deg, #087F8C, #5AAA95);
         color: white;
-        padding: 25px;
+        padding: clamp(16px, 4vw, 25px);
         border-radius: 12px;
-        margin-bottom: 30px;
+        margin-bottom: 22px;
         text-align: center;
     }
 
     .summary-box h2 {
-        margin: 0 0 10px 0;
-        font-size: 2rem;
+        margin: 0 0 8px 0;
+        font-size: clamp(1.35rem, 5vw, 1.85rem);
+        font-weight: 700;
+        line-height: 1.2;
     }
 
     .summary-box p {
-        margin: 5px 0;
-        font-size: 1.1rem;
+        margin: 4px 0;
+        font-size: clamp(0.85rem, 3vw, 1.02rem);
+        line-height: 1.45;
+        opacity: 0.96;
     }
 
     .recommendation-box {
         background: #ffffff;
         border: 1px solid #dbe7e4;
         border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 24px;
+        padding: clamp(14px, 3vw, 20px);
+        margin-bottom: 20px;
     }
 
     .recommendation-grid {
@@ -127,33 +131,34 @@
         display: block;
         color: #095256;
         margin-bottom: 4px;
-        font-size: 0.9rem;
+        font-size: 0.82rem;
+        font-weight: 600;
     }
 
     .city-selector {
         background: white;
-        padding: 25px;
+        padding: clamp(14px, 4vw, 24px);
         border-radius: 12px;
         box-shadow: 0 3px 10px rgba(9, 82, 86, 0.1);
-        margin-bottom: 30px;
+        margin-bottom: 22px;
     }
 
     .period-selector {
         background: white;
-        padding: 20px;
+        padding: clamp(14px, 3vw, 20px);
         border-radius: 12px;
         box-shadow: 0 3px 10px rgba(9, 82, 86, 0.1);
-        margin-bottom: 30px;
+        margin-bottom: 22px;
         display: flex;
         align-items: center;
-        gap: 20px;
+        gap: 16px;
         flex-wrap: wrap;
     }
 
     .period-selector label {
         font-weight: 600;
         color: #095256;
-        font-size: 1.1rem;
+        font-size: clamp(0.88rem, 3vw, 1.05rem);
     }
 
     .period-buttons {
@@ -163,13 +168,14 @@
     }
 
     .period-btn {
-        padding: 10px 20px;
+        padding: 8px 14px;
         background: #e0f2f1;
         border: 2px solid #087F8C;
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.3s ease;
         font-weight: 600;
+        font-size: 0.86rem;
         color: #087F8C;
     }
 
@@ -380,11 +386,27 @@
         }
 
         .summary-box {
-            padding: 18px 14px;
+            padding: 16px 14px;
         }
 
         .summary-box h2 {
-            font-size: 1.45rem;
+            font-size: 1.22rem;
+        }
+
+        .summary-box p {
+            font-size: 0.84rem;
+        }
+
+        .period-selector label {
+            font-size: 0.88rem;
+        }
+
+        .city-selector {
+            padding: 14px;
+        }
+
+        .recommendation-item strong {
+            font-size: 0.78rem;
         }
 
         .recommendation-grid {
@@ -412,7 +434,11 @@
         }
 
         .stat-value {
-            font-size: 1.25rem;
+            font-size: 1.15rem;
+        }
+
+        .summary-box h2 {
+            font-size: 1.12rem;
         }
     }
 </style>

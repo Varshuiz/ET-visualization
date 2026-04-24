@@ -37,10 +37,11 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 16px;
             background: #f4f7f6;
             min-height: 100vh;
             min-height: 100dvh;
-            line-height: 1.6;
+            line-height: 1.55;
             color: var(--midnight-green);
             overflow-x: clip;
         }
@@ -179,8 +180,8 @@
 
         .page-header {
             text-align: center;
-            margin-bottom: 22px;
-            padding: 22px 14px;
+            margin-bottom: 18px;
+            padding: clamp(14px, 3vw, 22px) clamp(12px, 3vw, 18px);
             background: #0f646a;
             border-radius: 12px;
             color: white;
@@ -188,23 +189,26 @@
         }
 
         .page-header h1 {
-            font-size: 2rem;
-            margin-bottom: 6px;
+            font-size: clamp(1.25rem, 4vw, 2rem);
+            margin-bottom: 8px;
             font-weight: 700;
+            line-height: 1.2;
         }
 
         .page-header p {
-            font-size: 1rem;
-            opacity: 0.9;
+            font-size: clamp(0.875rem, 2.5vw, 1rem);
+            opacity: 0.92;
             max-width: 700px;
             margin: 0 auto;
+            line-height: 1.45;
         }
 
         .subtitle {
-            font-size: 1.1rem;
-            opacity: 0.9;
+            font-size: clamp(0.875rem, 2.5vw, 1.05rem);
+            opacity: 0.92;
             max-width: 700px;
             margin: 0 auto;
+            line-height: 1.45;
         }
 
         .file-upload-wrapper {
@@ -246,17 +250,17 @@
         .submit-btn {
             background: #0e6970;
             color: white;
-            padding: 12px 24px;
+            padding: 11px 20px;
             border: none;
             border-radius: 8px;
-            font-size: 1rem;
+            font-size: clamp(0.9rem, 2.8vw, 1rem);
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
             margin-left: 0;
             box-shadow: none;
-            min-height: 46px;
-            min-width: 220px;
+            min-height: 44px;
+            min-width: min(220px, 100%);
             text-align: center;
         }
 
@@ -490,21 +494,22 @@
             }
 
             .page-header {
-                padding: 18px 12px;
+                padding: 14px 12px;
+                margin-bottom: 14px;
             }
 
             .page-header h1 {
-                font-size: 1.55rem;
-                line-height: 1.2;
+                font-size: 1.28rem;
+                line-height: 1.22;
             }
 
             .page-header p,
             .subtitle {
-                font-size: 0.95rem;
+                font-size: 0.84rem;
             }
 
             .card {
-                padding: 16px;
+                padding: 14px;
             }
 
             .submit-btn {
@@ -550,11 +555,16 @@
             }
 
             .page-header h1 {
-                font-size: 1.35rem;
+                font-size: 1.15rem;
+            }
+
+            .page-header p,
+            .subtitle {
+                font-size: 0.8rem;
             }
 
             .card {
-                padding: 14px;
+                padding: 12px;
                 border-radius: 10px;
             }
         }

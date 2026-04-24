@@ -15,13 +15,14 @@
     }
 
     .location-toggle button {
-        padding: 10px 30px;
+        padding: 9px 16px;
         border: 2px solid #087F8C;
         background: white;
         color: #087F8C;
-        border-radius: 25px;
+        border-radius: 999px;
         cursor: pointer;
         font-weight: 600;
+        font-size: 0.88rem;
         transition: all 0.3s ease;
     }
 
@@ -58,16 +59,22 @@
     .form-field label {
         font-weight: 600;
         color: #095256;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
+        font-size: 0.86rem;
     }
 
     .form-field input,
     .form-field select {
-        padding: 12px;
+        padding: 10px 12px;
         border: 2px solid #e0f2f1;
         border-radius: 8px;
-        font-size: 1rem;
+        font-size: 16px;
         transition: border-color 0.3s ease;
+    }
+
+    .form-field small {
+        font-size: 0.78rem !important;
+        line-height: 1.35;
     }
 
     .form-field input:focus,
@@ -77,16 +84,147 @@
     }
 
     .info-box {
-        background: linear-gradient(135deg, #e0f2f1, #f1f8f7);
-        border-left: 5px solid #5AAA95;
+        background: linear-gradient(135deg, #e8f4f2, #f4faf9);
+        border-left: 4px solid #5AAA95;
         border-radius: 10px;
-        padding: 20px;
-        margin: 20px 0;
+        padding: 14px 16px;
+        margin: 14px 0 18px;
     }
 
     .info-box h3 {
         color: #095256;
+        margin-bottom: 8px;
+        font-size: 1.02rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+    }
+
+    .info-box > p {
+        font-size: 0.875rem;
+        line-height: 1.45;
+        color: #3d5659;
+        margin: 0;
+    }
+
+    .info-box ul {
+        margin-top: 8px;
+        margin-bottom: 0;
+        padding-left: 1.15rem;
+    }
+
+    .info-box li {
+        font-size: 0.84rem;
+        line-height: 1.45;
+        margin-bottom: 6px;
+        color: #3d5659;
+    }
+
+    .info-box li:last-child {
+        margin-bottom: 0;
+    }
+
+    .upload-card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 16px;
+        border: 1px solid #e5eeec;
+        box-shadow: 0 2px 12px rgba(9, 82, 86, 0.06);
+    }
+
+    .acis-form-heading {
+        color: #0a4a4e;
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin: 1.15rem 0 0.55rem;
+        letter-spacing: -0.02em;
+        line-height: 1.25;
+    }
+
+    .upload-card > form > .acis-form-heading:first-child,
+    .input-section > .acis-form-heading:first-child {
+        margin-top: 0;
+    }
+
+    .acis-form-heading--section {
+        margin-top: 1.35rem;
+        padding-top: 0.35rem;
+    }
+
+    .acis-radio-panel {
+        background: #f5f9f8;
+        border: 1px solid #d9e7e3;
+        border-radius: 10px;
+        padding: 12px 14px;
+    }
+
+    .acis-radio-panel label {
+        display: block;
         margin-bottom: 10px;
+        font-size: 0.84rem;
+        line-height: 1.45;
+        color: #355c60;
+    }
+
+    .acis-radio-panel label:last-child {
+        margin-bottom: 0;
+    }
+
+    .acis-note {
+        background: #fff8e6;
+        padding: 9px 12px;
+        border-radius: 8px;
+        margin-top: 10px;
+        font-size: 0.8rem;
+        line-height: 1.4;
+        color: #5c4a20;
+        border: 1px solid #f0e0b8;
+    }
+
+    .acis-preview-title {
+        font-size: 1.08rem;
+        font-weight: 600;
+        color: #095256;
+        margin: 0 0 8px 0;
+    }
+
+    .acis-examples {
+        background: #eef6fb;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-top: 10px;
+        font-size: 0.8rem;
+        line-height: 1.45;
+        color: #2d5668;
+        border: 1px solid #d4e8f2;
+    }
+
+    .acis-map-block {
+        margin-top: 12px;
+    }
+
+    .acis-map-label {
+        display: block;
+        color: #204f53;
+        font-size: 0.88rem;
+        font-weight: 600;
+    }
+
+    .acis-map-hint {
+        display: block;
+        color: #577476;
+        margin-top: 4px;
+        font-size: 0.78rem;
+        line-height: 1.35;
+    }
+
+    .acis-submit-btn {
+        margin-top: 1.25rem;
+        display: block;
+        width: 100%;
+        max-width: min(420px, 100%);
+        margin-left: auto;
+        margin-right: auto;
+        box-sizing: border-box;
     }
 
     .method-comparison {
@@ -280,6 +418,24 @@
             width: 100% !important;
             box-sizing: border-box;
         }
+
+        .upload-card {
+            padding: 14px 12px;
+        }
+
+        .acis-form-heading {
+            font-size: 0.9rem;
+        }
+
+        .acis-preview-title {
+            font-size: 1rem;
+        }
+
+        .preview-table th,
+        .preview-table td {
+            padding: 8px 10px;
+            font-size: 0.82rem;
+        }
     }
 
     @media (max-width: 480px) {
@@ -288,7 +444,22 @@
         }
 
         .info-box {
-            padding: 14px;
+            padding: 12px 14px;
+            margin: 12px 0 14px;
+        }
+
+        .info-box h3 {
+            font-size: 0.95rem;
+        }
+
+        .location-toggle button {
+            font-size: 0.78rem;
+            padding: 8px 12px;
+        }
+
+        .upload-card {
+            padding: 12px 10px;
+            border-radius: 10px;
         }
     }
 </style>
@@ -306,7 +477,7 @@
         <p>
             This page helps you quickly turn weather records into practical irrigation planning information:
         </p>
-        <ul style="margin-top: 10px; margin-left: 20px;">
+        <ul>
             <li>Pull recent and past weather conditions for your farm area</li>
             <li>Estimate crop water demand (ET) using trusted ET methods</li>
             <li>Compare methods side-by-side so you can make a confident watering decision</li>
@@ -346,7 +517,7 @@
 
             <!-- Place Name Search -->
             <div class="input-section active" id="place-section">
-                <h3 style="color: #095256; margin-bottom: 15px;">Pick Your Farm Area</h3>
+                <h3 class="acis-form-heading">Pick your farm area</h3>
                 <div class="form-field">
                     <label for="place_name">Closest City or Town</label>
                     <input type="text" id="place_name" name="place_name" 
@@ -375,7 +546,7 @@
 
             <!-- Township/Range Input -->
             <div class="input-section" id="township-section">
-                <h3 style="color: #095256; margin-bottom: 15px;">Find by Township and Range</h3>
+                <h3 class="acis-form-heading">Find by township and range</h3>
                 <div class="form-grid">
                     <div class="form-field">
                         <label for="township">Township Number</label>
@@ -396,7 +567,7 @@
                         </select>
                     </div>
                 </div>
-                <div style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 0.9rem;">
+                <div class="acis-examples">
                     <strong>Examples:</strong><br>
                     • Brooks: Township 19, Range 14, 4th Meridian<br>
                     • Lethbridge: Township 9, Range 22, 4th Meridian<br>
@@ -406,7 +577,7 @@
 
             <!-- Lat/Lon Input -->
             <div class="input-section" id="coordinates-section">
-                <h3 style="color: #095256; margin-bottom: 15px;">Find by Latitude and Longitude</h3>
+                <h3 class="acis-form-heading">Find by latitude and longitude</h3>
                 <div class="form-grid">
                     <div class="form-field">
                         <label for="latitude">Latitude (49-60°N)</label>
@@ -421,23 +592,23 @@
                                min="-120" max="-110">
                     </div>
                 </div>
-                <div style="background: #e3f2fd; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 0.9rem;">
+                <div class="acis-examples">
                     <strong>Examples:</strong><br>
                     • Brooks: 50.5644°N, -111.8986°W<br>
                     • Lethbridge: 49.6942°N, -112.8328°W<br>
                     • Calgary: 51.0486°N, -114.0708°W
                 </div>
-                <div style="margin-top: 14px;">
-                    <strong style="color:#204f53;">Map Picker</strong>
-                    <small style="display:block; color:#577476; margin-top:4px;">
-                        Click your farm location on the map to auto-fill latitude and longitude.
+                <div class="acis-map-block">
+                    <strong class="acis-map-label">Map picker</strong>
+                    <small class="acis-map-hint">
+                        Tap the map to set latitude and longitude.
                     </small>
                     <div id="farmMap"></div>
                 </div>
             </div>
 
             <!-- Date Range -->
-            <h3 style="color: #095256; margin: 30px 0 15px 0;">Select Your Date Range</h3>
+            <h3 class="acis-form-heading acis-form-heading--section">Select your date range</h3>
             <div class="form-grid">
                 <div class="form-field">
                     <label for="start_date">Start Date</label>
@@ -448,24 +619,24 @@
                     <input type="date" id="end_date" name="end_date" required>
                 </div>
             </div>
-            <div style="background: #fff3cd; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 0.85rem;">
+            <div class="acis-note">
                 <strong>Note:</strong> Pick dates up to today. For irrigation planning, the growing season months are usually most useful.
             </div>
 
-            <h3 style="color: #095256; margin: 24px 0 12px 0;">Choose Data Source Style</h3>
-            <div style="background:#f5f9f8; border:1px solid #d9e7e3; border-radius:10px; padding:12px;">
-                <label style="display:block; margin-bottom:8px; color:#274f53;">
+            <h3 class="acis-form-heading acis-form-heading--section">Choose data source style</h3>
+            <div class="acis-radio-panel">
+                <label>
                     <input type="radio" name="data_source_mode" value="exact_coordinates" {% if data_source_mode != 'nearest_station' %}checked{% endif %}>
                     Use my exact map coordinates
                 </label>
-                <label style="display:block; color:#274f53;">
+                <label>
                     <input type="radio" name="data_source_mode" value="nearest_station" {% if data_source_mode == 'nearest_station' %}checked{% endif %}>
                     Use nearest weather station (recommended for most users)
-                    {% if nearest_station_hint %}<strong>- nearest found: {{ nearest_station_hint }}</strong>{% endif %}
+                    {% if nearest_station_hint %}<strong> — nearest found: {{ nearest_station_hint }}</strong>{% endif %}
                 </label>
             </div>
 
-            <h3 style="color: #095256; margin: 24px 0 15px 0;">Optional: Upload Your Own Weather File</h3>
+            <h3 class="acis-form-heading acis-form-heading--section">Optional: upload your own weather file</h3>
             <div class="form-field">
                 <label for="id_file">Use a CSV file instead of automatic weather fetch</label>
                 <input type="file" id="id_file" name="file" accept=".csv">
@@ -476,8 +647,8 @@
 
             <input type="hidden" name="location_type" id="location_type" value="place">
 
-            <button type="submit" class="submit-btn" style="margin-top: 30px;">
-                Load Weather Data
+            <button type="submit" class="submit-btn acis-submit-btn">
+                Load weather data
             </button>
 
             <div class="loading" id="loading" style="display: none;">
@@ -491,7 +662,7 @@
 
     {% if df_preview %}
     <div style="margin-top: 40px;">
-        <h2 style="color: #095256;">Data Preview (First 10 Days)</h2>
+        <h2 class="acis-preview-title">Data preview (first 10 days)</h2>
         {% if used_station %}
         <p style="margin: 6px 0 14px 0; color:#355c60; font-weight:600;">
             Data source used: {{ used_station }}

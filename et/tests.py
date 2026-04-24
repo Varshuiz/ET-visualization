@@ -162,7 +162,7 @@ class ETPlannerViewTests(TestCase):
     def test_weather_data_page_shows_backup_upload_section(self):
         response = self.client.get(reverse("et:acis_fetch"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Optional: Upload Your Own Weather File")
+        self.assertContains(response, "Optional: upload your own weather file")
 
     def test_method_info_page_renders(self):
         response = self.client.get(reverse("et:method_info"))
