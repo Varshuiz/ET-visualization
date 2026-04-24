@@ -45,7 +45,7 @@
 
     .form-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
         gap: 20px;
         margin-bottom: 20px;
     }
@@ -91,7 +91,7 @@
 
     .method-comparison {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
         gap: 15px;
         margin-top: 15px;
     }
@@ -231,16 +231,65 @@
     .station-grid {
         margin-top: 10px;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
         gap: 8px;
     }
 
     #farmMap {
         height: 320px;
+        min-height: 200px;
         border-radius: 10px;
         border: 1px solid #cfe1dc;
         margin-top: 12px;
         overflow: hidden;
+    }
+
+    @media (max-width: 768px) {
+        .location-toggle {
+            flex-direction: column;
+        }
+
+        .location-toggle button {
+            width: 100%;
+        }
+
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .method-comparison {
+            grid-template-columns: 1fr;
+        }
+
+        #farmMap {
+            height: 240px;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-top: 8px;
+        }
+
+        .preview-table {
+            min-width: 520px;
+        }
+
+        a.submit-btn {
+            display: block !important;
+            width: 100% !important;
+            box-sizing: border-box;
+        }
+    }
+
+    @media (max-width: 480px) {
+        #farmMap {
+            height: 200px;
+        }
+
+        .info-box {
+            padding: 14px;
+        }
     }
 </style>
 {% endblock %}
@@ -448,6 +497,7 @@
             Data source used: {{ used_station }}
         </p>
         {% endif %}
+        <div class="table-responsive">
         <table class="preview-table">
             <thead>
                 <tr>
@@ -472,9 +522,10 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
         
         <div style="text-align: center; margin-top: 30px;">
-            <a href="{% url 'et:comparison_with_acis' %}" class="submit-btn" style="display: inline-block; text-decoration: none;" data-loading-link="true" data-loading-text="Calculating ET values and opening comparison...">
+            <a href="{% url 'et:comparison_with_acis' %}" class="submit-btn" style="display: inline-block; text-decoration: none; text-align: center;" data-loading-link="true" data-loading-text="Calculating ET values and opening comparison...">
                 Calculate and Compare Water Use
             </a>
         </div>

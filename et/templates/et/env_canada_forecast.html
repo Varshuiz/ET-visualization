@@ -34,7 +34,7 @@
 
     .forecast-stats {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
         gap: 15px;
         margin-bottom: 15px;
     }
@@ -112,7 +112,7 @@
 
     .recommendation-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
         gap: 12px;
         margin-top: 12px;
     }
@@ -280,14 +280,16 @@
     }
 
     .selection-group-city {
-        flex: 1 1 300px;
-        min-width: 260px;
+        flex: 1 1 280px;
+        min-width: 0;
+        max-width: 100%;
     }
 
     .selection-group {
         display: flex;
         flex-direction: column;
-        min-width: 160px;
+        min-width: 0;
+        flex: 1 1 140px;
     }
 
     .selection-group label {
@@ -338,6 +340,8 @@
         box-sizing: border-box;
         min-height: 48px;
         min-width: 150px;
+        width: auto;
+        max-width: 100%;
         text-align: center;
     }
 
@@ -354,6 +358,61 @@
 
         .submit-btn-small {
             width: 100%;
+            min-width: 0;
+        }
+
+        .period-selector {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+        }
+
+        .period-buttons {
+            justify-content: flex-start;
+            gap: 8px;
+        }
+
+        .period-btn {
+            flex: 1 1 calc(33.333% - 8px);
+            min-width: 0;
+            padding: 10px 8px;
+            font-size: 0.88rem;
+        }
+
+        .summary-box {
+            padding: 18px 14px;
+        }
+
+        .summary-box h2 {
+            font-size: 1.45rem;
+        }
+
+        .recommendation-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .forecast-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .city-dropdown {
+            max-height: min(50vh, 320px);
+        }
+    }
+
+    @media (max-width: 480px) {
+        .period-btn {
+            flex: 1 1 calc(50% - 6px);
+            font-size: 0.82rem;
+        }
+
+        .forecast-stats {
+            grid-template-columns: 1fr;
+        }
+
+        .stat-value {
+            font-size: 1.25rem;
         }
     }
 </style>

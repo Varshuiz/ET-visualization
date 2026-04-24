@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0c4f54">
     <title>{% block title %}Aqualys{% endblock %}</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -20,23 +21,40 @@
             --warning: #f39c12;
         }
 
-        * {
+        *,
+        *::before,
+        *::after {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+            scroll-behavior: smooth;
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #f4f7f6;
             min-height: 100vh;
+            min-height: 100dvh;
             line-height: 1.6;
             color: var(--midnight-green);
+            overflow-x: clip;
+        }
+
+        .container img:not([width]),
+        .card img {
+            max-width: 100%;
+            height: auto;
         }
 
         .navbar {
             background: #0c4f54;
-            padding: 12px 0;
+            padding: 10px 0;
+            padding-top: max(10px, env(safe-area-inset-top));
             box-shadow: 0 2px 8px var(--shadow);
             position: sticky;
             top: 0;
@@ -44,12 +62,14 @@
         }
 
         .nav-container {
+            position: relative;
             max-width: 1400px;
             margin: 0 auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 20px;
+            padding: 0 max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
+            gap: 10px;
         }
 
         .nav-brand {
@@ -57,7 +77,9 @@
             text-decoration: none;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
+            min-width: 0;
+            flex: 1 1 auto;
         }
 
         .brand-icon {
@@ -76,6 +98,7 @@
             display: flex;
             flex-direction: column;
             gap: 3px;
+            min-width: 0;
         }
 
         .brand-name {
@@ -110,10 +133,13 @@
             color: white;
             text-decoration: none;
             font-weight: 500;
-            transition: all 0.3s ease;
-            padding: 7px 12px;
+            transition: background 0.2s ease;
+            padding: 12px 14px;
             border-radius: 8px;
             font-size: 0.92rem;
+            display: block;
+            min-height: 44px;
+            line-height: 1.3;
         }
 
         .nav-links i {
@@ -130,6 +156,10 @@
             max-width: 1200px;
             margin: 0 auto;
             padding: 18px;
+            padding-left: max(18px, env(safe-area-inset-left));
+            padding-right: max(18px, env(safe-area-inset-right));
+            padding-bottom: max(18px, env(safe-area-inset-bottom));
+            width: 100%;
         }
 
         .card {
@@ -235,6 +265,14 @@
             background: #0b5860;
         }
 
+        button,
+        .submit-btn,
+        .submit-btn-small,
+        .period-btn,
+        input[type="submit"] {
+            touch-action: manipulation;
+        }
+
         .submit-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
@@ -291,11 +329,23 @@
 
         .mobile-menu-toggle {
             display: none;
-            background: none;
-            border: none;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 10px;
             color: white;
-            font-size: 1.5rem;
+            font-size: 1.35rem;
             cursor: pointer;
+            padding: 10px 12px;
+            min-width: 44px;
+            min-height: 44px;
+            flex-shrink: 0;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mobile-menu-toggle:focus-visible {
+            outline: 2px solid #5DCAA5;
+            outline-offset: 2px;
         }
 
         .unit-toggle-section {
@@ -347,7 +397,8 @@
             background: white;
             border-radius: 12px;
             padding: 18px 20px;
-            min-width: 280px;
+            min-width: min(280px, calc(100vw - 32px));
+            max-width: calc(100vw - 32px);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
             text-align: center;
             border: 1px solid #e1ece9;
@@ -403,17 +454,23 @@
             box-shadow: 0 0 1px var(--teal), 0 3px 10px rgba(90, 170, 149, 0.3);
         }
 
-        @media (max-width: 768px) {
+        /* Collapse long nav to touch menu on tablets and phones */
+        @media (max-width: 992px) {
             .nav-links {
                 display: none;
                 position: absolute;
                 top: 100%;
                 left: 0;
                 right: 0;
-                background: var(--midnight-green);
+                background: #0a4549;
                 flex-direction: column;
-                padding: 20px;
-                gap: 10px;
+                padding: 12px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
+                gap: 4px;
+                max-height: min(75vh, 520px);
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+                border-radius: 0 0 12px 12px;
             }
 
             .nav-links.active {
@@ -421,36 +478,84 @@
             }
 
             .mobile-menu-toggle {
-                display: block;
+                display: inline-flex;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 14px;
+                padding-left: max(14px, env(safe-area-inset-left));
+                padding-right: max(14px, env(safe-area-inset-right));
             }
 
-            .container {
-                padding: 15px;
+            .page-header {
+                padding: 18px 12px;
             }
 
             .page-header h1 {
-                font-size: 2rem;
+                font-size: 1.55rem;
+                line-height: 1.2;
+            }
+
+            .page-header p,
+            .subtitle {
+                font-size: 0.95rem;
             }
 
             .card {
-                padding: 20px;
+                padding: 16px;
             }
 
             .submit-btn {
                 margin-left: 0;
-                margin-top: 15px;
+                margin-top: 12px;
                 display: block;
                 width: 100%;
                 min-width: 0;
             }
 
+            .file-upload-wrapper {
+                flex-direction: column;
+            }
+
+            .file-upload {
+                width: 100%;
+                text-align: center;
+                justify-content: center;
+            }
+
             .unit-toggle-section {
-                flex-direction: row;
-                padding: 10px;
+                flex-wrap: wrap;
+                justify-content: center;
+                padding: 10px 12px;
             }
 
             .unit-label {
-                font-size: 0.9rem;
+                font-size: 0.88rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .brand-name {
+                font-size: 1.08rem;
+            }
+
+            .brand-tagline {
+                font-size: 0.65rem;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 58vw;
+            }
+
+            .page-header h1 {
+                font-size: 1.35rem;
+            }
+
+            .card {
+                padding: 14px;
+                border-radius: 10px;
             }
         }
     </style>
@@ -500,8 +605,8 @@
                     Help
                 </a></li>
             </ul>
-            <button class="mobile-menu-toggle" id="mobileMenuToggle">
-                <i class="fas fa-bars"></i>
+            <button type="button" class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">
+                <i class="fas fa-bars" aria-hidden="true"></i>
             </button>
         </div>
     </nav>
@@ -518,11 +623,29 @@
     </div>
 
     <script>
-        // Mobile menu toggle
-        document.getElementById('mobileMenuToggle').addEventListener('click', function() {
+        // Mobile menu toggle + close after navigation (better on phones)
+        (function () {
+            const toggle = document.getElementById('mobileMenuToggle');
             const navLinks = document.getElementById('navLinks');
-            navLinks.classList.toggle('active');
-        });
+            if (!toggle || !navLinks) return;
+            toggle.addEventListener('click', function () {
+                navLinks.classList.toggle('active');
+                const open = navLinks.classList.contains('active');
+                toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+            navLinks.querySelectorAll('a').forEach(function (a) {
+                a.addEventListener('click', function () {
+                    navLinks.classList.remove('active');
+                    toggle.setAttribute('aria-expanded', 'false');
+                });
+            });
+            document.addEventListener('click', function (e) {
+                if (!navLinks.classList.contains('active')) return;
+                if (toggle.contains(e.target) || navLinks.contains(e.target)) return;
+                navLinks.classList.remove('active');
+                toggle.setAttribute('aria-expanded', 'false');
+            });
+        })();
 
         // Unit toggle functionality (global - works on all pages)
         document.addEventListener('DOMContentLoaded', function() {
