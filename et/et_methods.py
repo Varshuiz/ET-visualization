@@ -79,6 +79,24 @@ def penman_monteith_ET(Tmax, Tmin, RH, u2, Rs, Ra, elevation=766):
     return max(et0, 0)
 
 
+def penman_monteith_ET_with_rn(Tmax, Tmin, RH, u2, Rn, elevation=766):
+    """Penman-Monteith ET0 calculation using a precomputed net radiation term."""
+    if any(pd.isna(val) for val in [Tmax, Tmin, RH, u2, Rn]):
+        return np.nan
+
+    tmean = (Tmax + Tmin) / 2
+    delta = delta_svp(tmean)
+    gamma = psychrometric_constant(elevation)
+    es = (saturation_vapor_pressure(Tmax) + saturation_vapor_pressure(Tmin)) / 2
+    ea = actual_vapor_pressure(tmean, RH)
+
+    wind_term = 900 / (tmean + 273) * u2 * (es - ea)
+    numerator = 0.408 * delta * Rn + gamma * wind_term
+    denominator = delta + gamma * (1 + 0.34 * u2)
+    et0 = numerator / denominator
+    return max(et0, 0)
+
+
 def maule_ET(Tmax, Tmin, Rs, RH=None, latitude=49.7):
     """Maule ET estimation method."""
     if any(pd.isna(val) for val in [Tmax, Tmin, Rs]):
@@ -206,6 +224,31 @@ def penman_monteith_ET_vec(Tmax, Tmin, RH, u2, Rs, Ra, elevation=766):
         ea = es_tmean * (rh / 100.0)
         rn = net_radiation_estimate_vec(rs, tmax, tmin, ra, rh, elevation)
 
+        wind_term = 900.0 / (tmean + 273.0) * u2a * (es - ea)
+        numerator = 0.408 * delta * rn + gamma * wind_term
+        denominator = delta + gamma * (1.0 + 0.34 * u2a)
+        et0 = numerator / denominator
+        et0 = np.where(np.isfinite(et0), np.maximum(et0, 0.0), np.nan)
+    return et0
+
+
+def penman_monteith_ET_with_rn_vec(Tmax, Tmin, RH, u2, Rn, elevation=766):
+    tmax = _to_float32_array(Tmax)
+    tmin = _to_float32_array(Tmin)
+    rh = _to_float32_array(RH)
+    u2a = _to_float32_array(u2)
+    rn = _to_float32_array(Rn)
+
+    tmean = (tmax + tmin) / 2.0
+    with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
+        delta = 4098.0 * (0.6108 * np.exp((17.27 * tmean) / (tmean + 237.3))) / (tmean + 237.3) ** 2
+        gamma = psychrometric_constant(elevation)
+        es = (
+            0.6108 * np.exp((17.27 * tmax) / (tmax + 237.3))
+            + 0.6108 * np.exp((17.27 * tmin) / (tmin + 237.3))
+        ) / 2.0
+        es_tmean = 0.6108 * np.exp((17.27 * tmean) / (tmean + 237.3))
+        ea = es_tmean * (rh / 100.0)
         wind_term = 900.0 / (tmean + 273.0) * u2a * (es - ea)
         numerator = 0.408 * delta * rn + gamma * wind_term
         denominator = delta + gamma * (1.0 + 0.34 * u2a)

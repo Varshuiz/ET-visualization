@@ -71,6 +71,7 @@ import calendar
 import io
 import json
 import os
+import traceback
 import xml.etree.ElementTree as ET
 from datetime import datetime, date, timedelta
 from io import BytesIO, StringIO
@@ -684,42 +685,33 @@ def about(request):
 
 def get_lethbridge_forecast():
     """Get weather forecast data for Lethbridge"""
-    rss_url = "https://weather.gc.ca/rss/city/ab-52_e.xml"
-    cache_key = f"lethbridge_rss_forecast_v1:{rss_url}"
-    cache_ttl = int(os.environ.get("LETHBRIDGE_RSS_CACHE_SECONDS", "900"))
-    
+    # ECCC discontinued the old RSS feed in 2025; this project uses MSC Datamart XML instead.
+    from .environment_canada_scraper import EnvironmentCanadaScraper
+
+    cache_key = "lethbridge_msc_forecast_v1"
+    cache_ttl = int(os.environ.get("LETHBRIDGE_FORECAST_CACHE_SECONDS", "900"))
+
     if cache_ttl > 0:
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
     try:
-        # feedparser can block for a long time if it fetches the URL itself.
-        r = requests.get(
-            rss_url,
-            timeout=(2, 4),
-            headers={"User-Agent": "Aqualys/1.0 (ET tool)"},
-        )
-        r.raise_for_status()
-        feed = feedparser.parse(r.content)
-        forecast_data = []
-        
-        for entry in feed.entries:
-            published = entry.get("published", "Unknown Date")
-            title = entry.get("title", "No Title")
-            summary = entry.get("summary", "No Summary")
-
-            forecast_data.append({
-                "date": published,
-                "title": title,
-                "summary": summary
-            })
-
-        out = forecast_data[:5]  # Return first 5 entries
+        scraper = EnvironmentCanadaScraper()
+        df = scraper.fetch_forecast(city_name="Lethbridge", days=5)
+        out = []
+        if df is not None and not df.empty:
+            for _, row in df.iterrows():
+                out.append(
+                    {
+                        "date": str(row.get("Date", "")),
+                        "title": str(row.get("Period", "")),
+                        "summary": str(row.get("Forecast", "")),
+                    }
+                )
         if cache_ttl > 0:
             cache.set(cache_key, out, cache_ttl)
         return out
-        
     except Exception as e:
         print(f"Forecast fetch error: {e}")
         return []
@@ -2574,6 +2566,24 @@ def aquacrop_simulation(request):
             ('deficit', 'Deficit Irrigation (60% SMT)'),
         ],
     }
+
+    def _maturity_warning(crop_name: str, end_date_str: str):
+        thresholds = {"Wheat": "09-15", "Maize": "09-20"}
+        crop_threshold = thresholds.get(crop_name)
+        if not crop_threshold:
+            return None
+        end_ts = pd.to_datetime(end_date_str, errors="coerce")
+        if pd.isna(end_ts):
+            return None
+        recommended_ts = pd.Timestamp(f"{int(end_ts.year)}-{crop_threshold}")
+        if end_ts.normalize() < recommended_ts.normalize():
+            recommended_date = recommended_ts.strftime("%Y-%m-%d")
+            return (
+                f"Warning: Your selected end date may not allow enough time for {crop_name} to reach maturity. "
+                f"Consider extending to {recommended_date} for a complete simulation. "
+                "Partial growth results will still be shown."
+            )
+        return None
     
     if request.method == 'POST':
         try:
@@ -2587,6 +2597,7 @@ def aquacrop_simulation(request):
                 city_name = default_city
             start_date = request.POST.get('start_date', '2024-05-01')
             end_date = request.POST.get('end_date', '2024-09-01')
+            context['maturity_warning'] = _maturity_warning(crop, end_date)
             
             # Handle weather data upload
             weather_df = None
@@ -2662,6 +2673,8 @@ def aquacrop_simulation(request):
             })
                         
         except Exception as e:
+            print("[AQUACROP_DEBUG] aquacrop_simulation exception traceback:")
+            print(traceback.format_exc())
             context['error_message'] = f"Simulation error: {str(e)}"
     
     return render(request, 'et/aquacrop_simulation.html', context)
@@ -2709,6 +2722,8 @@ def aquacrop_api(request):
             return JsonResponse({'success': True, 'results': results_json})
             
         except Exception as e:
+            print("[AQUACROP_DEBUG] aquacrop_api exception traceback:")
+            print(traceback.format_exc())
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'POST request required'})

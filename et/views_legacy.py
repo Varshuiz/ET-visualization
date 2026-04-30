@@ -26,6 +26,7 @@ from .et_methods import (
     maule_ET,
     net_radiation_estimate,
     penman_monteith_ET,
+    penman_monteith_ET_with_rn,
     priestley_taylor_ET,
     psychrometric_constant,
     saturation_vapor_pressure,
@@ -39,7 +40,11 @@ from .location_services import (
     reverse_geocode,
     search_alberta_location,
 )
-from .weather_ingestion import fetch_openmeteo_historical_data, normalize_uploaded_weather_dataframe
+from .weather_ingestion import (
+    fetch_openmeteo_historical_data,
+    normalize_uploaded_weather_dataframe,
+    prepare_historical_weather_dataframe,
+)
 from .eccc_weather import add_eccc_rh_to_dataframe
 from .eccc_weather import build_aquacrop_weather_from_eccc
 from .aquacrop_simulator import AquaCropSimulator, run_aquacrop_simulation
@@ -102,15 +107,21 @@ def index(request):
                 else:
                     df['Date'] = pd.date_range(start='2024-01-01', periods=len(df), freq='D')
 
+                rn_cols = [col for col in df.columns if ('net' in col.lower() and 'radiation' in col.lower()) or col.lower() in ['rn', 'rf4']]
+
                 # Find temperature and radiation columns
                 temp_cols = [col for col in df.columns if any(term in col.lower() for term in ['temp', 'air_temp', 'temperature'])]
                 rad_cols = [col for col in df.columns if any(term in col.lower() for term in ['solar', 'rad', 'radiation'])]
+                rn_cols = [col for col in df.columns if ('net' in col.lower() and 'radiation' in col.lower()) or col.lower() in ['rn', 'rf4']]
                 
-                if temp_cols and rad_cols:
+                if temp_cols and (rad_cols or rn_cols):
                     df['Tavg'] = pd.to_numeric(df[temp_cols[0]], errors='coerce')
-                    df['Rn'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                    if rn_cols:
+                        df['Rn'] = pd.to_numeric(df[rn_cols[0]], errors='coerce')
+                    else:
+                        df['Rn'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
                 else:
-                    raise ValueError("Could not find temperature and solar radiation columns")
+                    raise ValueError("Could not find temperature data and either net or solar radiation columns")
 
                 # Compute ET using Priestley-Taylor method only
                 df['ET'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Rn']), axis=1)
@@ -276,11 +287,14 @@ def process_single_method(request, method_code, method_name, template_name):
                     temp_cols = [col for col in df.columns if any(term in col.lower() for term in ['temp', 'air_temp', 'temperature'])]
                     rad_cols = [col for col in df.columns if any(term in col.lower() for term in ['solar', 'rad', 'radiation'])]
                     
-                    if not temp_cols or not rad_cols:
+                    if not temp_cols or not (rad_cols or rn_cols):
                         raise ValueError("Missing required columns for Priestley-Taylor method")
                     
                     df['Tavg'] = pd.to_numeric(df[temp_cols[0]], errors='coerce')
-                    df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                    if rad_cols:
+                        df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                    if rn_cols:
+                        df['Rn'] = pd.to_numeric(df[rn_cols[0]], errors='coerce')
                     if 'tmax' in [c.lower() for c in df.columns] and 'tmin' in [c.lower() for c in df.columns]:
                         tmax_col = next(c for c in df.columns if c.lower() == 'tmax')
                         tmin_col = next(c for c in df.columns if c.lower() == 'tmin')
@@ -289,13 +303,12 @@ def process_single_method(request, method_code, method_name, template_name):
                     else:
                         df['Tmax'] = df['Tavg'] + 5
                         df['Tmin'] = df['Tavg'] - 5
-                    df['Ra'] = df.apply(
-                        lambda row: calculate_extraterrestrial_radiation(49.7, row['Date'].dayofyear),
-                        axis=1
-                    )
-                    df['Rn'] = df.apply(
-                        lambda row: net_radiation_estimate(row['Rs'], row['Tmax'], row['Tmin'], row['Ra'], elevation=766),
-                        axis=1
+                    df = prepare_historical_weather_dataframe(
+                        df,
+                        latitude=49.7,
+                        longitude=None,
+                        elevation=766.0,
+                        prefer_eccc_rn=False,
                     )
                     df['ET'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Rn']), axis=1)
                     
@@ -312,7 +325,7 @@ def process_single_method(request, method_code, method_name, template_name):
                     missing_cols = []
                     if not temp_cols and not (tmax_cols and tmin_cols):
                         missing_cols.append("Temperature (average or max/min)")
-                    if not rad_cols:
+                    if not rad_cols and not rn_cols:
                         missing_cols.append("Solar Radiation")
 
                     if missing_cols:
@@ -333,7 +346,10 @@ def process_single_method(request, method_code, method_name, template_name):
                         df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
 
                     # Assign other meteorological variables
-                    df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                    if rad_cols:
+                        df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                    if rn_cols:
+                        df['Rn'] = pd.to_numeric(df[rn_cols[0]], errors='coerce')
                     
                     if wind_cols:
                         df['u2'] = pd.to_numeric(df[wind_cols[0]], errors='coerce')
@@ -345,12 +361,17 @@ def process_single_method(request, method_code, method_name, template_name):
                     else:
                         df['RH'] = 65.0  # Default relative humidity
 
-                    df['Ra'] = df.apply(
-                        lambda row: calculate_extraterrestrial_radiation(49.7, row['Date'].dayofyear),
-                        axis=1
+                    df = prepare_historical_weather_dataframe(
+                        df,
+                        latitude=49.7,
+                        longitude=None,
+                        elevation=766.0,
+                        prefer_eccc_rn=False,
                     )
                     df['ET'] = df.apply(
-                        lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs'], row['Ra'], elevation=766),
+                        lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs'], row['Ra'], elevation=766)
+                        if pd.isna(row.get('Rn')) else
+                        penman_monteith_ET_with_rn(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rn'], elevation=766),
                         axis=1
                     )
 
@@ -651,6 +672,8 @@ def enhanced_comparison_calculator(request):
                 rad_cols = [col for col in df.columns if any(term in col.lower() for term in ['solar', 'rad', 'radiation'])]
                 wind_cols = [col for col in df.columns if any(term in col.lower() for term in ['wind', 'wind_speed', 'ws'])]
                 rh_cols = [col for col in df.columns if any(term in col.lower() for term in ['rh', 'humidity', 'relative_humidity'])]
+                rn_cols = [col for col in df.columns if ('net' in col.lower() and 'radiation' in col.lower()) or col.lower() in ['rn', 'rf4']]
+                rn_cols = [col for col in df.columns if ('net' in col.lower() and 'radiation' in col.lower()) or col.lower() in ['rn', 'rf4']]
 
                 # Validate minimum required columns
                 missing_cols = []
@@ -677,9 +700,8 @@ def enhanced_comparison_calculator(request):
                 # Assign solar radiation (with fallback estimation)
                 if rad_cols:
                     df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
-                else:
-                    # Estimate solar radiation from temperature if not available
-                    df['Rs'] = (df['Tmax'] - df['Tmin']) * 0.16 * np.sqrt(12)
+                if rn_cols:
+                    df['Rn'] = pd.to_numeric(df[rn_cols[0]], errors='coerce')
                 
                 # Assign wind speed (with default)
                 if wind_cols:
@@ -693,16 +715,17 @@ def enhanced_comparison_calculator(request):
                 else:
                     df['RH'] = 65.0  # Default relative humidity
 
-                # Calculate extraterrestrial radiation for each day
-                df['Ra'] = df.apply(lambda row: calculate_extraterrestrial_radiation(49.7, row['day_of_year']), axis=1)
+                df = prepare_historical_weather_dataframe(
+                    df,
+                    latitude=49.7,
+                    longitude=None,
+                    elevation=766.0,
+                    prefer_eccc_rn=False,
+                )
 
                 # Calculate ET using all four methods - with proper error handling
                 # Priestley-Taylor
                 try:
-                    df['Rn'] = df.apply(
-                        lambda row: net_radiation_estimate(row['Rs'], row['Tmax'], row['Tmin'], row['Ra'], row['RH'], elevation=766),
-                        axis=1
-                    )
                     df['ET_PT'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Rn']), axis=1)
                 except Exception as e:
                     print(f"PT calculation failed: {e}")
@@ -711,7 +734,9 @@ def enhanced_comparison_calculator(request):
                 # Penman-Monteith
                 try:
                     df['ET_PM'] = df.apply(
-                        lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs'], row['Ra'], elevation=766),
+                        lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs'], row['Ra'], elevation=766)
+                        if pd.isna(row.get('Rn')) else
+                        penman_monteith_ET_with_rn(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rn'], elevation=766),
                         axis=1
                     )
                 except Exception as e:
@@ -1047,31 +1072,26 @@ def process_single_method_enhanced(request, method_code, method_name, template_n
 
                 elif method_code == 'PT':
                     # Priestley-Taylor processing
-                    if not temp_cols or not rad_cols:
-                        raise ValueError("Missing required columns for Priestley-Taylor method (temperature and solar radiation)")
+                    if not temp_cols or not (rad_cols or rn_cols):
+                        raise ValueError("Missing required columns for Priestley-Taylor method (temperature and solar or net radiation)")
                     
                     df['Tavg'] = pd.to_numeric(df[temp_cols[0]], errors='coerce')
-                    df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                    if rad_cols:
+                        df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                    if rn_cols:
+                        df['Rn'] = pd.to_numeric(df[rn_cols[0]], errors='coerce')
                     if tmax_cols and tmin_cols:
                         df['Tmax'] = pd.to_numeric(df[tmax_cols[0]], errors='coerce')
                         df['Tmin'] = pd.to_numeric(df[tmin_cols[0]], errors='coerce')
                     else:
                         df['Tmax'] = df['Tavg'] + 5
                         df['Tmin'] = df['Tavg'] - 5
-                    df['Ra'] = df.apply(
-                        lambda row: calculate_extraterrestrial_radiation(49.7, row['Date'].dayofyear),
-                        axis=1
-                    )
-                    df['Rn'] = df.apply(
-                        lambda row: net_radiation_estimate(
-                            row['Rs'],
-                            row['Tmax'],
-                            row['Tmin'],
-                            row['Ra'],
-                            row['RH'] if 'RH' in df.columns else np.nan,
-                            elevation=766
-                        ),
-                        axis=1
+                    df = prepare_historical_weather_dataframe(
+                        df,
+                        latitude=49.7,
+                        longitude=None,
+                        elevation=766.0,
+                        prefer_eccc_rn=False,
                     )
                     df['ET'] = df.apply(lambda row: priestley_taylor_ET(row['Tavg'], row['Rn']), axis=1)
                     
@@ -1080,8 +1100,8 @@ def process_single_method_enhanced(request, method_code, method_name, template_n
                     missing_cols = []
                     if not temp_cols and not (tmax_cols and tmin_cols):
                         missing_cols.append("Temperature (average or max/min)")
-                    if not rad_cols:
-                        missing_cols.append("Solar Radiation")
+                    if not rad_cols and not rn_cols:
+                        missing_cols.append("Solar Radiation or net radiation")
 
                     if missing_cols:
                         raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
@@ -1101,7 +1121,10 @@ def process_single_method_enhanced(request, method_code, method_name, template_n
                         df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
 
                     # Assign other meteorological variables
-                    df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                    if rad_cols:
+                        df['Rs'] = pd.to_numeric(df[rad_cols[0]], errors='coerce')
+                    if rn_cols:
+                        df['Rn'] = pd.to_numeric(df[rn_cols[0]], errors='coerce')
                     
                     if wind_cols:
                         df['u2'] = pd.to_numeric(df[wind_cols[0]], errors='coerce')
@@ -1113,12 +1136,17 @@ def process_single_method_enhanced(request, method_code, method_name, template_n
                     else:
                         df['RH'] = 65.0  # Default relative humidity
 
-                    df['Ra'] = df.apply(
-                        lambda row: calculate_extraterrestrial_radiation(49.7, row['Date'].dayofyear),
-                        axis=1
+                    df = prepare_historical_weather_dataframe(
+                        df,
+                        latitude=49.7,
+                        longitude=None,
+                        elevation=766.0,
+                        prefer_eccc_rn=False,
                     )
                     df['ET'] = df.apply(
-                        lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs'], row['Ra'], elevation=766),
+                        lambda row: penman_monteith_ET(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs'], row['Ra'], elevation=766)
+                        if pd.isna(row.get('Rn')) else
+                        penman_monteith_ET_with_rn(row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rn'], elevation=766),
                         axis=1
                     )
 
@@ -1403,49 +1431,15 @@ def acis_data_view(request):
 
                 # Overlay RH from ECCC climate observations where available.
                 df = add_eccc_rh_to_dataframe(df, latitude=latitude, longitude=longitude, prefer_eccc=True)
-                
-                print(f"Available columns: {df.columns.tolist()}")
-                
-                # Ensure we have required columns
-                required_cols = ['Date', 'Tmax', 'Tmin']
-                missing_cols = [col for col in required_cols if col not in df.columns]
-                
-                if missing_cols:
-                    raise ValueError(f"Missing required columns: {missing_cols}")
-                
-                # Calculate derived variables
-                if 'Tavg' not in df.columns:
-                    df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
-                
-                # Add day of year for radiation calculations
-                df['day_of_year'] = df['Date'].dt.dayofyear
-                
-                # Calculate extraterrestrial radiation
-                df['Ra'] = df.apply(
-                    lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), 
-                    axis=1
+                df = prepare_historical_weather_dataframe(
+                    df,
+                    latitude=latitude,
+                    longitude=longitude,
+                    elevation=766.0,
+                    prefer_eccc_rn=True,
                 )
-                
-                # Estimate solar radiation if not provided
-                if 'Solar_Radiation' not in df.columns:
-                    temp_range = (df['Tmax'] - df['Tmin']).clip(lower=1)
-                    kRs = 0.16
-                    df['Solar_Radiation'] = kRs * np.sqrt(temp_range) * df['Ra']
-                    df['Solar_Radiation'] = df['Solar_Radiation'].clip(3, 40)
-                
-                df['Rs'] = df['Solar_Radiation']
-                
-                # Add defaults for RH and wind if not present
-                if 'RH' not in df.columns:
-                    df['RH'] = np.nan
-                df['RH'] = pd.to_numeric(df['RH'], errors='coerce').fillna(65.0)
-                if 'Wind_Speed' not in df.columns:
-                    df['Wind_Speed'] = 2.0
-                
-                df['u2'] = df['Wind_Speed']
-                
-                # Clean up
-                df = df.drop('day_of_year', axis=1, errors='ignore')
+
+                print(f"Available columns: {df.columns.tolist()}")
                 
                 print(f"\nSuccessfully fetched {len(df)} days of data")
                 print(f"  Temperature range: {df['Tmax'].min():.1f}°C to {df['Tmax'].max():.1f}°C")
@@ -1573,11 +1567,9 @@ def comparison_with_acis(request):
         print(f"Could not fetch Environment Canada forecast: {e}")
     
     try:
-        # Add day of year column for radiation calculations
-        df['day_of_year'] = df['Date'].dt.dayofyear
-        
         # Get latitude from session
         latitude = location_info.get('latitude', 49.7)
+        longitude = location_info.get('longitude')
         
         # We need temperature columns only when ET columns are not already present.
         existing_et_columns = ['ET_PT', 'ET_PM', 'ET_Maule', 'ET_Hargreaves']
@@ -1585,44 +1577,18 @@ def comparison_with_acis(request):
         if ('Tmax' not in df.columns or 'Tmin' not in df.columns) and not has_existing_et:
             raise ValueError("Missing temperature data")
         
-        # Calculate ET inputs only when ET series are not already available.
-        if not has_existing_et:
-            # Calculate Tavg if not present
-            if 'Tavg' not in df.columns:
-                df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
-        
-            # Assign solar radiation
-            if 'Solar_Radiation' in df.columns:
-                df['Rs'] = df['Solar_Radiation']
-            elif 'Rs' not in df.columns:
-                # Estimate if not available
-                df['Rs'] = (df['Tmax'] - df['Tmin']) * 0.16 * np.sqrt(12)
-            
-            # Assign wind speed
-            if 'Wind_Speed' in df.columns:
-                df['u2'] = df['Wind_Speed']
-            elif 'u2' not in df.columns:
-                df['u2'] = 2.0  # Default
-            
-            # Assign relative humidity
-            if 'RH' not in df.columns:
-                df['RH'] = 65.0  # Default
-            else:
-                df['RH'] = pd.to_numeric(df['RH'], errors='coerce').fillna(65.0)
-            
-            # Calculate extraterrestrial radiation
-            df['Ra'] = df.apply(
-                lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), 
-                axis=1
+        if not has_existing_et or 'Rn' not in df.columns or 'Ra' not in df.columns:
+            df = prepare_historical_weather_dataframe(
+                df,
+                latitude=latitude,
+                longitude=longitude,
+                elevation=766.0,
+                prefer_eccc_rn=True,
             )
         
         # Calculate ET using all four methods (only if not already present)
         if 'ET_PT' not in df.columns:
             try:
-                df['Rn'] = df.apply(
-                    lambda row: net_radiation_estimate(row['Rs'], row['Tmax'], row['Tmin'], row['Ra'], row['RH'], elevation=766),
-                    axis=1
-                )
                 df['ET_PT'] = df.apply(
                     lambda row: priestley_taylor_ET(row['Tavg'], row['Rn']), 
                     axis=1
@@ -1636,6 +1602,8 @@ def comparison_with_acis(request):
                 df['ET_PM'] = df.apply(
                     lambda row: penman_monteith_ET(
                         row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rs'], row['Ra'], elevation=766
+                    ) if pd.isna(row.get('Rn')) else penman_monteith_ET_with_rn(
+                        row['Tmax'], row['Tmin'], row['RH'], row['u2'], row['Rn'], elevation=766
                     ), 
                     axis=1
                 )

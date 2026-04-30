@@ -568,6 +568,26 @@
                 border-radius: 10px;
             }
         }
+
+        .global-attribution {
+            text-align: center;
+            font-size: 0.85rem;
+            color: #5f6f6d;
+            padding: 8px 14px 14px;
+        }
+
+        @media print {
+            .global-attribution {
+                position: fixed;
+                bottom: 8mm;
+                left: 0;
+                right: 0;
+                padding: 0;
+                margin: 0;
+                font-size: 9.5pt;
+                color: #4f5d5b;
+            }
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -631,6 +651,7 @@
     <div class="container">
         {% block content %}{% endblock %}
     </div>
+    <div class="global-attribution">© 2026 Dr. Evan Davies &amp; Smriti Mohapatra</div>
 
     <script>
         // Mobile menu toggle + close after navigation (better on phones)

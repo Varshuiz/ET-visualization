@@ -10,6 +10,9 @@ import base64
 
 # ─── 1. AGGREGATE DAILY → WEEKLY / BIWEEKLY ────────────────────────────────
 
+def _fmt_month_day(ts: pd.Timestamp) -> str:
+    return ts.strftime("%b %d").replace(" 0", " ")
+
 def aggregate_aquacrop_timeseries(daily_df: pd.DataFrame, timestep: str = "weekly") -> pd.DataFrame:
     """
     Resample AquaCrop daily output to weekly or biweekly averages.
@@ -28,11 +31,18 @@ def aggregate_aquacrop_timeseries(daily_df: pd.DataFrame, timestep: str = "weekl
     if "Date" in df.columns:
         df["Date"] = pd.to_datetime(df["Date"])
         df = df.set_index("Date")
+    if df.index.name != "Date":
+        df.index = pd.to_datetime(df.index, errors="coerce")
+        df.index.name = "Date"
+    df = df.sort_index()
+    df = df[~df.index.isna()]
+    if df.empty:
+        return pd.DataFrame(columns=["Period", "Period_Start", "Period_End"])
 
     # Drop non-numeric columns for aggregation
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 
-    rule = "W" if timestep == "weekly" else "2W"
+    period_days = 7 if timestep == "weekly" else 14
 
     # Mean of state variables, sum of fluxes
     flux_cols   = [c for c in numeric_cols if any(k in c.lower() for k in
@@ -42,15 +52,32 @@ def aggregate_aquacrop_timeseries(daily_df: pd.DataFrame, timestep: str = "weekl
     agg_dict = {c: "sum" for c in flux_cols}
     agg_dict.update({c: "mean" for c in state_cols})
 
-    resampled = df[numeric_cols].resample(rule).agg(
-        {c: agg_dict.get(c, "mean") for c in numeric_cols}
-    )
-    resampled = resampled.reset_index()
-    resampled.rename(columns={"Date": "Period_End"}, inplace=True)
+    sim_start = df.index.min().normalize()
+    sim_end = df.index.max().normalize()
+    period_index = ((df.index.normalize() - sim_start).days // period_days).astype(int)
+    work = df[numeric_cols].copy()
+    work["period_index"] = period_index
 
-    # Add period number label
-    resampled.insert(0, "Period", [f"{'Wk' if timestep == 'weekly' else 'Biwk'} {i+1}"
-                                   for i in range(len(resampled))])
+    resampled = (
+        work.groupby("period_index", as_index=False)
+        .agg({c: agg_dict.get(c, "mean") for c in numeric_cols})
+        .sort_values("period_index")
+        .reset_index(drop=True)
+    )
+
+    resampled["Period_Start"] = resampled["period_index"].apply(
+        lambda idx: sim_start + pd.Timedelta(days=int(idx) * period_days)
+    )
+    resampled["Period_End"] = resampled["Period_Start"].apply(
+        lambda d: min(d + pd.Timedelta(days=period_days - 1), sim_end)
+    )
+
+    label_prefix = "Week" if timestep == "weekly" else "Biweek"
+    resampled["Period"] = [
+        f"{label_prefix} {i + 1} ({_fmt_month_day(row['Period_Start'])} - {_fmt_month_day(row['Period_End'])})"
+        for i, (_, row) in enumerate(resampled.iterrows())
+    ]
+    resampled = resampled[["Period", "Period_Start", "Period_End"] + numeric_cols]
 
     return resampled
 
@@ -83,7 +110,14 @@ def plot_aquacrop_timeseries(resampled_df: pd.DataFrame,
     ax.set_xticklabels(resampled_df["Period"], rotation=45, ha="right", fontsize=8)
     ax.set_xlabel(f"{'Weekly' if timestep == 'weekly' else 'Biweekly'} Period", fontsize=11)
     ax.set_ylabel(y_col, fontsize=11)
-    ax.set_title(title, fontsize=13, fontweight="bold", color="#1a3a3a")
+    period_text = ""
+    if {"Period_Start", "Period_End"}.issubset(resampled_df.columns) and not resampled_df.empty:
+        sim_start = pd.to_datetime(resampled_df["Period_Start"].min(), errors="coerce")
+        sim_end = pd.to_datetime(resampled_df["Period_End"].max(), errors="coerce")
+        if pd.notna(sim_start) and pd.notna(sim_end):
+            period_text = f"{_fmt_month_day(sim_start)} - {_fmt_month_day(sim_end)} {sim_end.year}"
+    title_text = f"{title}\n({period_text})" if period_text else title
+    ax.set_title(title_text, fontsize=13, fontweight="bold", color="#1a3a3a")
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.1f"))
     ax.grid(axis="y", linestyle="--", alpha=0.4)
     ax.spines[["top", "right"]].set_visible(False)

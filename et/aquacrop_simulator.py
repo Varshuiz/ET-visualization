@@ -12,6 +12,7 @@ from aquacrop import (
 )
 import pandas as pd
 import numpy as np
+import traceback
 
 
 class AquaCropSimulator:
@@ -72,7 +73,7 @@ class AquaCropSimulator:
             planting_date = start_dt.strftime('%m/%d')
             
             print(f"\n{'='*70}")
-            print(f"🌾 Running AquaCrop Simulation")
+            print("Running AquaCrop Simulation")
             print(f"{'='*70}")
             print(f"Crop: {crop_name}")
             print(f"Soil: {soil_type}")
@@ -87,10 +88,23 @@ class AquaCropSimulator:
                     "or use ECCC-backed auto-fetch in the simulation form."
                 )
             weather_df = self._prepare_weather_data(weather_data)
+            self._log_weather_diagnostics(weather_df, start_dt, end_dt)
             
             # Create components
             soil = Soil(soil_type=self.SOIL_TYPES.get(soil_type, 'Loam'))
-            crop = Crop(crop_name, planting_date=planting_date)
+            try:
+                crop = Crop(crop_name, planting_date=planting_date)
+                print(
+                    "[AQUACROP_DEBUG] Crop parameters loaded successfully: "
+                    f"crop_name={crop_name}, planting_date={planting_date}"
+                )
+            except Exception:
+                print(
+                    "[AQUACROP_DEBUG] Crop parameter load failed: "
+                    f"crop_name={crop_name}, planting_date={planting_date}"
+                )
+                print(traceback.format_exc())
+                raise
             
             if initial_water_content == 'FC':
                 initial_wc = InitialWaterContent(value=['FC'])
@@ -108,6 +122,13 @@ class AquaCropSimulator:
                 irrigation = IrrigationManagement(irrigation_method=1, SMT=[60] * 4)
             
             # Create and run model
+            print(
+                "[AQUACROP_DEBUG] AquaCropModel call params: "
+                f"sim_start_time={start_str}, sim_end_time={end_str}, "
+                f"crop={crop_name}, soil={self.SOIL_TYPES.get(soil_type, 'Loam')}, "
+                f"irrigation_method={irrigation_method}, initial_water_content={initial_water_content}, "
+                f"weather_rows={len(weather_df)}, weather_columns={list(weather_df.columns)}"
+            )
             model = AquaCropModel(
                 sim_start_time=start_str,
                 sim_end_time=end_str,
@@ -123,7 +144,7 @@ class AquaCropSimulator:
             # Process results
             results = self._process_results(model)
             
-            print(f"\n✅ Simulation Complete!")
+            print("\nSimulation Complete!")
             print(f"   Yield: {results['yield_fresh']:.1f} tonnes/ha")
             print(f"   Water Use: {results['total_et']:.1f} mm")
             print(f"   Water Productivity: {results['water_productivity']:.2f} kg/m³\n")
@@ -134,10 +155,32 @@ class AquaCropSimulator:
             return results
             
         except Exception as e:
-            print(f"\n❌ Error: {e}\n")
-            import traceback
+            print(f"\nError: {e}\n")
             traceback.print_exc()
             raise
+
+    def _log_weather_diagnostics(self, weather_df: pd.DataFrame, start_dt: pd.Timestamp, end_dt: pd.Timestamp):
+        weather_copy = weather_df.copy()
+        weather_copy["Date"] = pd.to_datetime(weather_copy["Date"], errors="coerce")
+        nan_counts = weather_copy.isna().sum().to_dict()
+        date_min = weather_copy["Date"].min() if "Date" in weather_copy.columns else pd.NaT
+        date_max = weather_copy["Date"].max() if "Date" in weather_copy.columns else pd.NaT
+        planting_before_weather = bool(pd.notna(date_min) and start_dt.normalize() < date_min.normalize())
+
+        print("[AQUACROP_DEBUG] Weather dataframe columns:", list(weather_copy.columns))
+        print("[AQUACROP_DEBUG] Weather dataframe rows:", len(weather_copy))
+        print("[AQUACROP_DEBUG] Weather dataframe NaN counts:", nan_counts)
+        print("[AQUACROP_DEBUG] Weather dataframe first date:", date_min)
+        print("[AQUACROP_DEBUG] Weather dataframe last date:", date_max)
+        print(
+            "[AQUACROP_DEBUG] Planting before first weather row:",
+            planting_before_weather,
+            f"(planting={start_dt.normalize()}, first_weather={date_min.normalize() if pd.notna(date_min) else 'NaT'})",
+        )
+        print("[AQUACROP_DEBUG] Weather dataframe first 5 rows:")
+        print(weather_copy.head(5).to_string(index=False))
+        print("[AQUACROP_DEBUG] Weather dataframe last 5 rows:")
+        print(weather_copy.tail(5).to_string(index=False))
     
     def _generate_sample_weather(self, start_date, end_date):
         """
@@ -208,25 +251,46 @@ class AquaCropSimulator:
     
     def _process_results(self, model):
         """Extract results using official output format"""
-        final_stats = model._outputs.final_stats
-        crop_growth = model._outputs.crop_growth
-        water_flux = model._outputs.water_flux
+        outputs = getattr(model, "_outputs", None) or getattr(model, "Outputs", None)
+        if outputs is None:
+            return {
+                "yield_fresh": 0,
+                "yield_dry": 0,
+                "biomass": 0,
+                "total_irrigation": 0,
+                "total_et": 0,
+                "transpiration": 0,
+                "evaporation": 0,
+                "total_rainfall": 0,
+                "water_productivity": 0,
+                "irrigation_efficiency": 0,
+                "canopy_cover_max": 0,
+                "growing_degree_days": 0,
+                "daily_output": pd.DataFrame(),
+                "water_flux": pd.DataFrame(),
+                "reached_maturity": False,
+                "partial_results": True,
+                "result_note": "Simulation ended before crop maturity — showing partial growth results only.",
+            }
+
+        final_stats = getattr(outputs, "final_stats", pd.DataFrame())
+        crop_growth = getattr(outputs, "crop_growth", pd.DataFrame())
+        water_flux = getattr(outputs, "water_flux", pd.DataFrame())
+        has_final_stats = len(final_stats) > 0
         
-        if len(final_stats) == 0:
-            raise ValueError("Simulation produced no output - check dates and crop settings")
-        
-        # Get last season's results
-        last_season = final_stats.iloc[-1]
-        
-        # Find correct column names (they vary slightly between versions)
-        yield_col = next((col for col in final_stats.columns if 'dry yield' in col.lower()), None)
-        irrigation_col = next((col for col in final_stats.columns if 'irrigation' in col.lower()), None)
-        
+        last_season = final_stats.iloc[-1] if has_final_stats else None
+        yield_col = next((col for col in final_stats.columns if 'dry yield' in col.lower()), None) if has_final_stats else None
+        irrigation_col = (
+            next((col for col in final_stats.columns if 'irrigation' in col.lower()), None)
+            if has_final_stats
+            else None
+        )
+
         results = {
-            'yield_fresh': last_season[yield_col] if yield_col else 0,
-            'yield_dry': last_season[yield_col] if yield_col else 0,
+            'yield_fresh': last_season[yield_col] if has_final_stats and yield_col else 0,
+            'yield_dry': last_season[yield_col] if has_final_stats and yield_col else 0,
             'biomass': crop_growth['biomass'].iloc[-1] if len(crop_growth) > 0 else 0,
-            'total_irrigation': last_season[irrigation_col] if irrigation_col else 0,
+            'total_irrigation': last_season[irrigation_col] if has_final_stats and irrigation_col else 0,
             'total_et': (water_flux['Tr'].sum() + water_flux['Es'].sum()) if len(water_flux) > 0 else 0,
             'transpiration': water_flux['Tr'].sum() if len(water_flux) > 0 else 0,
             'evaporation': water_flux['Es'].sum() if len(water_flux) > 0 else 0,
@@ -237,6 +301,13 @@ class AquaCropSimulator:
             'growing_degree_days': crop_growth['gdd_cum'].iloc[-1] if len(crop_growth) > 0 else 0,
             'daily_output': crop_growth,
             'water_flux': water_flux,
+            'reached_maturity': bool(has_final_stats),
+            'partial_results': not bool(has_final_stats),
+            'result_note': (
+                "Simulation ended before crop maturity — showing partial growth results only."
+                if not has_final_stats
+                else None
+            ),
         }
         
         # Calculated metrics

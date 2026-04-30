@@ -143,6 +143,16 @@
         color: #333;
     }
 
+    .warning-box {
+        background: #fff7ed;
+        border-left: 4px solid #f59e0b;
+        color: #7c2d12;
+        padding: 12px 14px;
+        border-radius: 8px;
+        margin: 12px 0 18px;
+        font-size: 0.95rem;
+    }
+
     canvas {
         max-width: 100%;
         height: 400px !important;
@@ -207,6 +217,10 @@
         
         <form method="post" enctype="multipart/form-data" id="simulationForm" data-loading-text="Running crop simulation...">
             {% csrf_token %}
+            <div id="maturityWarning" class="warning-box" style="display: none;"></div>
+            {% if maturity_warning %}
+            <div class="warning-box">{{ maturity_warning }}</div>
+            {% endif %}
             
             <div class="form-grid">
                 <div class="form-group">
@@ -299,6 +313,9 @@
     {% if has_results %}
     <!-- Results Summary -->
     <h2 style="color: #095256; margin-bottom: 20px;">Simulation Results</h2>
+    {% if results.partial_results %}
+    <div class="warning-box">{{ results.result_note }}</div>
+    {% endif %}
     
     <div class="results-summary">
         <div class="result-card">
@@ -392,6 +409,31 @@
         </button>
     </div>
     {% endif %}
+
+    <div class="chart-container">
+        <h3>Model Credit</h3>
+        <p style="color: #333; line-height: 1.8; margin-bottom: 12px;">
+            Steduto, P., Hsiao, T.C., Fereres, E., Raes, D. (2012). Crop yield response
+            to water. FAO Irrigation and Drainage Paper 66. Food and Agriculture Organization
+            of the United Nations, Rome.
+            <a href="https://www.fao.org/3/i2800e/i2800e.pdf" target="_blank" rel="noopener noreferrer">https://www.fao.org/3/i2800e/i2800e.pdf</a>
+        </p>
+        <p style="color: #333; line-height: 1.8; margin-bottom: 18px;">
+            Hsiao, T.C., Heng, L., Steduto, P., Rojas-Lara, B., Raes, D., Fereres, E. (2009).
+            AquaCrop - The FAO crop model to simulate yield response to water: III.
+            Parameterization and testing for maize. Agronomy Journal, 101(3), 448-459.
+            <a href="https://doi.org/10.2134/agronj2008.0218s" target="_blank" rel="noopener noreferrer">https://doi.org/10.2134/agronj2008.0218s</a>
+        </p>
+
+        <h3>Model &amp; Data Sources</h3>
+        <ul style="color: #333; line-height: 1.8; padding-left: 20px;">
+            <li>AquaCrop Python package (<a href="https://github.com/aquacrop/aquacrop" target="_blank" rel="noopener noreferrer">https://github.com/aquacrop/aquacrop</a>)</li>
+            <li>FAO AquaCrop model (<a href="https://www.fao.org/aquacrop" target="_blank" rel="noopener noreferrer">https://www.fao.org/aquacrop</a>)</li>
+            <li>Open-Meteo archive and forecast APIs (<a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer">https://open-meteo.com</a>)</li>
+            <li>Environment and Climate Change Canada (ECCC) / MSC Datamart (<a href="https://dd.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://dd.weather.gc.ca</a>)</li>
+            <li>ECCC climate daily API (<a href="https://api.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://api.weather.gc.ca</a>)</li>
+        </ul>
+    </div>
 </div>
 {% endblock %}
 
@@ -578,5 +620,46 @@ document.getElementById('weather_file').addEventListener('change', function(e) {
     uploadArea.textContent = `File: ${fileName}`;
     uploadArea.style.color = '#5AAA95';
 });
+
+function parseDateInput(value) {
+    if (!value) return null;
+    const normalized = value.trim().replace(/\//g, '-');
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getRecommendedDate(crop, year) {
+    if (crop === 'Wheat') return `${year}-09-15`;
+    if (crop === 'Maize') return `${year}-09-20`;
+    return null;
+}
+
+function updateMaturityWarning() {
+    const crop = document.getElementById('crop')?.value || '';
+    const endDateRaw = document.querySelector('input[name=\"end_date\"]')?.value || '';
+    const warningEl = document.getElementById('maturityWarning');
+    if (!warningEl) return;
+
+    const endDate = parseDateInput(endDateRaw);
+    if (!endDate || (crop !== 'Wheat' && crop !== 'Maize')) {
+        warningEl.style.display = 'none';
+        warningEl.textContent = '';
+        return;
+    }
+
+    const recommended = getRecommendedDate(crop, endDate.getFullYear());
+    const recommendedDate = new Date(recommended);
+    if (endDate < recommendedDate) {
+        warningEl.textContent = `Warning: Your selected end date may not allow enough time for ${crop} to reach maturity. Consider extending to ${recommended} for a complete simulation. Partial growth results will still be shown.`;
+        warningEl.style.display = 'block';
+        return;
+    }
+    warningEl.style.display = 'none';
+    warningEl.textContent = '';
+}
+
+document.getElementById('crop')?.addEventListener('change', updateMaturityWarning);
+document.querySelector('input[name=\"end_date\"]')?.addEventListener('input', updateMaturityWarning);
+updateMaturityWarning();
 </script>
 {% endblock %}

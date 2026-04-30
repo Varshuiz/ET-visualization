@@ -81,6 +81,43 @@ Date,Tmax,Tmin,Solar_Radiation,Humidity,Wind_Speed<br>
                 <li>Review side-by-side ET results and download data</li>
             </ol>
         </div>
+
+        <div style="background: linear-gradient(135deg, #e7f7f7, #f4fbfb); padding: 20px; border-radius: 15px;">
+            <h3 style="color: var(--teal); margin-bottom: 15px;"><i class="fas fa-cloud-sun-rain"></i> Forecast &amp; Water Plan</h3>
+            <ol style="color: var(--midnight-green); line-height: 1.8;">
+                <li>Visit the Forecast &amp; Water Plan page</li>
+                <li>Enter your city or town name in the search box</li>
+                <li>Select your crop type from the dropdown</li>
+                <li>Select your soil type from the dropdown</li>
+                <li>Choose your forecast horizon (3 to 30 days)</li>
+                <li>Click "Get Forecast"</li>
+                <li>Review the daily forecast cards showing temperature, precipitation, and estimated ET</li>
+                <li>Check the irrigation recommendation summary (Low / Moderate / High)</li>
+                <li>Read the Irrigation Confidence Band chart - the grey band shows the P10&ndash;P90 range from historical years, the dashed line is the historical median, and the teal line is your current forecast. If the teal line runs near the top of the band, prepare for more irrigation than a typical year.</li>
+            </ol>
+            <p style="margin-top: 12px; color: var(--midnight-green); line-height: 1.7;">
+                <strong>Note:</strong> Forecasts beyond 7 days are less reliable. Use the grey band and historical range as your guide rather than the single millimetre figure for extended horizons.
+            </p>
+        </div>
+
+        <div style="background: linear-gradient(135deg, #f1f8f1, #f8fcf8); padding: 20px; border-radius: 15px;">
+            <h3 style="color: var(--asparagus); margin-bottom: 15px;"><i class="fas fa-seedling"></i> AquaCrop Simulation</h3>
+            <p style="color: var(--midnight-green); line-height: 1.7; margin-bottom: 12px;">
+                AquaCrop is a crop water productivity model developed by the FAO. It simulates how crops grow and use water through the season, giving a more detailed picture of crop water demand than a simple ET calculation.
+            </p>
+            <ol style="color: var(--midnight-green); line-height: 1.8;">
+                <li>Visit the Crop Simulation page</li>
+                <li>Enter your location (city or township)</li>
+                <li>Select your crop type (wheat, maize, etc.)</li>
+                <li>Set your planting date and end date - use dates within the growing season (May 1&ndash;September 1 recommended for Alberta)</li>
+                <li>Click "Run AquaCrop Simulation"</li>
+                <li>Review the weekly output charts showing biomass, canopy cover, and water use</li>
+                <li>Download the results if needed</li>
+            </ol>
+            <p style="margin-top: 12px; color: var(--midnight-green); line-height: 1.7;">
+                <strong>Important:</strong> Dates must fall within the growing season. Simulations outside May&ndash;September for Alberta will produce no output. If you see "Simulation produced no output", check that your date range falls within the growing season and that your location has available weather data.
+            </p>
+        </div>
     </div>
 </div>
 
@@ -209,6 +246,30 @@ Date,Tmax,Tmin,Solar_Radiation,Humidity,Wind_Speed<br>
     </div>
 </div>
 
+<div class="card fade-in">
+    <h2 style="color: var(--midnight-green); margin-bottom: 20px;">Credits &amp; Data Sources</h2>
+
+    <h3 style="color: var(--teal); margin-bottom: 12px;">ET Methods &amp; References</h3>
+    <ul style="color: var(--midnight-green); line-height: 1.8; margin-bottom: 18px; padding-left: 20px;">
+        <li>Penman-Monteith (FAO-56): Allen, R.G., Pereira, L.S., Raes, D., Smith, M. (1998). Crop evapotranspiration: Guidelines for computing crop water requirements. FAO Irrigation and Drainage Paper 56. <a href="https://www.fao.org/3/x0490e/x0490e00.htm" target="_blank" rel="noopener noreferrer">https://www.fao.org/3/x0490e/x0490e00.htm</a></li>
+        <li>Priestley-Taylor: Priestley, C.H.B. and Taylor, R.J. (1972). On the assessment of surface heat flux and evaporation using large-scale parameters. Monthly Weather Review, 100, 81&ndash;92.</li>
+        <li>Hargreaves-Samani: Hargreaves, G.H. and Samani, Z.A. (1985). Reference crop evapotranspiration from temperature. Applied Engineering in Agriculture, 1(2), 96&ndash;99.</li>
+        <li>Maule: This implementation uses a project-calibrated Maul&eacute;-style ET formulation tuned for Prairie conditions (see method notes in code).</li>
+    </ul>
+
+    <h3 style="color: var(--teal); margin-bottom: 12px;">AquaCrop</h3>
+    <ul style="color: var(--midnight-green); line-height: 1.8; margin-bottom: 18px; padding-left: 20px;">
+        <li>FAO AquaCrop model: <a href="https://www.fao.org/aquacrop" target="_blank" rel="noopener noreferrer">https://www.fao.org/aquacrop</a></li>
+        <li>AquaCrop Python package: <a href="https://github.com/aquacrop/aquacrop" target="_blank" rel="noopener noreferrer">https://github.com/aquacrop/aquacrop</a></li>
+    </ul>
+
+    <h3 style="color: var(--teal); margin-bottom: 12px;">Weather Data Sources</h3>
+    <ul style="color: var(--midnight-green); line-height: 1.8; padding-left: 20px;">
+        <li>Historical &amp; forecast weather: Open-Meteo Archive/Forecast APIs (<a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer">https://open-meteo.com</a>)</li>
+        <li>Canadian weather data (forecast/climate observations): Environment and Climate Change Canada (ECCC) via MSC Datamart and climate API endpoints (<a href="https://weather.gc.ca" target="_blank" rel="noopener noreferrer">https://weather.gc.ca</a>, <a href="https://dd.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://dd.weather.gc.ca</a>, <a href="https://api.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://api.weather.gc.ca</a>)</li>
+    </ul>
+</div>
+
 <div style="text-align: center; margin: 40px 0;">
     <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
         <a href="{% url 'et:comparison' %}" style="background: linear-gradient(135deg, var(--teal), var(--midnight-green)); color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: 600; box-shadow: 0 5px 15px rgba(8, 127, 140, 0.3); display: inline-flex; align-items: center; gap: 10px;">
@@ -218,6 +279,21 @@ Date,Tmax,Tmin,Solar_Radiation,Humidity,Wind_Speed<br>
             <i class="fas fa-info-circle"></i> Learn About Methods
         </a>
     </div>
+</div>
+
+<div class="card fade-in">
+    <h2 style="color: var(--midnight-green); margin-bottom: 20px;">Contact</h2>
+    <p style="color: var(--midnight-green); line-height: 1.8; margin-bottom: 12px;">For questions or feedback about this tool:</p>
+    <p style="color: var(--midnight-green); line-height: 1.8; margin-bottom: 12px;">
+        Smriti Mohapatra<br>
+        University of Alberta<br>
+        smritimohapatra21@gmail.com
+    </p>
+    <p style="color: var(--midnight-green); line-height: 1.8; margin-bottom: 12px;">
+        Supervisor: Dr. Evan Davies<br>
+        University of Alberta, Department of Civil and Environmental Engineering<br>
+        evan.davies@ualberta.ca
+    </p>
 </div>
 
 {% endblock %}
