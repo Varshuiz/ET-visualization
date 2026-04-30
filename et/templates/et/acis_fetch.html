@@ -472,6 +472,7 @@
         <p class="subtitle">Start here to bring in weather data and estimate daily crop water use for your field.</p>
     </div>
 
+    {% if not df_preview %}
     <div class="info-box">
         <h3>Use This Tool To</h3>
         <p>
@@ -485,6 +486,7 @@
         </ul>
        
     </div>
+    {% endif %}
 
     {% if error_message %}
     <div class="error-message">
@@ -498,6 +500,7 @@
     </div>
     {% endif %}
 
+    {% if not df_preview %}
     <div class="upload-card">
         <form method="post" enctype="multipart/form-data" id="acisForm" data-loading-text="Fetching historical weather data...">
             {% csrf_token %}
@@ -659,9 +662,10 @@
             </div>
         </form>
     </div>
+    {% endif %}
 
     {% if df_preview %}
-    <div style="margin-top: 40px;">
+    <div style="margin-top: 8px;">
         <h2 class="acis-preview-title">Data preview (first 10 days)</h2>
         {% if used_station %}
         <p style="margin: 6px 0 14px 0; color:#355c60; font-weight:600;">
@@ -698,6 +702,11 @@
         <div style="text-align: center; margin-top: 30px;">
             <a href="{% url 'et:comparison_with_acis' %}" class="submit-btn" style="display: inline-block; text-decoration: none; text-align: center;" data-loading-link="true" data-loading-text="Calculating ET values and opening comparison...">
                 Calculate and Compare Water Use
+            </a>
+        </div>
+        <div style="text-align: center; margin-top: 14px;">
+            <a href="{% url 'et:acis_fetch' %}" class="submit-btn" style="display: inline-block; text-decoration: none; text-align: center; background: linear-gradient(135deg, #5AAA95, #3f8f7f);">
+                Choose another ET setup
             </a>
         </div>
     </div>

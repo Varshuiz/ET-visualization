@@ -106,8 +106,13 @@ def plot_aquacrop_timeseries(resampled_df: pd.DataFrame,
                 label="3-period moving avg", zorder=3)
         ax.legend(fontsize=9)
 
-    ax.set_xticks(x)
-    ax.set_xticklabels(resampled_df["Period"], rotation=45, ha="right", fontsize=8)
+    # Keep x-axis readable for long runs by showing only evenly spaced labels.
+    period_labels = resampled_df["Period"].astype(str).tolist()
+    tick_step = max(1, int(np.ceil(len(period_labels) / 12)))
+    tick_positions = x[::tick_step]
+    tick_labels = [period_labels[i] for i in range(0, len(period_labels), tick_step)]
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels, rotation=35, ha="right", fontsize=8)
     ax.set_xlabel(f"{'Weekly' if timestep == 'weekly' else 'Biweekly'} Period", fontsize=11)
     ax.set_ylabel(y_col, fontsize=11)
     period_text = ""

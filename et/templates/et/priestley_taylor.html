@@ -39,7 +39,8 @@
             </code>
             <p style="margin-top: 10px; font-size: 0.9rem; color: var(--zomp);">
                 Where: α = 1.26 (empirical coefficient), Δ = slope of saturation vapor pressure curve, 
-                γ = psychrometric constant, Rn = net radiation, λ = latent heat of vaporization
+                γ = psychrometric constant, Rn = net radiation, λ = latent heat of vaporization.
+                For daily ET in this app, soil heat flux is assumed negligible (G ≈ 0).
             </p>
         </div>
     </div>
@@ -180,12 +181,10 @@
         <a href="https://doi.org/10.5194/hess-17-1331-2013" target="_blank" rel="noopener noreferrer">https://doi.org/10.5194/hess-17-1331-2013</a>
     </p>
 
-    <h3 style="color: var(--asparagus); margin-bottom: 12px;">Weather &amp; Climate Data Sources</h3>
-    <ul style="color: var(--midnight-green); line-height: 1.8; padding-left: 20px;">
-        <li>Open-Meteo archive and forecast APIs (<a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer">https://open-meteo.com</a>)</li>
-        <li>Environment and Climate Change Canada (ECCC) / MSC Datamart (<a href="https://dd.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://dd.weather.gc.ca</a>)</li>
-        <li>ECCC climate daily API (<a href="https://api.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://api.weather.gc.ca</a>)</li>
-    </ul>
+    <p style="color: var(--midnight-green); line-height: 1.8;">
+        For full data sources, credits and references see the
+        <a href="{% url 'et:method_info' %}#references-data-sources">Method Guide</a>.
+    </p>
 </div>
 
 <style>

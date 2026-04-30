@@ -42,7 +42,7 @@
                 <li>Solar radiation (MJ/m²/day)</li>
             </ul>
             <div style="margin-top: 15px; padding: 12px; background: #f1f8e9; border-radius: 8px;">
-                <code style="color: var(--asparagus); font-size: 0.9rem;">ET₀ = α × (Δ/(Δ+γ)) × (Rn - G) / λ</code>
+                <code style="color: var(--asparagus); font-size: 0.9rem;">ET₀ = α × (Δ/(Δ+γ)) × (Rn/λ), with daily G ≈ 0</code>
             </div>
         </div>
 
@@ -114,7 +114,7 @@
                 <li>Minimum temperature (°C)</li>
             </ul>
             <div style="margin-top: 15px; padding: 12px; background: #e0f2f1; border-radius: 8px;">
-                <code style="color: #5AAA95; font-size: 0.9rem;">ET₀ = 0.0023 × Ra × (Tmax-Tmin)^0.5 × (Tavg+17.8)</code>
+                <code style="color: #5AAA95; font-size: 0.9rem;">ET₀ = 0.0023 × (Ra/λ) × (Tmax-Tmin)^0.5 × (Tavg+17.8)</code>
             </div>
         </div>
 
@@ -150,7 +150,7 @@
                 <li><em>Optional:</em> Relative humidity (%)</li>
             </ul>
             <div style="margin-top: 15px; padding: 12px; background: #fff8e1; border-radius: 8px;">
-                <code style="color: #BB9F06; font-size: 0.9rem;">ET₀ = C × Ra × (Tmax-Tmin)^0.5 × (Tavg+17.8) / 100</code>
+                <code style="color: #BB9F06; font-size: 0.9rem;">ET₀ = k × (Tavg+a) × Rs × fRH × fΔT</code>
             </div>
         </div>
 
@@ -214,6 +214,37 @@
                 </tbody>
             </table>
         </div>
+    </div>
+
+    <div id="references-data-sources" style="margin-top: 38px; padding: 24px; background: #f8fffe; border: 1px solid #d8ece8; border-left: 4px solid var(--teal); border-radius: 12px;">
+        <h2 style="color: var(--midnight-green); margin-bottom: 14px;">References &amp; Data Sources</h2>
+        <p style="color: var(--midnight-green); margin-bottom: 14px; line-height: 1.7;">
+            This section centralizes method references, model credits, and shared weather/climate data sources used across calculator pages.
+        </p>
+
+        <h3 style="color: var(--teal); margin-bottom: 10px;">ET Methods</h3>
+        <ul style="color: var(--midnight-green); line-height: 1.8; padding-left: 20px; margin-bottom: 14px;">
+            <li>Allen, R.G., Pereira, L.S., Raes, D., Smith, M. (1998). Crop evapotranspiration: Guidelines for computing crop water requirements. FAO Irrigation and Drainage Paper 56. <a href="https://www.fao.org/3/x0490e/x0490e00.htm" target="_blank" rel="noopener noreferrer">https://www.fao.org/3/x0490e/x0490e00.htm</a></li>
+            <li>Priestley, C.H.B. and Taylor, R.J. (1972). On the assessment of surface heat flux and evaporation using large-scale parameters. Monthly Weather Review, 100, 81-92. <a href="https://doi.org/10.1175/1520-0493(1972)100&lt;0081:OTAOSH&gt;2.3.CO;2" target="_blank" rel="noopener noreferrer">https://doi.org/10.1175/1520-0493(1972)100&lt;0081:OTAOSH&gt;2.3.CO;2</a></li>
+            <li>Hargreaves, G.H. and Samani, Z.A. (1985). Reference crop evapotranspiration from temperature. Applied Engineering in Agriculture, 1(2), 96-99. <a href="https://doi.org/10.13031/2013.26773" target="_blank" rel="noopener noreferrer">https://doi.org/10.13031/2013.26773</a></li>
+            <li>Maule, C.P., Helwig, N., Crowe, A. (2006). Calibrating the Hargreaves equation for evapotranspiration estimation in the Canadian Prairies. Canadian Water Resources Journal, 31(4), 237-250. <a href="https://doi.org/10.4296/cwrj3104237" target="_blank" rel="noopener noreferrer">https://doi.org/10.4296/cwrj3104237</a></li>
+        </ul>
+
+        <h3 style="color: var(--teal); margin-bottom: 10px;">AquaCrop Model</h3>
+        <ul style="color: var(--midnight-green); line-height: 1.8; padding-left: 20px; margin-bottom: 14px;">
+            <li>Steduto, P., Hsiao, T.C., Fereres, E., Raes, D. (2012). Crop yield response to water. FAO Irrigation and Drainage Paper 66. <a href="https://www.fao.org/3/i2800e/i2800e.pdf" target="_blank" rel="noopener noreferrer">https://www.fao.org/3/i2800e/i2800e.pdf</a></li>
+            <li>Hsiao, T.C., Heng, L., Steduto, P., Rojas-Lara, B., Raes, D., Fereres, E. (2009). AquaCrop parameterization and testing for maize. Agronomy Journal, 101(3), 448-459. <a href="https://doi.org/10.2134/agronj2008.0218s" target="_blank" rel="noopener noreferrer">https://doi.org/10.2134/agronj2008.0218s</a></li>
+            <li>AquaCrop Python package: <a href="https://github.com/aquacropos/aquacrop" target="_blank" rel="noopener noreferrer">https://github.com/aquacropos/aquacrop</a></li>
+            <li>FAO AquaCrop model: <a href="https://www.fao.org/aquacrop" target="_blank" rel="noopener noreferrer">https://www.fao.org/aquacrop</a></li>
+        </ul>
+
+        <h3 style="color: var(--teal); margin-bottom: 10px;">Weather &amp; Climate Data Sources</h3>
+        <ul style="color: var(--midnight-green); line-height: 1.8; padding-left: 20px;">
+            <li>Open-Meteo archive and forecast APIs: <a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer">https://open-meteo.com</a></li>
+            <li>Environment and Climate Change Canada (ECCC) / MSC Datamart: <a href="https://dd.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://dd.weather.gc.ca</a></li>
+            <li>ECCC climate API endpoints: <a href="https://api.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://api.weather.gc.ca</a></li>
+            <li>ECCC weather portal: <a href="https://weather.gc.ca" target="_blank" rel="noopener noreferrer">https://weather.gc.ca</a></li>
+        </ul>
     </div>
 
     <div style="text-align: center; margin-top: 40px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">

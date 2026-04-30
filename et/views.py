@@ -2549,17 +2549,21 @@ def aquacrop_simulation(request):
     """
     View for AquaCrop crop growth simulation
     """
-    
-    from .environment_canada_scraper import EnvironmentCanadaScraper
-    default_city = "Calgary"
-    available_cities = sorted(EnvironmentCanadaScraper.LOCATION_CODES.keys())
+
+    default_city = ""
+    available_cities = sorted(ALBERTA_LOCATIONS.keys())
 
     context = {
         'crops': list(AquaCropSimulator.AVAILABLE_CROPS.keys()),
         'soil_types': list(AquaCropSimulator.SOIL_TYPES.keys()),
         'available_cities': available_cities,
         'selected_city': default_city,
+        'selected_crop': '',
+        'selected_soil': '',
         'selected_irrigation': 'full',
+        'timestep': '',
+        'start_date': '',
+        'end_date': '',
         'irrigation_methods': [
             ('rainfed', 'Rainfed (No Irrigation)'),
             ('full', 'Full Irrigation (80% SMT)'),
@@ -2580,7 +2584,8 @@ def aquacrop_simulation(request):
             recommended_date = recommended_ts.strftime("%Y-%m-%d")
             return (
                 f"Warning: Your selected end date may not allow enough time for {crop_name} to reach maturity. "
-                f"Consider extending to {recommended_date} for a complete simulation. "
+                f"Consider extending to at least {recommended_date}. "
+                "Actual maturity can still occur later depending on location weather and temperatures. "
                 "Partial growth results will still be shown."
             )
         return None
@@ -2593,10 +2598,10 @@ def aquacrop_simulation(request):
             soil = request.POST.get('soil', 'Loam')
             irrigation = request.POST.get('irrigation', 'full')
             city_name = request.POST.get('city_name', default_city).strip()
-            if city_name not in available_cities:
+            if city_name and city_name not in available_cities:
                 city_name = default_city
-            start_date = request.POST.get('start_date', '2024-05-01')
-            end_date = request.POST.get('end_date', '2024-09-01')
+            start_date = request.POST.get('start_date', '')
+            end_date = request.POST.get('end_date', '')
             context['maturity_warning'] = _maturity_warning(crop, end_date)
             
             # Handle weather data upload
@@ -2621,6 +2626,16 @@ def aquacrop_simulation(request):
                     start_date=start_date,
                     end_date=end_date,
                 )
+                weather_warnings = list(weather_df.attrs.get("warnings", [])) if hasattr(weather_df, "attrs") else []
+                if weather_warnings:
+                    context['warning_messages'] = weather_warnings
+                weather_source_summary = (
+                    weather_df.attrs.get("temperature_source_summary", {})
+                    if hasattr(weather_df, "attrs")
+                    else {}
+                )
+                if weather_source_summary:
+                    context["temperature_source_summary"] = weather_source_summary
 
             # Run simulation
             results = run_aquacrop_simulation(
@@ -2637,7 +2652,6 @@ def aquacrop_simulation(request):
                 daily_df = results['daily_output'].copy()
                 # Add a Date column if not present (use day index)
                 if 'Date' not in daily_df.columns:
-                    import pandas as pd
                     start_dt = pd.to_datetime(start_date)
                     daily_df['Date'] = pd.date_range(start_dt, periods=len(daily_df), freq='D')
                 

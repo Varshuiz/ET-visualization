@@ -14,6 +14,45 @@ import pandas as pd
 import numpy as np
 import traceback
 
+MIN_AQUACROP_REF_ET = 0.01
+
+EXPLICIT_CROP_PARAMETERS = {
+    "Wheat": {
+        "Emergence": 13,
+        "EmergenceCD": 13,
+        "MaxRooting": 65,
+        "MaxRootingCD": 65,
+        "Flowering": 9,
+        "FloweringCD": 9,
+        "HIstart": 74,
+        "HIstartCD": 74,
+        "YldForm": 39,
+        "YldFormCD": 39,
+        "Senescence": 95,
+        "SenescenceCD": 95,
+        "Maturity": 115,
+        "MaturityCD": 115,
+        "CGC": 0.0082,
+        "CDC": 0.0058,
+        "CCx": 0.96,
+        "WP": 15.0,
+        "PlantPop": 4500000,
+        "CalendarType": 1,
+    },
+    "Maize": {
+        "Emergence": 6,
+        "MaxRooting": 108,
+        "Senescence": 132,
+        "Maturity": 161,
+        "CGC": 0.0128,
+        "CDC": 0.0068,
+        "CCx": 0.96,
+        "WP": 33.7,
+        "PlantPop": 75000,
+        "CalendarType": 1,
+    },
+}
+
 
 class AquaCropSimulator:
     """
@@ -38,8 +77,14 @@ class AquaCropSimulator:
         'Loam': 'Loam',
         'Clay Loam': 'ClayLoam',
         'Sandy Clay Loam': 'SandyClayLoam',
-        'Silty Clay': 'SiltyClay',
+        # AquaCrop has no built-in "SiltyClay" preset; map to closest supported heavy soil.
+        'Silty Clay': 'Clay',
         'Clay': 'Clay',
+    }
+
+    CROP_NAME_ALIASES = {
+        # AquaCrop preset name for paddy rice.
+        'Rice': 'PaddyRice',
     }
     
     def __init__(self):
@@ -91,13 +136,19 @@ class AquaCropSimulator:
             self._log_weather_diagnostics(weather_df, start_dt, end_dt)
             
             # Create components
-            soil = Soil(soil_type=self.SOIL_TYPES.get(soil_type, 'Loam'))
+            soil_code = self.SOIL_TYPES.get(soil_type, 'Loam')
+            resolved_crop_name = self.CROP_NAME_ALIASES.get(crop_name, crop_name)
+            soil = Soil(soil_type=soil_code)
             try:
-                crop = Crop(crop_name, planting_date=planting_date)
+                crop = Crop(resolved_crop_name, planting_date=planting_date)
+                applied_params = self._resolve_explicit_crop_parameters(crop_name, crop)
+                for key, val in applied_params.items():
+                    setattr(crop, key, val)
                 print(
                     "[AQUACROP_DEBUG] Crop parameters loaded successfully: "
-                    f"crop_name={crop_name}, planting_date={planting_date}"
+                    f"requested_crop={crop_name}, resolved_crop={resolved_crop_name}, planting_date={planting_date}"
                 )
+                print("[AQUACROP_DEBUG] Crop parameters applied:", applied_params)
             except Exception:
                 print(
                     "[AQUACROP_DEBUG] Crop parameter load failed: "
@@ -125,7 +176,7 @@ class AquaCropSimulator:
             print(
                 "[AQUACROP_DEBUG] AquaCropModel call params: "
                 f"sim_start_time={start_str}, sim_end_time={end_str}, "
-                f"crop={crop_name}, soil={self.SOIL_TYPES.get(soil_type, 'Loam')}, "
+                f"requested_crop={crop_name}, resolved_crop={resolved_crop_name}, soil={soil_code}, "
                 f"irrigation_method={irrigation_method}, initial_water_content={initial_water_content}, "
                 f"weather_rows={len(weather_df)}, weather_columns={list(weather_df.columns)}"
             )
@@ -158,6 +209,36 @@ class AquaCropSimulator:
             print(f"\nError: {e}\n")
             traceback.print_exc()
             raise
+
+    def _resolve_explicit_crop_parameters(self, crop_name: str, crop_obj) -> dict:
+        if crop_name in EXPLICIT_CROP_PARAMETERS:
+            return dict(EXPLICIT_CROP_PARAMETERS[crop_name])
+
+        # For all other supported crops, still apply an explicit map using the
+        # crop object's populated defaults (with CD fallbacks when sentinel -9 appears).
+        def _pick(primary_attr: str, fallback_attr: str | None = None):
+            primary = getattr(crop_obj, primary_attr, None)
+            if isinstance(primary, (int, float)) and primary > 0:
+                return primary
+            if fallback_attr:
+                fallback = getattr(crop_obj, fallback_attr, None)
+                if isinstance(fallback, (int, float)) and fallback > 0:
+                    return fallback
+            return None
+
+        resolved = {
+            "Emergence": _pick("Emergence", "EmergenceCD"),
+            "MaxRooting": _pick("MaxRooting", "MaxRootingCD"),
+            "Senescence": _pick("Senescence", "SenescenceCD"),
+            "Maturity": _pick("Maturity", "MaturityCD"),
+            "CGC": _pick("CGC", "CGC_CD"),
+            "CDC": _pick("CDC", "CDC_CD"),
+            "CCx": _pick("CCx"),
+            "WP": _pick("WP"),
+            "PlantPop": _pick("PlantPop"),
+            "CalendarType": 1,
+        }
+        return {k: v for k, v in resolved.items() if v is not None}
 
     def _log_weather_diagnostics(self, weather_df: pd.DataFrame, start_dt: pd.Timestamp, end_dt: pd.Timestamp):
         weather_copy = weather_df.copy()
@@ -246,6 +327,10 @@ class AquaCropSimulator:
         weather_df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
         if weather_df['Date'].isna().any():
             raise ValueError("Weather data contains invalid Date values")
+
+        # AquaCrop internals can divide by ET0; enforce a small positive floor.
+        weather_df["ReferenceET"] = pd.to_numeric(weather_df["ReferenceET"], errors="coerce")
+        weather_df["ReferenceET"] = weather_df["ReferenceET"].clip(lower=MIN_AQUACROP_REF_ET)
         
         return weather_df
     
@@ -285,11 +370,25 @@ class AquaCropSimulator:
             if has_final_stats
             else None
         )
+        has_crop_growth = len(crop_growth) > 0
+        biomass_series = crop_growth["biomass"] if has_crop_growth and "biomass" in crop_growth else pd.Series(dtype=float)
+        gdd_series = crop_growth["gdd_cum"] if has_crop_growth and "gdd_cum" in crop_growth else pd.Series(dtype=float)
+        canopy_series = crop_growth["canopy_cover"] if has_crop_growth and "canopy_cover" in crop_growth else pd.Series(dtype=float)
+
+        # For partial runs, the final day may be a post-season/reset row; report peak observed growth instead.
+        # Daily outputs include post-season reset rows; use peak biomass for stable summaries.
+        biomass_value = biomass_series.max() if not biomass_series.empty else 0
+        gdd_value = (
+            gdd_series.iloc[-1]
+            if has_final_stats and not gdd_series.empty
+            else (gdd_series.max() if not gdd_series.empty else 0)
+        )
+        canopy_value = (canopy_series.max() * 100.0) if not canopy_series.empty else 0
 
         results = {
             'yield_fresh': last_season[yield_col] if has_final_stats and yield_col else 0,
             'yield_dry': last_season[yield_col] if has_final_stats and yield_col else 0,
-            'biomass': crop_growth['biomass'].iloc[-1] if len(crop_growth) > 0 else 0,
+            'biomass': biomass_value,
             'total_irrigation': last_season[irrigation_col] if has_final_stats and irrigation_col else 0,
             'total_et': (water_flux['Tr'].sum() + water_flux['Es'].sum()) if len(water_flux) > 0 else 0,
             'transpiration': water_flux['Tr'].sum() if len(water_flux) > 0 else 0,
@@ -297,8 +396,8 @@ class AquaCropSimulator:
             'total_rainfall': water_flux['Infl'].sum() if len(water_flux) > 0 and 'Infl' in water_flux else 0,
             'water_productivity': 0,
             'irrigation_efficiency': 0,
-            'canopy_cover_max': crop_growth['canopy_cover'].max() if len(crop_growth) > 0 else 0,
-            'growing_degree_days': crop_growth['gdd_cum'].iloc[-1] if len(crop_growth) > 0 else 0,
+            'canopy_cover_max': canopy_value,
+            'growing_degree_days': gdd_value,
             'daily_output': crop_growth,
             'water_flux': water_flux,
             'reached_maturity': bool(has_final_stats),

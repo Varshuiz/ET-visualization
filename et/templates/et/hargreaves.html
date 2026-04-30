@@ -35,11 +35,12 @@
         <div style="margin-top: 20px; padding: 15px; background: var(--white); border-radius: 10px;">
             <h4 style="color: var(--midnight-green); margin-bottom: 10px;">Formula:</h4>
             <code style="font-size: 1.1rem; color: #5AAA95;">
-                ET₀ = 0.0023 × Ra × (Tmax - Tmin)^0.5 × (Tavg + 17.8)
+                ET₀ = 0.0023 × (Ra/λ) × (Tmax - Tmin)^0.5 × (Tavg + 17.8)
             </code>
             <p style="margin-top: 10px; font-size: 0.9rem; color: var(--zomp);">
                 Where: Ra = extraterrestrial radiation (estimated from latitude and day of year),
-                Tmax/Tmin = daily max/min temperature, Tavg = (Tmax + Tmin) / 2
+                λ = 2.45 MJ/kg (latent heat), Tmax/Tmin = daily max/min temperature,
+                Tavg = (Tmax + Tmin) / 2
             </p>
         </div>
     </div>
@@ -230,12 +231,10 @@
         <a href="https://doi.org/10.1061/(ASCE)0733-9437(2003)129:1(53)" target="_blank" rel="noopener noreferrer">https://doi.org/10.1061/(ASCE)0733-9437(2003)129:1(53)</a>
     </p>
 
-    <h3 style="color: #5AAA95; margin-bottom: 12px;">Weather &amp; Climate Data Sources</h3>
-    <ul style="color: var(--midnight-green); line-height: 1.8; padding-left: 20px;">
-        <li>Open-Meteo archive and forecast APIs (<a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer">https://open-meteo.com</a>)</li>
-        <li>Environment and Climate Change Canada (ECCC) / MSC Datamart (<a href="https://dd.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://dd.weather.gc.ca</a>)</li>
-        <li>ECCC climate daily API (<a href="https://api.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://api.weather.gc.ca</a>)</li>
-    </ul>
+    <p style="color: var(--midnight-green); line-height: 1.8;">
+        For full data sources, credits and references see the
+        <a href="{% url 'et:method_info' %}#references-data-sources">Method Guide</a>.
+    </p>
 </div>
 
 <style>

@@ -35,11 +35,12 @@
         <div style="margin-top: 20px; padding: 15px; background: var(--white); border-radius: 10px;">
             <h4 style="color: var(--midnight-green); margin-bottom: 10px;">Formula:</h4>
             <code style="font-size: 1.1rem; color: #BB9F06;">
-                ET₀ = C × Ra × (Tmax - Tmin)^0.5 × (Tavg + 17.8) / 100
+                ET₀ = k × (Tavg + a) × Rs × fRH × fΔT
             </code>
             <p style="margin-top: 10px; font-size: 0.9rem; color: var(--zomp);">
-                Where: C = empirical coefficient, Ra = extraterrestrial radiation,
-                Tmax/Tmin = daily max/min temperature, Tavg = mean daily temperature
+                Where: k = 0.0055, a = 17.8, Rs = incoming solar radiation (MJ/m²/day),
+                fRH = humidity correction (bounded 0.7 to 1.3), and
+                fΔT = temperature-range correction (bounded 0.8 to 1.2).
             </p>
         </div>
     </div>
@@ -223,12 +224,10 @@
         <a href="https://doi.org/10.4296/cwrj3104237" target="_blank" rel="noopener noreferrer">https://doi.org/10.4296/cwrj3104237</a>
     </p>
 
-    <h3 style="color: #BB9F06; margin-bottom: 12px;">Weather &amp; Climate Data Sources</h3>
-    <ul style="color: var(--midnight-green); line-height: 1.8; padding-left: 20px;">
-        <li>Open-Meteo archive and forecast APIs (<a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer">https://open-meteo.com</a>)</li>
-        <li>Environment and Climate Change Canada (ECCC) / MSC Datamart (<a href="https://dd.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://dd.weather.gc.ca</a>)</li>
-        <li>ECCC climate daily API (<a href="https://api.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://api.weather.gc.ca</a>)</li>
-    </ul>
+    <p style="color: var(--midnight-green); line-height: 1.8;">
+        For full data sources, credits and references see the
+        <a href="{% url 'et:method_info' %}#references-data-sources">Method Guide</a>.
+    </p>
 </div>
 
 <style>

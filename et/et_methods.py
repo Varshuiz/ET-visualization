@@ -57,7 +57,10 @@ def priestley_taylor_ET(Tavg, Rn, alpha=1.26, gamma=0.066, lambda_val=2.45):
     if pd.isna(Tavg) or pd.isna(Rn):
         return np.nan
     delta = delta_svp(Tavg)
-    return alpha * (delta / (delta + gamma)) * (Rn / lambda_val)
+    denom = delta + gamma
+    if denom <= 0 or lambda_val == 0:
+        return 0.0
+    return alpha * (delta / denom) * (Rn / lambda_val)
 
 
 def penman_monteith_ET(Tmax, Tmin, RH, u2, Rs, Ra, elevation=766):
@@ -198,7 +201,12 @@ def priestley_taylor_ET_vec(Tavg, Rn, alpha=1.26, gamma=0.066, lambda_val=2.45):
     rn = _to_float32_array(Rn)
     with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
         delta = 4098.0 * (0.6108 * np.exp((17.27 * tavg) / (tavg + 237.3))) / (tavg + 237.3) ** 2
-        et0 = alpha * (delta / (delta + gamma)) * (rn / lambda_val)
+        denom = delta + gamma
+        safe_ratio = np.where(denom > 0, delta / denom, 0.0)
+        if lambda_val == 0:
+            et0 = np.zeros_like(safe_ratio, dtype=np.float32)
+        else:
+            et0 = alpha * safe_ratio * (rn / lambda_val)
         et0 = np.where(np.isfinite(et0), np.maximum(et0, 0.0), np.nan)
     return et0
 

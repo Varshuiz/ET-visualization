@@ -2420,10 +2420,9 @@ def aquacrop_simulation(request):
     """
     View for AquaCrop crop growth simulation
     """
-    
-    from .environment_canada_scraper import EnvironmentCanadaScraper
+
     default_city = "Calgary"
-    available_cities = sorted(EnvironmentCanadaScraper.LOCATION_CODES.keys())
+    available_cities = sorted(ALBERTA_LOCATIONS.keys())
 
     context = {
         'crops': list(AquaCropSimulator.AVAILABLE_CROPS.keys()),

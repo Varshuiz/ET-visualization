@@ -480,18 +480,84 @@ def build_aquacrop_weather_from_eccc(
         .sort_values("Date")
         .reset_index(drop=True)
     )
+    pre_filter_min = df["Date"].min() if not df.empty else pd.NaT
+    pre_filter_max = df["Date"].max() if not df.empty else pd.NaT
+    print(
+        "[AQUACROP_GAPFILL_DEBUG] ECCC rows before explicit date filter: "
+        f"count={len(df)}, min_date={pre_filter_min}, max_date={pre_filter_max}"
+    )
+    df = df.loc[
+        (df["Date"] >= start_ts.normalize()) & (df["Date"] <= end_ts.normalize())
+    ].reset_index(drop=True)
+    post_filter_min = df["Date"].min() if not df.empty else pd.NaT
+    post_filter_max = df["Date"].max() if not df.empty else pd.NaT
+    print(
+        "[AQUACROP_GAPFILL_DEBUG] ECCC rows after explicit date filter: "
+        f"count={len(df)}, min_date={post_filter_min}, max_date={post_filter_max}"
+    )
 
     full_dates = pd.date_range(start_ts.normalize(), end_ts.normalize(), freq="D")
     df = pd.DataFrame({"Date": full_dates}).merge(df, on="Date", how="left")
-    if df["Tmax"].isna().any() or df["Tmin"].isna().any():
-        raise ValueError("ECCC data has missing daily temperature values in selected range")
+
+    warnings: list[str] = []
+    temp_missing_before = df["Tmax"].isna() | df["Tmin"].isna()
+    eccc_full_temp_days = int((~temp_missing_before).sum())
+    om_fill_days = 0
+    if temp_missing_before.any():
+        om_temp_df = _fetch_openmeteo_daily_temperature_fallback(
+            latitude=float(latitude),
+            longitude=float(longitude),
+            start_date=start_ts.strftime("%Y-%m-%d"),
+            end_date=end_ts.strftime("%Y-%m-%d"),
+        )
+        if not om_temp_df.empty:
+            df = df.merge(om_temp_df, on="Date", how="left")
+            df["Tmax"] = df["Tmax"].combine_first(df["Tmax_OM"])
+            df["Tmin"] = df["Tmin"].combine_first(df["Tmin_OM"])
+            filled_mask = temp_missing_before & df["Tmax"].notna() & df["Tmin"].notna()
+            om_fill_days = int(filled_mask.sum())
+            df = df.drop(columns=[c for c in ["Tmax_OM", "Tmin_OM"] if c in df.columns])
+
+    temp_missing_after = df["Tmax"].isna() | df["Tmin"].isna()
+    print(
+        "[AQUACROP_GAPFILL_DEBUG] temperature sourcing days: "
+        f"ECCC={eccc_full_temp_days}, Open-Meteo gap-filled={om_fill_days}, "
+        f"remaining_missing={int(temp_missing_after.sum())}"
+    )
+    if temp_missing_after.any():
+        missing_dates = df.loc[temp_missing_after, "Date"].dt.strftime("%Y-%m-%d").tolist()
+        coverage_ratio = float((~temp_missing_after).mean())
+        missing_dates_text = ", ".join(missing_dates[:12])
+        if len(missing_dates) > 12:
+            missing_dates_text += f", ... (+{len(missing_dates) - 12} more)"
+        warning_msg = (
+            "Some daily temperatures remain missing after ECCC + Open-Meteo gap-fill. "
+            f"Missing dates: {missing_dates_text}."
+        )
+        if coverage_ratio >= 0.8:
+            warnings.append(
+                warning_msg
+                + " Proceeding with available days because at least 80% of the selected period is complete."
+            )
+            df = df.loc[~temp_missing_after].copy()
+        else:
+            raise ValueError(
+                warning_msg
+                + " Please adjust the date range or location because less than 80% of days are complete."
+            )
 
     df["RH"] = pd.to_numeric(df["RH"], errors="coerce")
     if df["RH"].isna().any():
         # Fill missing RH from nearby days (still ECCC-derived, no synthetic constants).
         df["RH"] = df["RH"].interpolate(limit_direction="both")
     if df["RH"].isna().any():
-        raise ValueError("ECCC data has missing RH values that could not be resolved")
+        # Robust fallback for stations/periods with entirely missing RH fields.
+        # 60% is a neutral mid-range climatological assumption for ET calculations.
+        missing_count = int(df["RH"].isna().sum())
+        df["RH"] = df["RH"].fillna(60.0)
+        warnings.append(
+            f"ECCC RH had {missing_count} unresolved missing day(s); applied fallback RH=60% for those days."
+        )
 
     df["day_of_year"] = df["Date"].dt.dayofyear
     df["Ra"] = df.apply(
@@ -509,7 +575,7 @@ def build_aquacrop_weather_from_eccc(
     df["ReferenceET"] = df.apply(
         lambda row: priestley_taylor_ET(row["Tavg"], row["Rn"]),
         axis=1,
-    ).clip(lower=0)
+    ).clip(lower=0.01)
 
     weather_df = pd.DataFrame(
         {
@@ -520,4 +586,46 @@ def build_aquacrop_weather_from_eccc(
             "Date": df["Date"],
         }
     )
+    weather_df.attrs["warnings"] = warnings
+    weather_df.attrs["temperature_source_summary"] = {
+        "eccc_days": eccc_full_temp_days,
+        "openmeteo_gapfill_days": om_fill_days,
+        "remaining_missing_days": int(temp_missing_after.sum()),
+    }
     return weather_df
+
+
+@lru_cache(maxsize=64)
+def _fetch_openmeteo_daily_temperature_fallback(
+    latitude: float,
+    longitude: float,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    url = "https://archive-api.open-meteo.com/v1/archive"
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "start_date": start_date,
+        "end_date": end_date,
+        "daily": "temperature_2m_max,temperature_2m_min",
+        "timezone": "auto",
+    }
+    try:
+        response = requests.get(url, params=params, timeout=45)
+        response.raise_for_status()
+        payload = response.json()
+    except Exception:
+        return pd.DataFrame(columns=["Date", "Tmax_OM", "Tmin_OM"])
+
+    daily = payload.get("daily", {})
+    out = pd.DataFrame(
+        {
+            "Date": pd.to_datetime(daily.get("time", []), errors="coerce"),
+            "Tmax_OM": pd.to_numeric(daily.get("temperature_2m_max", []), errors="coerce"),
+            "Tmin_OM": pd.to_numeric(daily.get("temperature_2m_min", []), errors="coerce"),
+        }
+    )
+    out["Date"] = out["Date"].dt.normalize()
+    out = out.dropna(subset=["Date"]).copy()
+    return out
