@@ -1,6 +1,6 @@
 {% extends 'et/base.html' %}
 
-{% block title %}Prepare ET Inputs | Aqualys{% endblock %}
+{% block title %}Prepare ET Inputs | AqualET{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -505,6 +505,9 @@
         <form method="post" enctype="multipart/form-data" id="acisForm" data-loading-text="Fetching historical weather data...">
             {% csrf_token %}
 
+            {{ popular_locations_by_province|json_script:"acis-popular-locations-data" }}
+            {{ acis_map_default_center|json_script:"acis-map-centers-data" }}
+
             <!-- Location Type Toggle -->
             <div class="location-toggle">
                 <button type="button" class="active" data-target="place">
@@ -518,13 +521,28 @@
                 </button>
             </div>
 
+            <h3 class="acis-form-heading">Province</h3>
+            <div class="form-field" style="margin-bottom: 18px;">
+                <label for="acis_province">Select province</label>
+                <select name="province" id="acis_province" class="acis-province-select">
+                    {% for p in province_options %}
+                    <option value="{{ p.value }}" {% if p.value == selected_province %}selected{% endif %}>{{ p.label }}</option>
+                    {% endfor %}
+                </select>
+                <small style="color: #666; margin-top: 8px; display: block;">
+                    Alberta is the default. For <strong>City or Town</strong>, suggestions match the province you pick.
+                    <strong>Township and range</strong> is available for Alberta only.
+                </small>
+            </div>
+
             <!-- Place Name Search -->
             <div class="input-section active" id="place-section">
                 <h3 class="acis-form-heading">Pick your farm area</h3>
                 <div class="form-field">
                     <label for="place_name">Closest City or Town</label>
                     <input type="text" id="place_name" name="place_name" 
-                           placeholder="e.g., Calgary, Lethbridge, Red Deer, Medicine Hat..."
+                           value="{{ request.POST.place_name|default:'' }}"
+                           placeholder="e.g., Calgary, Vancouver, Saskatoon, Winnipeg..."
                            list="popular_locations"
                            autocomplete="off">
                     <datalist id="popular_locations">
@@ -549,7 +567,7 @@
 
             <!-- Township/Range Input -->
             <div class="input-section" id="township-section">
-                <h3 class="acis-form-heading">Find by township and range</h3>
+                <h3 class="acis-form-heading">Find by township and range (Alberta only)</h3>
                 <div class="form-grid">
                     <div class="form-field">
                         <label for="township">Township Number</label>
@@ -581,18 +599,23 @@
             <!-- Lat/Lon Input -->
             <div class="input-section" id="coordinates-section">
                 <h3 class="acis-form-heading">Find by latitude and longitude</h3>
+                <p class="acis-coord-bounds-hint" style="color:#555;font-size:0.88rem;margin:0 0 12px 0;">
+                    Allowed ranges depend on the province selected above (for example, British Columbia reaches farther west than Alberta).
+                </p>
                 <div class="form-grid">
                     <div class="form-field">
-                        <label for="latitude">Latitude (49-60°N)</label>
+                        <label for="latitude">Latitude (decimal degrees)</label>
                         <input type="number" id="latitude" name="latitude" 
                                step="0.0001" placeholder="e.g., 50.5644" 
-                               min="49" max="60">
+                               value="{{ request.POST.latitude|default:'' }}"
+                               min="48" max="61">
                     </div>
                     <div class="form-field">
-                        <label for="longitude">Longitude (-120 to -110°W)</label>
+                        <label for="longitude">Longitude (decimal degrees, negative = west)</label>
                         <input type="number" id="longitude" name="longitude" 
                                step="0.0001" placeholder="e.g., -111.8986" 
-                               min="-120" max="-110">
+                               value="{{ request.POST.longitude|default:'' }}"
+                               min="-140" max="-85">
                     </div>
                 </div>
                 <div class="acis-examples">
@@ -632,9 +655,9 @@
                     <input type="radio" name="data_source_mode" value="exact_coordinates" {% if data_source_mode != 'nearest_station' %}checked{% endif %}>
                     Use my exact map coordinates
                 </label>
-                <label>
-                    <input type="radio" name="data_source_mode" value="nearest_station" {% if data_source_mode == 'nearest_station' %}checked{% endif %}>
-                    Use nearest weather station (recommended for most users)
+                <label class="acis-nearest-station-label">
+                    <input type="radio" name="data_source_mode" value="nearest_station" {% if data_source_mode == 'nearest_station' %}checked{% endif %} {% if selected_province != 'Alberta' %}disabled{% endif %}>
+                    Use nearest weather station (recommended for most users){% if selected_province != 'Alberta' %} <span class="acis-muted">— Alberta only</span>{% endif %}
                     {% if nearest_station_hint %}<strong> — nearest found: {{ nearest_station_hint }}</strong>{% endif %}
                 </label>
             </div>
@@ -734,7 +757,68 @@ document.addEventListener('DOMContentLoaded', function() {
     const toggleButtons = document.querySelectorAll('.location-toggle button');
     const sections = document.querySelectorAll('.input-section');
     const locationTypeInput = document.getElementById('location_type');
-    
+    const provSelect = document.getElementById('acis_province');
+    const datalistEl = document.getElementById('popular_locations');
+
+    function escapeAttr(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/'/g, '&#39;');
+    }
+
+    let popularByProvince = {};
+    let mapCenters = {};
+    const popScript = document.getElementById('acis-popular-locations-data');
+    const mapScript = document.getElementById('acis-map-centers-data');
+    if (popScript) {
+        try { popularByProvince = JSON.parse(popScript.textContent); } catch (e) {}
+    }
+    if (mapScript) {
+        try { mapCenters = JSON.parse(mapScript.textContent); } catch (e) {}
+    }
+
+    function rebuildPopularDatalist() {
+        if (!provSelect || !datalistEl) return;
+        const prov = provSelect.value;
+        const list = popularByProvince[prov] || [];
+        datalistEl.innerHTML = list.map(function(c) {
+            return '<option value="' + escapeAttr(c) + '">';
+        }).join('');
+    }
+
+    function syncProvinceUi() {
+        if (!provSelect) return;
+        const alberta = provSelect.value === 'Alberta';
+        const twBtn = document.querySelector('.location-toggle button[data-target="township"]');
+        const nearestRadio = document.querySelector('input[name="data_source_mode"][value="nearest_station"]');
+        const exactRadio = document.querySelector('input[name="data_source_mode"][value="exact_coordinates"]');
+        if (twBtn) {
+            twBtn.disabled = !alberta;
+            twBtn.style.opacity = alberta ? '1' : '0.5';
+            twBtn.title = alberta ? '' : 'Township/range is available for Alberta only';
+            if (!alberta && twBtn.classList.contains('active')) {
+                document.querySelector('.location-toggle button[data-target="place"]').click();
+            }
+        }
+        if (nearestRadio) {
+            nearestRadio.disabled = !alberta;
+            if (!alberta && nearestRadio.checked && exactRadio) {
+                exactRadio.checked = true;
+            }
+        }
+        rebuildPopularDatalist();
+        if (farmMap && mapCenters[provSelect.value]) {
+            const c = mapCenters[provSelect.value];
+            farmMap.setView(c, alberta ? 6 : 5);
+        }
+    }
+
+    if (provSelect) {
+        provSelect.addEventListener('change', syncProvinceUi);
+    }
+
     toggleButtons.forEach(button => {
         button.addEventListener('click', function() {
             const target = this.getAttribute('data-target');
@@ -826,6 +910,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initial refresh in case the coordinates section is already active.
         refreshMapSizeIfVisible();
     }
+
+    syncProvinceUi();
 });
 </script>
 {% endblock %}

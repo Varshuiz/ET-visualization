@@ -334,3 +334,25 @@ def calculate_extraterrestrial_radiation_vec(latitude, day_of_year):
             * (ws * np.sin(lat) * np.sin(delta) + np.cos(lat) * np.cos(delta) * np.sin(ws))
         )
     return ra
+
+
+def reference_et_mm_per_day_to_latent_heat_flux_wm2(et_mm_day):
+    """
+    Mean latent heat flux (W/m²) equivalent to daily reference crop ET₀ (mm/day),
+    using λ ≈ 2.45 MJ kg⁻¹ and unit water depth as mass per area (1 mm ≈ 1 kg m⁻²):
+    LE ≈ λ × (ET_mm/day) / 86400.
+    """
+    if et_mm_day is None:
+        return np.nan
+    try:
+        if isinstance(et_mm_day, float) and np.isnan(et_mm_day):
+            return np.nan
+    except TypeError:
+        pass
+    try:
+        et = float(et_mm_day)
+    except (TypeError, ValueError):
+        return np.nan
+    if et <= 0:
+        return 0.0
+    return et * (2.45e6 / 86400.0)

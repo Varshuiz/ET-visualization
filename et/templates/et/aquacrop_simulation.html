@@ -1,7 +1,7 @@
 {% extends 'et/base.html' %}
 {% load static %}
 
-{% block title %}AquaCrop Crop Simulation | Aqualys{% endblock %}
+{% block title %}AquaCrop Crop Simulation | AqualET{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -233,6 +233,58 @@
         <form method="post" enctype="multipart/form-data" id="simulationForm" data-loading-text="Running crop simulation...">
             {% csrf_token %}
             <div id="maturityWarning" class="warning-box" {% if not maturity_warning %}style="display: none;"{% endif %}>{{ maturity_warning|default:'' }}</div>
+
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label>Simulation mode</label>
+                <div class="mode-tabs" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px;">
+                    <label class="mode-tab" style="cursor: pointer; padding: 8px 12px; border-radius: 8px; border: 2px solid #e0f2f1; background: {% if sim_mode == 'single_year' %}#e0f2f1{% else %}#fff{% endif %};">
+                        <input type="radio" name="sim_mode" value="single_year" {% if sim_mode == 'single_year' %}checked{% endif %} style="margin-right: 6px;">
+                        Simulation year
+                    </label>
+                    <label class="mode-tab" style="cursor: pointer; padding: 8px 12px; border-radius: 8px; border: 2px solid #e0f2f1; background: {% if sim_mode == 'historical_range' %}#e0f2f1{% else %}#fff{% endif %};">
+                        <input type="radio" name="sim_mode" value="historical_range" {% if sim_mode == 'historical_range' %}checked{% endif %} style="margin-right: 6px;">
+                        Historical range
+                    </label>
+                    <label class="mode-tab" style="cursor: pointer; padding: 8px 12px; border-radius: 8px; border: 2px solid #e0f2f1; background: {% if sim_mode == 'forecast' %}#e0f2f1{% else %}#fff{% endif %};">
+                        <input type="radio" name="sim_mode" value="forecast" {% if sim_mode == 'forecast' %}checked{% endif %} style="margin-right: 6px;">
+                        Forecast (Open-Meteo)
+                    </label>
+                </div>
+                <p style="margin: 0; font-size: 0.85rem; color: #666;">
+                    <strong>Simulation year</strong> uses May&nbsp;1–Sep&nbsp;30 for the year you enter.
+                    <strong>Historical range</strong> uses ECCC-backed weather: either a custom date range or multiple May–Sep seasons by calendar year.
+                    <strong>Forecast</strong> uses Open-Meteo daily forecast drivers (short horizon, typically up to ~16 days).
+                </p>
+            </div>
+
+            <div id="panelSingleYear" class="form-grid" style="display: none; margin-bottom: 12px;">
+                <div class="form-group">
+                    <label>Simulation year</label>
+                    <input type="number" name="simulation_year" min="1980" max="2100" step="1"
+                           value="{{ simulation_year|default:'' }}"
+                           placeholder="e.g. 2023">
+                </div>
+            </div>
+
+            <div id="panelHistoricalSub" style="display: none; margin-bottom: 12px;">
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Historical range type</label>
+                    <div style="display: flex; flex-wrap: wrap; gap: 14px;">
+                        <label><input type="radio" name="historical_range_type" value="custom" {% if historical_range_type != 'years' %}checked{% endif %}> Custom start / end dates</label>
+                        <label><input type="radio" name="historical_range_type" value="years" {% if historical_range_type == 'years' %}checked{% endif %}> Year to year (May–Sep each year)</label>
+                    </div>
+                </div>
+                <div id="panelHistYears" class="form-grid" style="display: none;">
+                    <div class="form-group">
+                        <label>Start year</label>
+                        <input type="number" name="hist_year_start" min="1980" max="2100" step="1" value="{{ hist_year_start|default:'' }}" placeholder="e.g. 2018">
+                    </div>
+                    <div class="form-group">
+                        <label>End year</label>
+                        <input type="number" name="hist_year_end" min="1980" max="2100" step="1" value="{{ hist_year_end|default:'' }}" placeholder="e.g. 2022">
+                    </div>
+                </div>
+            </div>
             
             <div class="form-grid">
                 <div class="form-group">
@@ -290,15 +342,15 @@
                     </select>
                 </div>
                 
-                <div class="form-group">
+                <div class="form-group" id="panelCustomDates">
                     <label>Start Date</label>
-                    <input type="text" name="start_date" value="{{ start_date|default:'' }}" 
+                    <input type="text" name="start_date" id="start_date_input" value="{{ start_date|default:'' }}" 
                            placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}" required>
                 </div>
                 
-                <div class="form-group">
+                <div class="form-group" id="panelCustomDatesEnd">
                     <label>End Date</label>
-                    <input type="text" name="end_date" value="{{ end_date|default:'' }}" 
+                    <input type="text" name="end_date" id="end_date_input" value="{{ end_date|default:'' }}" 
                            placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}" required>
                 </div>
             </div>
@@ -333,6 +385,10 @@
     <div class="warning-box">{{ results.result_note }}</div>
     {% endif %}
     
+    {% if forecast_mode_caveat %}
+    <div class="warning-box">{{ forecast_mode_caveat }}</div>
+    {% endif %}
+
     <div class="results-summary">
         <div class="result-card">
             {% if results.partial_results and results.yield_fresh == 0 %}
@@ -438,10 +494,91 @@
 </div>
 {% endif %}
 
-    <!-- Water Balance Chart -->
+{% if historical_results_rows %}
+<div class="chart-container">
+    <h3>Historical yield &amp; ET (AquaCrop)</h3>
+    <p style="color:#5a6f70; font-size:0.92rem; margin-bottom:12px;">
+        Values correspond to the mode you selected (custom dates, single simulation year, May–Sep by calendar year, or forecast window).
+        {% if multi_year_mode %}Each row is one growing season (May&nbsp;1–Sep&nbsp;30).{% endif %}
+    </p>
+    <table style="width:100%; border-collapse:collapse;">
+        <thead>
+            <tr style="background:#087F8C; color:white;">
+                <th style="padding:10px; text-align:left;">Period</th>
+                <th style="padding:10px; text-align:right;">Fresh yield (t/ha)</th>
+                <th style="padding:10px; text-align:right;">Total ET (mm)</th>
+                <th style="padding:10px; text-align:left;">Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in historical_results_rows %}
+            <tr style="border-bottom:1px solid #e0f2f1;">
+                <td style="padding:10px;">{{ row.label }}{% if row.start_date %}<br><span style="font-size:0.82rem;color:#666;">{{ row.start_date }} – {{ row.end_date }}</span>{% endif %}</td>
+                <td style="padding:10px; text-align:right;">
+                    {% if row.error %}&mdash;{% else %}{{ row.yield_fresh|floatformat:2 }}{% endif %}
+                </td>
+                <td style="padding:10px; text-align:right;">
+                    {% if row.error %}&mdash;{% else %}{{ row.total_et|floatformat:1 }}{% endif %}
+                </td>
+                <td style="padding:10px;">
+                    {% if row.error %}<span style="color:#b45309;">{{ row.error }}</span>
+                    {% elif row.partial_results %}Partial season
+                    {% else %}&nbsp;{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if weekly_yield_projection %}
+<div class="chart-container">
+    <h3>Weekly yield projection (biomass × harvest index)</h3>
+    <p style="color:#5a6f70; font-size:0.9rem; margin-bottom:12px;">
+        Indicative trajectory from simulated peak weekly biomass; not a substitute for field-calibrated forecasts.
+    </p>
+    <table style="width:100%; border-collapse:collapse;">
+        <thead>
+            <tr style="background:#087F8C; color:white;">
+                <th style="padding:10px; text-align:left;">Week after planting</th>
+                <th style="padding:10px; text-align:right;">Potential marketable yield (t/ha)</th>
+                <th style="padding:10px; text-align:right;">Peak biomass (t/ha)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in weekly_yield_projection %}
+            <tr style="border-bottom:1px solid #e0f2f1;">
+                <td style="padding:10px;">{{ row.period_label }}</td>
+                <td style="padding:10px; text-align:right;">{{ row.yield_tha|floatformat:3 }}</td>
+                <td style="padding:10px; text-align:right;">{{ row.biomass_peak_tha|floatformat:3 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+    <!-- Water Balance: cumulative / weekly actual ET vs weeks after planting -->
     <div class="chart-container">
-        <h3>Water Balance</h3>
+        <h3>Water balance — actual ET (transpiration + evaporation)</h3>
+        <p style="color:#5a6f70; font-size:0.9rem; margin-bottom:10px;">
+            X-axis: weeks after planting. Toggle cumulative vs weekly totals (mm per week).
+        </p>
+        <div style="margin-bottom:12px; display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+            <span style="font-weight:600; color:#095256;">ET view:</span>
+            <label style="cursor:pointer;"><input type="radio" name="wb_et_view" value="cumulative" checked id="wbCumulative"> Cumulative actual ET</label>
+            <label style="cursor:pointer;"><input type="radio" name="wb_et_view" value="weekly" id="wbWeekly"> Weekly actual ET</label>
+        </div>
         <canvas id="waterBalanceChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+        <h3>Weekly water fluxes (ET, precipitation, irrigation)</h3>
+        <p style="color:#5a6f70; font-size:0.9rem; margin-bottom:10px;">
+            Weekly sums (mm/week) after planting: actual ET (T<sub>r</sub>+E<sub>s</sub>), rain (model influx), and irrigation applied.
+        </p>
+        <canvas id="weeklyWaterChart"></canvas>
     </div>
 
     <!-- Download Button -->
@@ -454,6 +591,9 @@
 
     <div class="chart-container">
         <h3>Model Credit</h3>
+        <p style="color: #333; line-height: 1.8; margin-bottom: 12px;">
+            AquaCrop model developed by Dirk Raes, Pasquale Steduto, Theodore C. Hsiao, and Elias Fereres (FAO, 2009).
+        </p>
         <p style="color: #333; line-height: 1.8; margin-bottom: 12px;">
             Steduto, P., Hsiao, T.C., Fereres, E., Raes, D. (2012). Crop yield response
             to water. FAO Irrigation and Drainage Paper 66. Food and Agriculture Organization
@@ -552,62 +692,127 @@ new Chart(growthCtx, {
     }
 });
 
-// Water Balance Chart
+// Water balance — weeks after planting (cumulative vs weekly actual ET)
+const weekLabels = waterBalanceData.week_labels || [];
+const hasWeekly = weekLabels.length > 0;
 const waterCtx = document.getElementById('waterBalanceChart').getContext('2d');
-new Chart(waterCtx, {
-    type: 'bar',
-    data: {
-        labels: waterBalanceData.dates,
-        datasets: [
-            {
-                label: 'Precipitation',
-                data: waterBalanceData.precipitation,
-                backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                stack: 'inputs'
-            },
-            {
-                label: 'Irrigation',
-                data: waterBalanceData.irrigation,
-                backgroundColor: 'rgba(16, 185, 129, 0.7)',
-                stack: 'inputs'
-            },
-            {
-                label: 'Transpiration',
-                data: waterBalanceData.transpiration,
-                backgroundColor: 'rgba(245, 158, 11, 0.7)',
-                stack: 'outputs'
-            },
-            {
-                label: 'Evaporation',
-                data: waterBalanceData.evaporation,
-                backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                stack: 'outputs'
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                display: true,
-                position: 'top'
-            }
-        },
-        scales: {
-            x: {
-                stacked: false
-            },
-            y: {
-                stacked: false,
-                title: {
-                    display: true,
-                    text: 'Water (mm/day)'
-                }
-            }
-        }
+let wbChart = null;
+function renderWaterBalance(mode) {
+    if (wbChart) {
+        wbChart.destroy();
     }
-});
+    const commonScales = {
+        x: {
+            title: { display: true, text: 'Weeks after planting' },
+        },
+        y: {
+            beginAtZero: true,
+            title: {
+                display: true,
+                text: mode === 'cumulative' ? 'Cumulative actual ET (mm)' : 'Weekly actual ET (mm)',
+            },
+        },
+    };
+    if (mode === 'cumulative') {
+        wbChart = new Chart(waterCtx, {
+            type: 'line',
+            data: {
+                labels: weekLabels,
+                datasets: [{
+                    label: 'Cumulative actual ET',
+                    data: waterBalanceData.cumulative_actual_et_mm || [],
+                    borderColor: '#087F8C',
+                    backgroundColor: 'rgba(8, 127, 140, 0.12)',
+                    fill: true,
+                    tension: 0.25,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: true, position: 'top' } },
+                scales: commonScales,
+            },
+        });
+    } else {
+        wbChart = new Chart(waterCtx, {
+            type: 'bar',
+            data: {
+                labels: weekLabels,
+                datasets: [{
+                    label: 'Weekly actual ET',
+                    data: waterBalanceData.weekly_actual_et_mm || [],
+                    backgroundColor: 'rgba(8, 127, 140, 0.75)',
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: true, position: 'top' } },
+                scales: commonScales,
+            },
+        });
+    }
+}
+if (hasWeekly) {
+    renderWaterBalance('cumulative');
+    document.getElementById('wbCumulative').addEventListener('change', function () {
+        if (this.checked) renderWaterBalance('cumulative');
+    });
+    document.getElementById('wbWeekly').addEventListener('change', function () {
+        if (this.checked) renderWaterBalance('weekly');
+    });
+
+    const wwc = document.getElementById('weeklyWaterChart');
+    if (wwc) {
+        new Chart(wwc.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: weekLabels,
+                datasets: [
+                    {
+                        label: 'Actual ET (mm/week)',
+                        data: waterBalanceData.weekly_actual_et_mm || [],
+                        backgroundColor: 'rgba(8, 127, 140, 0.75)',
+                    },
+                    {
+                        label: 'Precipitation (mm/week)',
+                        data: waterBalanceData.weekly_precipitation_mm || [],
+                        backgroundColor: 'rgba(59, 130, 246, 0.65)',
+                    },
+                    {
+                        label: 'Irrigation (mm/week)',
+                        data: waterBalanceData.weekly_irrigation_mm || [],
+                        backgroundColor: 'rgba(16, 185, 129, 0.75)',
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: true, position: 'top' } },
+                scales: {
+                    x: { title: { display: true, text: 'Weeks after planting' } },
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'mm per week' },
+                    },
+                },
+            },
+        });
+    }
+} else {
+    const msg = document.createElement('p');
+    msg.style.color = '#666';
+    msg.textContent = 'Weekly water-balance aggregation is not available for this run.';
+    document.getElementById('waterBalanceChart').after(msg);
+    document.getElementById('waterBalanceChart').style.display = 'none';
+    document.querySelectorAll('input[name="wb_et_view"]').forEach((el) => {
+        el.closest('label')?.style.setProperty('display', 'none');
+    });
+    const wrap = document.getElementById('weeklyWaterChart')?.parentElement;
+    if (wrap) wrap.style.display = 'none';
+}
 
 // Download results function
 function downloadResults() {
@@ -651,6 +856,58 @@ function downloadResults() {
 {% endif %}
 
 <script>
+(function simModeUi() {
+    const panelSingle = document.getElementById('panelSingleYear');
+    const panelHistSub = document.getElementById('panelHistoricalSub');
+    const panelHistYears = document.getElementById('panelHistYears');
+    const d1 = document.getElementById('panelCustomDates');
+    const d2 = document.getElementById('panelCustomDatesEnd');
+    const startIn = document.getElementById('start_date_input');
+    const endIn = document.getElementById('end_date_input');
+
+    function currentMode() {
+        return document.querySelector('input[name="sim_mode"]:checked')?.value || 'historical_range';
+    }
+    function currentHistType() {
+        return document.querySelector('input[name="historical_range_type"]:checked')?.value || 'custom';
+    }
+    function update() {
+        const mode = currentMode();
+        const ht = currentHistType();
+        if (panelSingle) {
+            panelSingle.style.display = mode === 'single_year' ? 'grid' : 'none';
+        }
+        if (panelHistSub) {
+            panelHistSub.style.display = mode === 'historical_range' ? 'block' : 'none';
+        }
+        if (panelHistYears) {
+            panelHistYears.style.display = (mode === 'historical_range' && ht === 'years') ? 'grid' : 'none';
+        }
+        const showCustomDates = (mode === 'historical_range' && ht === 'custom') || mode === 'forecast';
+        [d1, d2].forEach((el) => {
+            if (el) el.style.display = showCustomDates ? '' : 'none';
+        });
+        if (startIn && endIn) {
+            if (mode === 'single_year') {
+                startIn.removeAttribute('required');
+                endIn.removeAttribute('required');
+            } else {
+                startIn.setAttribute('required', 'required');
+                endIn.setAttribute('required', 'required');
+            }
+        }
+    }
+    document.querySelectorAll('input[name="sim_mode"]').forEach((r) => r.addEventListener('change', update));
+    document.querySelectorAll('input[name="historical_range_type"]').forEach((r) => r.addEventListener('change', update));
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', update);
+    } else {
+        update();
+    }
+})();
+</script>
+
+<script>
 // Display selected file name
 document.getElementById('weather_file').addEventListener('change', function(e) {
     const fileName = e.target.files[0]?.name || 'No file selected';
@@ -674,7 +931,7 @@ function getRecommendedDate(crop, year) {
 
 function updateMaturityWarning() {
     const crop = document.getElementById('crop')?.value || '';
-    const endDateRaw = document.querySelector('input[name=\"end_date\"]')?.value || '';
+    const endDateRaw = document.querySelector('#end_date_input')?.value || '';
     const warningEl = document.getElementById('maturityWarning');
     if (!warningEl) return;
 
@@ -697,7 +954,7 @@ function updateMaturityWarning() {
 }
 
 document.getElementById('crop')?.addEventListener('change', updateMaturityWarning);
-document.querySelector('input[name=\"end_date\"]')?.addEventListener('input', updateMaturityWarning);
+document.querySelector('#end_date_input')?.addEventListener('input', updateMaturityWarning);
 updateMaturityWarning();
 </script>
 {% endblock %}

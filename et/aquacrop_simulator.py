@@ -442,27 +442,65 @@ class AquaCropSimulator:
         }
     
     def get_water_balance_data(self):
-        """Chart data for water balance"""
+        """Chart data for water balance (daily + weekly aggregates after planting)."""
         if not self.results:
             return None
-        
-        water_flux = self.results['water_flux']
+
+        water_flux = self.results["water_flux"]
         if len(water_flux) == 0:
             return None
-        
-        # Use days after planting (dap) or simple day numbers
-        if 'dap' in water_flux.columns:
-            dates = [f"Day {int(d)}" for d in water_flux['dap'].tolist()]
+
+        wf = water_flux.copy()
+        n = len(wf)
+
+        tr = pd.to_numeric(wf.get("Tr", pd.Series(0, index=wf.index)), errors="coerce").fillna(0.0)
+        es = pd.to_numeric(wf.get("Es", pd.Series(0, index=wf.index)), errors="coerce").fillna(0.0)
+        infl = pd.to_numeric(wf.get("Infl", pd.Series(0, index=wf.index)), errors="coerce").fillna(0.0)
+        irr = pd.to_numeric(wf.get("IrrDay", pd.Series(0, index=wf.index)), errors="coerce").fillna(0.0)
+        actual_et_daily = (tr + es).tolist()
+
+        if "dap" in wf.columns:
+            dap = pd.to_numeric(wf["dap"], errors="coerce")
+            day_num = dap.fillna(pd.Series(np.arange(1, n + 1), index=wf.index))
         else:
-            dates = [f"Day {i+1}" for i in range(len(water_flux))]
-            
+            day_num = pd.Series(np.arange(1, n + 1), index=wf.index)
+
+        week_bin = ((day_num - 1).clip(lower=0) // 7).astype(int)
+        agg = pd.DataFrame(
+            {
+                "wk": week_bin,
+                "aet": tr + es,
+                "infl": infl,
+                "irr": irr,
+            }
+        )
+        grouped = agg.groupby("wk", sort=True).sum()
+        weeks_after_planting = (grouped.index.astype(int) + 1).tolist()
+        week_labels = [f"Week {w}" for w in weeks_after_planting]
+        weekly_actual_et_mm = [round(float(v), 4) for v in grouped["aet"].tolist()]
+        cumulative_actual_et_mm = [round(float(v), 4) for v in grouped["aet"].cumsum().tolist()]
+        weekly_precipitation_mm = [round(float(v), 4) for v in grouped["infl"].tolist()]
+        weekly_irrigation_mm = [round(float(v), 4) for v in grouped["irr"].tolist()]
+
+        if "dap" in wf.columns:
+            dates = [f"Day {int(d)}" for d in wf["dap"].tolist()]
+        else:
+            dates = [f"Day {i + 1}" for i in range(n)]
+
         return {
-            'dates': dates,
-            'precipitation': water_flux['Infl'].tolist() if 'Infl' in water_flux else [],
-            'irrigation': water_flux['IrrDay'].tolist() if 'IrrDay' in water_flux else [],
-            'transpiration': water_flux['Tr'].tolist() if 'Tr' in water_flux else [],
-            'evaporation': water_flux['Es'].tolist() if 'Es' in water_flux else [],
-            'drainage': water_flux['DeepPerc'].tolist() if 'DeepPerc' in water_flux else [],
+            "dates": dates,
+            "precipitation": infl.tolist() if "Infl" in wf.columns else [],
+            "irrigation": irr.tolist() if "IrrDay" in wf.columns else [],
+            "transpiration": tr.tolist() if "Tr" in wf.columns else [],
+            "evaporation": es.tolist() if "Es" in wf.columns else [],
+            "drainage": wf["DeepPerc"].tolist() if "DeepPerc" in wf.columns else [],
+            "actual_et_daily_mm": actual_et_daily,
+            "week_labels": week_labels,
+            "weeks_after_planting": weeks_after_planting,
+            "weekly_actual_et_mm": weekly_actual_et_mm,
+            "cumulative_actual_et_mm": cumulative_actual_et_mm,
+            "weekly_precipitation_mm": weekly_precipitation_mm,
+            "weekly_irrigation_mm": weekly_irrigation_mm,
         }
 
 

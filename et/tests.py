@@ -36,6 +36,7 @@ class ETPlannerViewTests(TestCase):
         response = self.client.get(reverse("et:acis_fetch"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Prepare ET Inputs")
+        self.assertContains(response, "Select province")
 
     def test_et_results_requires_seeded_data(self):
         response = self.client.get(reverse("et:comparison_with_acis"))
@@ -92,6 +93,8 @@ class ETPlannerViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Crop type")
         self.assertContains(response, "Soil type")
+        self.assertContains(response, "Province")
+        self.assertContains(response, "British Columbia")
 
     @patch("et.views.build_irrigation_confidence_plot", return_value="ZmFrZV9jaGFydA==")
     @patch(
@@ -136,6 +139,7 @@ class ETPlannerViewTests(TestCase):
         self.assertEqual(response.context["soil_type"], "sandy")
         self.assertContains(response, "Selected Crop")
         self.assertContains(response, "Selected Soil")
+        self.assertContains(response, "ET flux")
 
     def test_update_comparison_plot_requires_session_data(self):
         response = self.client.get(

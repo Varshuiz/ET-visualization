@@ -274,3 +274,43 @@ def format_yield_table(yield_results: dict) -> list:
             "pct_bar":   round(pct, 1),
         })
     return rows
+
+
+def build_weekly_yield_projection(
+    daily_df: pd.DataFrame, crop_name: str, start_date_str: str
+) -> list:
+    """
+    End-of-week potential marketable yield (t/ha) from peak simulated dry biomass
+    within each calendar week after simulation start (indicative trajectory).
+    """
+    if daily_df is None or daily_df.empty or "biomass" not in daily_df.columns:
+        return []
+
+    df = daily_df.copy()
+    if "Date" not in df.columns:
+        start_dt = pd.to_datetime(start_date_str, errors="coerce")
+        if pd.isna(start_dt):
+            return []
+        df["Date"] = pd.date_range(start_dt, periods=len(df), freq="D")
+
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Date"])
+    if df.empty:
+        return []
+
+    start_dt = df["Date"].min().normalize()
+    df["week_idx"] = ((df["Date"] - start_dt).dt.days // 7).astype(int)
+
+    out = []
+    for wk, grp in df.groupby("week_idx", sort=True):
+        bmax = float(grp["biomass"].max())
+        y = compute_yield_tha(bmax, crop_name)
+        out.append(
+            {
+                "week_after_planting": int(wk) + 1,
+                "period_label": f"Week {int(wk) + 1}",
+                "yield_tha": round(float(y), 3),
+                "biomass_peak_tha": round(bmax, 3),
+            }
+        )
+    return out

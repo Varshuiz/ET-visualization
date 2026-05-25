@@ -11,6 +11,7 @@ import pandas as pd
 import requests
 
 from .weather_ingestion import kmh_max_wind_to_u2_ms
+from .weather_ingestion import fetch_openmeteo_historical_data
 
 
 CROP_GDD_PROFILES = {
@@ -141,58 +142,28 @@ def _daily_series_aligned(daily, key, n):
 
 
 def fetch_openmeteo_archive_daily(latitude, longitude, start_date, end_date):
-    url = "https://archive-api.open-meteo.com/v1/archive"
-    params = {
-        "latitude": latitude,
-        "longitude": longitude,
-        "start_date": start_date,
-        "end_date": end_date,
-        "daily": ",".join(
-            [
-                "temperature_2m_max",
-                "temperature_2m_min",
-                "precipitation_sum",
-                "wind_speed_10m_max",
-                "relative_humidity_2m_mean",
-                "shortwave_radiation_sum",
-            ]
-        ),
-        "timezone": "auto",
-    }
-    response = requests.get(url, params=params, timeout=45)
-    response.raise_for_status()
-    daily = response.json().get("daily", {})
-    times = daily.get("time", []) or []
-    n = len(times)
-    if n == 0:
+    """
+    Historical daily data for forecast confidence:
+    prefer ECCC-backed historical weather, fallback to Open-Meteo handled internally.
+    """
+    base = fetch_openmeteo_historical_data(latitude, longitude, start_date, end_date)
+    if base is None or base.empty:
         return pd.DataFrame(
             columns=["Date", "Tmax", "Tmin", "Precipitation", "Wind_kmh_max", "RH_hist", "Rs_mjm2", "u2"]
         )
 
-    df = pd.DataFrame(
-        {
-            "Date": pd.to_datetime(times, errors="coerce"),
-            "Tmax": pd.to_numeric(
-                pd.Series(_daily_series_aligned(daily, "temperature_2m_max", n)), errors="coerce"
-            ),
-            "Tmin": pd.to_numeric(
-                pd.Series(_daily_series_aligned(daily, "temperature_2m_min", n)), errors="coerce"
-            ),
-            "Precipitation": pd.to_numeric(
-                pd.Series(_daily_series_aligned(daily, "precipitation_sum", n)), errors="coerce"
-            ).fillna(0.0),
-            "Wind_kmh_max": pd.to_numeric(
-                pd.Series(_daily_series_aligned(daily, "wind_speed_10m_max", n)), errors="coerce"
-            ),
-            "RH_hist": pd.to_numeric(
-                pd.Series(_daily_series_aligned(daily, "relative_humidity_2m_mean", n)), errors="coerce"
-            ),
-            "Rs_mjm2": pd.to_numeric(
-                pd.Series(_daily_series_aligned(daily, "shortwave_radiation_sum", n)), errors="coerce"
-            ),
-        }
-    )
-    df["u2"] = df["Wind_kmh_max"].map(kmh_max_wind_to_u2_ms)
+    df = base.copy()
+    df["Date"] = pd.to_datetime(df.get("Date"), errors="coerce")
+    df["Tmax"] = pd.to_numeric(df.get("Tmax"), errors="coerce")
+    df["Tmin"] = pd.to_numeric(df.get("Tmin"), errors="coerce")
+    df["Precipitation"] = pd.to_numeric(df.get("Precipitation"), errors="coerce").fillna(0.0)
+    df["u2"] = pd.to_numeric(df.get("u2"), errors="coerce")
+    if "Wind_kmh_max" not in df.columns:
+        # Best-effort reverse transform for display/compatibility when only u2 exists.
+        df["Wind_kmh_max"] = df["u2"] * (3.6 / 0.748)
+    df["RH_hist"] = pd.to_numeric(df.get("RH"), errors="coerce")
+    # Keep existing radiation when available; if absent, downstream logic estimates ET from temperature.
+    df["Rs_mjm2"] = pd.to_numeric(df.get("Rs_mjm2", df.get("Solar_Radiation")), errors="coerce")
     return df.dropna(subset=["Date", "Tmax", "Tmin"]).reset_index(drop=True)
 
 
@@ -288,7 +259,8 @@ def merge_openmeteo_forecast_drivers(df, latitude, longitude, timeout=30):
     out.loc[still_rh, "RH_percent"] = fill_rh.loc[still_rh]
 
     fill_rs = dnorm.map(rs_by_date)
-    out.loc[fill_rs.notna(), "Rs_mjm2"] = fill_rs.loc[fill_rs.notna()]
+    still_rs = out["Rs_mjm2"].isna()
+    out.loc[still_rs, "Rs_mjm2"] = fill_rs.loc[still_rs]
     return out
 
 

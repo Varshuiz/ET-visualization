@@ -109,9 +109,15 @@ from .et_methods import (
     priestley_taylor_ET,
     priestley_taylor_ET_vec,
     psychrometric_constant,
+    reference_et_mm_per_day_to_latent_heat_flux_wm2,
     saturation_vapor_pressure,
 )
 from .et_units import convert_units, format_et_value, get_unit_info
+from .eccc_forecast_registry import (
+    all_cities_for_province,
+    cities_by_region_for_province,
+    get_lat_lon,
+)
 from .location_services import (
     ALBERTA_LOCATIONS,
     geocode_location,
@@ -120,7 +126,11 @@ from .location_services import (
     reverse_geocode,
     search_alberta_location,
 )
-from .weather_ingestion import fetch_openmeteo_historical_data, normalize_uploaded_weather_dataframe
+from .weather_ingestion import (
+    build_aquacrop_weather_from_openmeteo_forecast,
+    fetch_openmeteo_historical_data,
+    normalize_uploaded_weather_dataframe,
+)
 from .eccc_weather import add_eccc_rh_to_dataframe
 from .eccc_weather import build_aquacrop_weather_from_eccc
 from .aquacrop_simulator import AquaCropSimulator, run_aquacrop_simulation
@@ -130,6 +140,7 @@ from .aquacrop_aggregation import (
     compute_yield_tha,
     build_yield_comparison_chart,
     format_yield_table,
+    build_weekly_yield_projection,
 )
 from .forms import UploadFileForm
 from .forecast_recommendations import (
@@ -1380,7 +1391,40 @@ def process_single_method_enhanced(request, method_code, method_name, template_n
     return render(request, template_name, context)
 
 
-    return max(ET0, 0)
+# --- ET Setup (acis_fetch): supported provinces and coordinate bounds ---
+ACIS_PROVINCE_GEO_BOUNDS = {
+    "Alberta": (49.0, 60.0, -120.0, -110.0),
+    "British Columbia": (48.2, 60.1, -139.1, -114.0),
+    "Saskatchewan": (49.0, 60.0, -110.5, -101.3),
+    "Manitoba": (49.0, 60.0, -102.1, -89.0),
+}
+ACIS_MAP_DEFAULT_CENTER = {
+    "Alberta": (53.5, -114.0),
+    "British Columbia": (54.0, -125.0),
+    "Saskatchewan": (52.0, -106.0),
+    "Manitoba": (52.5, -98.0),
+}
+
+
+def _acis_popular_location_suggestions(province_display):
+    if province_display == "Alberta":
+        return sorted(ALBERTA_LOCATIONS.keys())[:30]
+    return sorted(all_cities_for_province(province_display))[:40]
+
+
+def _validate_acis_coordinates(latitude, longitude, province_display):
+    bounds = ACIS_PROVINCE_GEO_BOUNDS.get(
+        province_display, ACIS_PROVINCE_GEO_BOUNDS["Alberta"]
+    )
+    lat_min, lat_max, lon_min, lon_max = bounds
+    if not (lat_min <= latitude <= lat_max):
+        raise ValueError(
+            f"Latitude must be between {lat_min} and {lat_max} for {province_display}"
+        )
+    if not (lon_min <= longitude <= lon_max):
+        raise ValueError(
+            f"Longitude must be between {lon_min} and {lon_max} for {province_display}"
+        )
 
 
 def acis_data_view(request):
@@ -1398,13 +1442,19 @@ def acis_data_view(request):
         selected_unit = 'mm'
     
     unit_info = get_unit_info(selected_unit)
-    
+
+    selected_province = "Alberta"
+    if request.method == "POST":
+        raw_prov = request.POST.get("province", "Alberta").strip()
+        if raw_prov in ACIS_PROVINCE_GEO_BOUNDS:
+            selected_province = raw_prov
+
     if request.method == 'POST':
         try:
             location_type = request.POST.get('location_type', 'place')
             uploaded_file = request.FILES.get('file')
             data_source_mode = request.POST.get("data_source_mode", "exact_coordinates")
-            
+
             # Get date range first
             start_date = request.POST.get('start_date', '').strip()
             end_date = request.POST.get('end_date', '').strip()
@@ -1429,86 +1479,122 @@ def acis_data_view(request):
                 raise
             
             # Determine location
-            if location_type == 'place':
-                place_name = request.POST.get('place_name', '').strip()
-                
+            if location_type == "place":
+                place_name = request.POST.get("place_name", "").strip()
+
                 if not place_name:
                     raise ValueError("Please enter a location name")
-                
-                print(f"Searching for: {place_name}")
-                location_result = search_alberta_location(place_name)
-                
-                if not location_result:
-                    raise ValueError(f"Location '{place_name}' not found. Try 'Calgary', 'Lethbridge', etc.")
-                
-                latitude = location_result['latitude']
-                longitude = location_result['longitude']
-                station_name = location_result['place_name']
-                location_desc = location_result['place_name']
-                
-                if location_result.get('township'):
-                    location_desc += f" (Twp {location_result['township']}, Rge {location_result['range']}, {location_result['meridian']} Meridian)"
-            
-            elif location_type == 'township':
-                township_str = request.POST.get('township', '').strip()
-                range_str = request.POST.get('range', '').strip()
-                
+
+                print(f"Searching for: {place_name} ({selected_province})")
+                if selected_province == "Alberta":
+                    location_result = search_alberta_location(place_name)
+                    if not location_result:
+                        raise ValueError(
+                            f"Location '{place_name}' not found. Try 'Calgary', 'Lethbridge', etc."
+                        )
+                else:
+                    try:
+                        geo = geocode_location(place_name, province=selected_province)
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"Location '{place_name}' could not be found in {selected_province}. "
+                            "Check spelling or try a larger nearby community."
+                        ) from exc
+                    location_result = {
+                        "place_name": place_name,
+                        "latitude": float(geo["latitude"]),
+                        "longitude": float(geo["longitude"]),
+                        "township": None,
+                        "range": None,
+                        "meridian": None,
+                        "source": "geocode",
+                    }
+
+                latitude = location_result["latitude"]
+                longitude = location_result["longitude"]
+                station_name = location_result["place_name"]
+                location_desc = location_result["place_name"]
+
+                if location_result.get("township"):
+                    location_desc += (
+                        f" (Twp {location_result['township']}, Rge {location_result['range']}, "
+                        f"{location_result['meridian']} Meridian)"
+                    )
+
+            elif location_type == "township":
+                if selected_province != "Alberta":
+                    raise ValueError(
+                        "Township and range lookup is only available when Province is set to Alberta."
+                    )
+
+                township_str = request.POST.get("township", "").strip()
+                range_str = request.POST.get("range", "").strip()
+
                 if not township_str or not range_str:
                     raise ValueError("Please enter both Township and Range numbers")
-                
+
                 try:
                     township = int(township_str)
                     range_val = int(range_str)
                 except ValueError:
                     raise ValueError("Township and Range must be numbers")
-                
-                meridian = request.POST.get('meridian', '4th')
-                
+
+                meridian = request.POST.get("meridian", "4th")
+
                 latitude, longitude = get_coordinates_from_township(township, range_val, meridian)
-                
+
                 # Find nearest station
                 station_result = find_nearest_alberta_station(latitude, longitude)
                 if station_result:
-                    station_name = station_result['name']
-                    location_desc = f"Township {township}, Range {range_val}, {meridian} Meridian (Nearest: {station_name})"
+                    station_name = station_result["name"]
+                    location_desc = (
+                        f"Township {township}, Range {range_val}, {meridian} Meridian "
+                        f"(Nearest: {station_name})"
+                    )
                 else:
                     raise ValueError("No weather station found near this location")
-            
+
             else:  # coordinates
-                lat_str = request.POST.get('latitude', '').strip()
-                lon_str = request.POST.get('longitude', '').strip()
-                
+                lat_str = request.POST.get("latitude", "").strip()
+                lon_str = request.POST.get("longitude", "").strip()
+
                 if not lat_str or not lon_str:
                     raise ValueError("Please enter both latitude and longitude")
-                
+
                 try:
                     latitude = float(lat_str)
                     longitude = float(lon_str)
                 except ValueError:
                     raise ValueError("Latitude and longitude must be valid numbers")
-                
-                if not (49 <= latitude <= 60):
-                    raise ValueError("Latitude must be between 49 and 60 for Alberta")
-                if not (-120 <= longitude <= -110):
-                    raise ValueError("Longitude must be between -120 and -110 for Alberta")
-                
-                # Find nearest station
-                station_result = find_nearest_alberta_station(latitude, longitude)
+
+                _validate_acis_coordinates(latitude, longitude, selected_province)
+
+                station_result = None
+                if selected_province == "Alberta":
+                    station_result = find_nearest_alberta_station(latitude, longitude)
                 if station_result:
-                    station_name = station_result['name']
-                    location_desc = f"{latitude}°N, {abs(longitude)}°W (Nearest: {station_name})"
+                    station_name = station_result["name"]
+                    location_desc = (
+                        f"{latitude}°N, {abs(longitude)}°W (Nearest: {station_name})"
+                    )
                 else:
-                    raise ValueError("No weather station found near this location")
-            
-            # Optional snap-to-nearest-station mode for coordinate sourcing.
+                    station_name = f"Coordinates in {selected_province}"
+                    location_desc = f"{latitude}°N, {abs(longitude)}°W ({selected_province})"
+
+            # Optional snap-to-nearest-station mode (Alberta reference stations only).
             if data_source_mode == "nearest_station":
-                station_result = find_nearest_alberta_station(latitude, longitude)
-                if not station_result:
-                    raise ValueError("Could not locate a nearby station for selected coordinates")
-                used_station = station_result["name"]
-                latitude = station_result["latitude"]
-                longitude = station_result["longitude"]
-                location_desc = f"{location_desc} | Using nearest station: {used_station}"
+                if selected_province != "Alberta":
+                    used_station = "Exact farm coordinates (nearest-station snap is Alberta-only)"
+                else:
+                    station_result = find_nearest_alberta_station(latitude, longitude)
+                    if not station_result:
+                        raise ValueError(
+                            "Could not locate a nearby station for selected coordinates"
+                        )
+                    used_station = station_result["name"]
+                    latitude = station_result["latitude"]
+                    longitude = station_result["longitude"]
+                    location_desc = f"{location_desc} | Using nearest station: {used_station}"
             else:
                 used_station = "Exact farm coordinates"
 
@@ -1537,7 +1623,10 @@ def acis_data_view(request):
                     if end_dt.date() > today_dt:
                         raise ValueError("Historical fetch only supports dates up to today; upload CSV for future scenarios")
                     df = fetch_openmeteo_historical_data(latitude, longitude, start_date, end_date)
-                    source_name = "Open-Meteo historical archive"
+                    source_name = getattr(df, "attrs", {}).get(
+                        "historical_source",
+                        "ECCC primary with Open-Meteo fallback",
+                    )
                 
                 # Validate data
                 if df is None or len(df) == 0:
@@ -1603,14 +1692,21 @@ def acis_data_view(request):
                     'station': station_name,
                     'used_station': used_station,
                     'data_source_mode': data_source_mode,
+                    'province': selected_province,
                 }
                 
                 # Preview
                 df_preview = df.head(10).to_dict('records')
-                success_message = (
-                    f"Successfully loaded {len(df)} day(s) of weather data from {source_name}."
-                )
-                success_message += f" Source mode: {used_station}."
+                if uploaded_file:
+                    success_message = (
+                        f"Successfully loaded {len(df)} day(s) of weather data from uploaded CSV."
+                    )
+                else:
+                    success_message = (
+                        f"Weather data loaded: {len(df)} days from Environment Canada. "
+                        "Open-Meteo used to fill any gaps. "
+                        "Based on your farm coordinates."
+                    )
                 
             except Exception as scrape_error:
                 print(f"\nEnvironment Canada fetch failed: {scrape_error}")
@@ -1633,6 +1729,11 @@ def acis_data_view(request):
     if used_station and used_station != "Exact farm coordinates":
         nearest_station_hint = used_station
 
+    popular_locations_by_province = {
+        p: _acis_popular_location_suggestions(p) for p in ACIS_PROVINCE_GEO_BOUNDS
+    }
+    province_options = [{"value": k, "label": k} for k in ACIS_PROVINCE_GEO_BOUNDS]
+
     context = {
         'error_message': error_message,
         'success_message': success_message,
@@ -1647,7 +1748,11 @@ def acis_data_view(request):
         ],
         'selected_unit': selected_unit,
         'unit_info': unit_info,
-        'popular_locations': list(ALBERTA_LOCATIONS.keys())[:20],
+        'popular_locations': _acis_popular_location_suggestions(selected_province),
+        'popular_locations_by_province': popular_locations_by_province,
+        'selected_province': selected_province,
+        'province_options': province_options,
+        'acis_map_default_center': ACIS_MAP_DEFAULT_CENTER,
         'scraping': scraping
     }
     
@@ -2263,16 +2368,133 @@ def combine_day_night_forecasts(df_forecast):
     
     return combined
 
-def _resolve_city_lat_lon(city_name):
-    if city_name in ALBERTA_LOCATIONS:
-        loc = ALBERTA_LOCATIONS[city_name]
-        return loc["lat"], loc["lon"]
+FORECAST_ECC_BY_DISPLAY = {
+    "Alberta": "AB",
+    "British Columbia": "BC",
+    "Saskatchewan": "SK",
+    "Manitoba": "MB",
+}
+FORECAST_DEFAULT_CITY = {
+    "Alberta": "Calgary",
+    "British Columbia": "Vancouver",
+    "Saskatchewan": "Saskatoon",
+    "Manitoba": "Winnipeg",
+}
+
+
+def _resolve_city_lat_lon(city_name, province_display="Alberta"):
+    """Resolve coordinates for ECCC forecast locations (Alberta DB + BC/SK/MB ECCC site list)."""
+    if province_display == "Alberta":
+        if city_name in ALBERTA_LOCATIONS:
+            loc = ALBERTA_LOCATIONS[city_name]
+            return loc["lat"], loc["lon"]
+    else:
+        lat, lon = get_lat_lon(province_display, city_name)
+        if lat is not None and lon is not None:
+            return float(lat), float(lon)
     try:
-        geo = geocode_location(city_name)
+        geo = geocode_location(city_name, province=province_display)
         return geo["latitude"], geo["longitude"]
     except Exception:
-        # fallback near central Alberta
-        return 53.0, -114.0
+        fallbacks = {
+            "Alberta": (53.0, -114.0),
+            "British Columbia": (54.0, -124.0),
+            "Saskatchewan": (52.0, -106.0),
+            "Manitoba": (52.0, -98.0),
+        }
+        return fallbacks.get(province_display, (53.0, -114.0))
+
+
+def _alberta_cities_by_region_filtered(scraper):
+    cities_by_region = {
+        "Major Cities": [
+            "Calgary",
+            "Edmonton",
+            "Lethbridge",
+            "Red Deer",
+            "Medicine Hat",
+            "Grande Prairie",
+            "Fort McMurray",
+        ],
+        "Central Alberta": [
+            "Airdrie",
+            "St. Albert",
+            "Spruce Grove",
+            "Camrose",
+            "Okotoks",
+            "Cochrane",
+            "Strathmore",
+            "Leduc",
+            "Stony Plain",
+            "Beaumont",
+            "Fort Saskatchewan",
+            "Wetaskiwin",
+            "Sylvan Lake",
+            "Drumheller",
+            "Olds",
+            "Innisfail",
+            "Ponoka",
+            "Lacombe",
+            "Rimbey",
+            "Rocky Mountain House",
+        ],
+        "Southern Alberta": [
+            "Brooks",
+            "Taber",
+            "Vauxhall",
+            "Coaldale",
+            "Picture Butte",
+            "Vulcan",
+            "Claresholm",
+            "Pincher Creek",
+            "Cardston",
+            "Fort Macleod",
+            "Blairmore",
+            "Crowsnest Pass",
+            "High River",
+        ],
+        "Northern Alberta": [
+            "Peace River",
+            "Slave Lake",
+            "Whitecourt",
+            "Hinton",
+            "High Level",
+            "Fort Chipewyan",
+            "Rainbow Lake",
+            "Athabasca",
+            "Barrhead",
+            "Westlock",
+            "Mayerthorpe",
+        ],
+        "Eastern Alberta": [
+            "Lloydminster",
+            "Cold Lake",
+            "Vegreville",
+            "Vermilion",
+            "Wainwright",
+            "Provost",
+            "Coronation",
+            "Hanna",
+            "Oyen",
+            "Bonnyville",
+            "St. Paul",
+            "Lac La Biche",
+        ],
+        "Mountain Towns": ["Banff", "Jasper", "Canmore"],
+        "West-Central Alberta": ["Edson", "Drayton Valley"],
+    }
+    return {
+        region: [city for city in cities if city in scraper.LOCATION_CODES]
+        for region, cities in cities_by_region.items()
+    }
+
+
+def _forecast_cities_by_province_for_ui(scraper):
+    """Province display name -> region -> cities (for Environment Canada forecast UI)."""
+    out = {"Alberta": _alberta_cities_by_region_filtered(scraper)}
+    for pname in ("British Columbia", "Saskatchewan", "Manitoba"):
+        out[pname] = cities_by_region_for_province(pname)
+    return out
 
 def _pt_daily_et_from_temperature(tmax, tmin, latitude, day_of_year):
     """
@@ -2338,13 +2560,14 @@ def env_canada_forecast_view(request):
     Standalone view to display Environment Canada precipitation forecast
     """
     from .environment_canada_scraper import fetch_env_canada_forecast, EnvironmentCanadaScraper
-    
+
     error_message = None
     df_forecast = None
-    city_name = 'Calgary'  # Default
+    province_display = "Alberta"
+    city_name = FORECAST_DEFAULT_CITY[province_display]
     selected_days = 7  # Default
-    crop_type = 'wheat'
-    soil_type = 'loam'
+    crop_type = "wheat"
+    soil_type = "loam"
     crop_options = [
         {"value": key, "label": key.replace("_", " ").title()}
         for key in sorted(CROP_GDD_PROFILES.keys())
@@ -2354,85 +2577,78 @@ def env_canada_forecast_view(request):
         for key in sorted(SOIL_IRRIGATION_FACTORS.keys())
     ]
 
-    # Get available cities
     scraper = EnvironmentCanadaScraper()
-    all_cities = sorted(scraper.LOCATION_CODES.keys())
-    
-    # Organize cities by region
-    cities_by_region = {
-        'Major Cities': ['Calgary', 'Edmonton', 'Lethbridge', 'Red Deer', 'Medicine Hat', 
-                        'Grande Prairie', 'Fort McMurray'],
-        'Central Alberta': ['Airdrie', 'St. Albert', 'Spruce Grove', 'Camrose', 'Okotoks', 
-                           'Cochrane', 'Strathmore', 'Leduc', 'Stony Plain', 'Beaumont',
-                           'Fort Saskatchewan', 'Wetaskiwin', 'Sylvan Lake', 'Drumheller',
-                           'Olds', 'Innisfail', 'Ponoka', 'Lacombe', 'Rimbey', 
-                           'Rocky Mountain House'],
-        'Southern Alberta': ['Brooks', 'Taber', 'Vauxhall', 'Coaldale', 'Picture Butte',
-                            'Vulcan', 'Claresholm', 'Pincher Creek', 'Cardston',
-                            'Fort Macleod', 'Blairmore', 'Crowsnest Pass', 'High River'],
-        'Northern Alberta': ['Peace River', 'Slave Lake', 'Whitecourt', 'Hinton', 
-                            'High Level', 'Fort Chipewyan', 'Rainbow Lake', 'Athabasca',
-                            'Barrhead', 'Westlock', 'Mayerthorpe'],
-        'Eastern Alberta': ['Lloydminster', 'Cold Lake', 'Vegreville', 'Vermilion',
-                           'Wainwright', 'Provost', 'Coronation', 'Hanna', 'Oyen',
-                           'Bonnyville', 'St. Paul', 'Lac La Biche'],
-        'Mountain Towns': ['Banff', 'Jasper', 'Canmore'],
-        'West-Central Alberta': ['Edson', 'Drayton Valley'],
-    }
-    
-    # Filter to only include cities that exist in our codes
-    cities_by_region = {
-        region: [city for city in cities if city in scraper.LOCATION_CODES]
-        for region, cities in cities_by_region.items()
-    }
-    
-    if request.method == 'POST':
-        city_name = request.POST.get('city_name', 'Calgary').strip()
-        crop_type = request.POST.get('crop_type', 'wheat').strip().lower()
-        soil_type = request.POST.get('soil_type', 'loam').strip().lower()
+    cities_by_province = _forecast_cities_by_province_for_ui(scraper)
+
+    def cities_in_province(pname):
+        if pname == "Alberta":
+            return sorted(scraper.LOCATION_CODES.keys())
+        return all_cities_for_province(pname)
+
+    cities_by_region = cities_by_province[province_display]
+    all_cities = cities_in_province(province_display)
+
+    province_options = [{"value": k, "label": k} for k in FORECAST_ECC_BY_DISPLAY]
+
+    def base_context(extra=None):
+        ctx = {
+            "error_message": error_message,
+            "city_name": city_name,
+            "selected_province": province_display,
+            "province_options": province_options,
+            "cities_by_province": cities_by_province,
+            "default_city_by_province": FORECAST_DEFAULT_CITY,
+            "selected_days": selected_days,
+            "show_extended_horizon_caveat": False,
+            "chart_available": False,
+            "crop_type": crop_type,
+            "soil_type": soil_type,
+            "crop_label": next((item["label"] for item in crop_options if item["value"] == crop_type), "Wheat"),
+            "soil_label": next((item["label"] for item in soil_options if item["value"] == soil_type), "Loam"),
+            "crop_options": crop_options,
+            "soil_options": soil_options,
+            "available_cities": all_cities,
+            "cities_by_region": cities_by_region,
+        }
+        if extra:
+            ctx.update(extra)
+        return ctx
+
+    if request.method == "POST":
+        province_display = request.POST.get("province", "Alberta").strip()
+        if province_display not in FORECAST_ECC_BY_DISPLAY:
+            province_display = "Alberta"
+        ecc = FORECAST_ECC_BY_DISPLAY[province_display]
+
+        city_name = request.POST.get("city_name", "").strip()
+        crop_type = request.POST.get("crop_type", "wheat").strip().lower()
+        soil_type = request.POST.get("soil_type", "loam").strip().lower()
         if crop_type not in CROP_GDD_PROFILES:
-            crop_type = 'wheat'
+            crop_type = "wheat"
         if soil_type not in SOIL_IRRIGATION_FACTORS:
-            soil_type = 'loam'
+            soil_type = "loam"
         try:
-            selected_days = int(request.POST.get('days', 7))
+            selected_days = int(request.POST.get("days", 7))
         except (TypeError, ValueError):
             selected_days = 7
         selected_days = max(3, min(selected_days, 30))
-        
+
+        allowed = set(cities_in_province(province_display))
+        default_city = FORECAST_DEFAULT_CITY[province_display]
+        if not city_name or city_name not in allowed:
+            city_name = default_city
+
+        cities_by_region = cities_by_province[province_display]
+        all_cities = cities_in_province(province_display)
+
         try:
-            df = fetch_env_canada_forecast(city_name, selected_days)
-            lat, lon = _resolve_city_lat_lon(city_name)
+            df = fetch_env_canada_forecast(city_name, selected_days, province_code=ecc)
+            lat, lon = _resolve_city_lat_lon(city_name, province_display)
             _ = lon
             df = merge_openmeteo_forecast_drivers(df, lat, lon)
 
-            # Convert to records for template
+            # Convert to records + daily ET₀, crop-stage ET, and latent heat flux (W/m²)
             df_forecast = []
-            for _, row in df.iterrows():
-                temp_high = safe_temp_convert(row['Temp_High'])
-                temp_low = safe_temp_convert(row['Temp_Low'])
-                precip = safe_temp_convert(row['Precipitation_mm'])
-                rh_pct = safe_temp_convert(row.get('RH_percent'))
-                u2_ms = safe_temp_convert(row.get('u2_ms'))
-                wind_kmh = safe_temp_convert(row.get('Wind_kmh_max'))
-                rs_mj = safe_temp_convert(row.get('Rs_mjm2'))
-
-                forecast_dict = {
-                    'Date': row['Date'],
-                    'Period': row['Period'],
-                    'Temp_High': temp_high,
-                    'Temp_Low': temp_low,
-                    'RH_percent': rh_pct,
-                    'u2_ms': u2_ms,
-                    'Wind_kmh_max': wind_kmh,
-                    'Rs_mjm2': rs_mj,
-                    'Precipitation_mm': precip if precip is not None else 0.0,
-                    'Forecast': str(row['Forecast']) if row['Forecast'] else ''
-                }
-                df_forecast.append(forecast_dict)
-            
-            # Penman–Monteith + GDD recommendation on current forecast.
-            total_precip = sum([f['Precipitation_mm'] for f in df_forecast])
             estimated_et_total = 0.0
             cumulative_gdd = 0.0
             forecast_irrig_curve = []
@@ -2440,31 +2656,63 @@ def env_canada_forecast_view(request):
             current_stage_label = "Early establishment"
             soil_factor = SOIL_IRRIGATION_FACTORS.get(soil_type, 1.0)
 
-            for item in df_forecast:
-                tmax = item['Temp_High'] if item['Temp_High'] is not None else item['Temp_Low']
-                tmin = item['Temp_Low'] if item['Temp_Low'] is not None else item['Temp_High']
-                if tmax is None or tmin is None:
-                    continue
-                d = pd.to_datetime(item["Date"])
-                day_of_year = d.dayofyear
-                et0 = _pm_daily_et_from_temperature(
-                    float(tmax),
-                    float(tmin),
-                    lat,
-                    day_of_year,
-                    rh=item.get("RH_percent"),
-                    u2=item.get("u2_ms"),
-                    rs=item.get("Rs_mjm2"),
-                )
-                daily_gdd = calculate_daily_gdd(float(tmax), float(tmin))
-                cumulative_gdd += daily_gdd
-                stage_factor, current_stage_label = gdd_stage_factor(cumulative_gdd, crop_type)
-                adjusted_et = et0 * stage_factor
-                estimated_et_total += adjusted_et
-                daily_irrig = max(adjusted_et - max(float(item["Precipitation_mm"]), 0.0), 0.0)
-                running_irrig += daily_irrig
-                forecast_irrig_curve.append(running_irrig)
+            for _, row in df.iterrows():
+                temp_high = safe_temp_convert(row["Temp_High"])
+                temp_low = safe_temp_convert(row["Temp_Low"])
+                precip = safe_temp_convert(row["Precipitation_mm"])
+                rh_pct = safe_temp_convert(row.get("RH_percent"))
+                u2_ms = safe_temp_convert(row.get("u2_ms"))
+                wind_kmh = safe_temp_convert(row.get("Wind_kmh_max"))
+                rs_mj = safe_temp_convert(row.get("Rs_mjm2"))
 
+                et0_mm = None
+                et_flux_wm2 = None
+                adjusted_et_mm = None
+                tmax = temp_high if temp_high is not None else temp_low
+                tmin = temp_low if temp_low is not None else temp_high
+                if tmax is not None and tmin is not None:
+                    d = pd.to_datetime(row["Date"])
+                    day_of_year = int(d.dayofyear)
+                    et0_mm = _pm_daily_et_from_temperature(
+                        float(tmax),
+                        float(tmin),
+                        lat,
+                        day_of_year,
+                        rh=rh_pct,
+                        u2=u2_ms,
+                        rs=rs_mj,
+                    )
+                    et_flux_wm2 = reference_et_mm_per_day_to_latent_heat_flux_wm2(et0_mm)
+                    daily_gdd = calculate_daily_gdd(float(tmax), float(tmin))
+                    cumulative_gdd += daily_gdd
+                    stage_factor, current_stage_label = gdd_stage_factor(cumulative_gdd, crop_type)
+                    adjusted_et_mm = float(et0_mm) * float(stage_factor)
+                    estimated_et_total += adjusted_et_mm
+                    daily_irrig = max(
+                        adjusted_et_mm - max(float(precip if precip is not None else 0.0), 0.0),
+                        0.0,
+                    )
+                    running_irrig += daily_irrig
+                    forecast_irrig_curve.append(running_irrig)
+
+                forecast_dict = {
+                    "Date": row["Date"],
+                    "Period": row["Period"],
+                    "Temp_High": temp_high,
+                    "Temp_Low": temp_low,
+                    "RH_percent": rh_pct,
+                    "u2_ms": u2_ms,
+                    "Wind_kmh_max": wind_kmh,
+                    "Rs_mjm2": rs_mj,
+                    "Precipitation_mm": precip if precip is not None else 0.0,
+                    "Forecast": str(row["Forecast"]) if row["Forecast"] else "",
+                    "et0_mm": et0_mm,
+                    "et_flux_wm2": float(et_flux_wm2) if et_flux_wm2 is not None and not pd.isna(et_flux_wm2) else None,
+                    "adjusted_et_mm": adjusted_et_mm,
+                }
+                df_forecast.append(forecast_dict)
+
+            total_precip = sum([f["Precipitation_mm"] for f in df_forecast])
             net_water_balance = total_precip - estimated_et_total
             irrigation_needed = running_irrig * soil_factor
             recommendation_level = (
@@ -2475,12 +2723,12 @@ def env_canada_forecast_view(request):
                 else "high"
             )
 
-            # 5-year historical baseline confidence band (sample areas around city).
+            resolve_for_hist = lambda c, p=province_display: _resolve_city_lat_lon(c, p)
             historical_confidence = build_historical_confidence(
                 city_name,
                 selected_days,
                 crop_type,
-                _resolve_city_lat_lon,
+                resolve_for_hist,
                 _pm_daily_et_from_temperature,
             )
             forecast_curve_soil_adjusted = [v * soil_factor for v in forecast_irrig_curve]
@@ -2491,59 +2739,39 @@ def env_canada_forecast_view(request):
             crop_label = next((item["label"] for item in crop_options if item["value"] == crop_type), "Wheat")
             soil_label = next((item["label"] for item in soil_options if item["value"] == soil_type), "Loam")
 
-            context = {
-                'city_name': city_name,
-                'selected_days': selected_days,
-                'show_extended_horizon_caveat': selected_days > 7,
-                'df_forecast': df_forecast,
-                'total_precip': total_precip,
-                'estimated_et_total': estimated_et_total,
-                'net_water_balance': net_water_balance,
-                'irrigation_needed': irrigation_needed,
-                'recommendation_level': recommendation_level,
-                'gdd_total': cumulative_gdd,
-                'gdd_stage': current_stage_label,
-                'crop_type': crop_type,
-                'soil_type': soil_type,
-                'crop_label': crop_label,
-                'soil_label': soil_label,
-                'crop_options': crop_options,
-                'soil_options': soil_options,
-                'soil_factor': soil_factor,
-                'historical_confidence': historical_confidence,
-                'rec_chart_url': rec_chart_url,
-                'chart_available': chart_available,
-                'available_cities': all_cities,
-                'cities_by_region': cities_by_region,
-            }
-            
-            return render(request, 'et/env_canada_forecast.html', context)
-            
+            context = base_context(
+                {
+                    "selected_days": selected_days,
+                    "show_extended_horizon_caveat": selected_days > 7,
+                    "df_forecast": df_forecast,
+                    "total_precip": total_precip,
+                    "estimated_et_total": estimated_et_total,
+                    "net_water_balance": net_water_balance,
+                    "irrigation_needed": irrigation_needed,
+                    "recommendation_level": recommendation_level,
+                    "gdd_total": cumulative_gdd,
+                    "gdd_stage": current_stage_label,
+                    "crop_label": crop_label,
+                    "soil_label": soil_label,
+                    "soil_factor": soil_factor,
+                    "historical_confidence": historical_confidence,
+                    "rec_chart_url": rec_chart_url,
+                    "chart_available": chart_available,
+                }
+            )
+
+            return render(request, "et/env_canada_forecast.html", context)
+
         except Exception as e:
             import traceback
+
             print(f"\n{'='*80}")
-            print(f"ERROR in env_canada_forecast_view:")
+            print("ERROR in env_canada_forecast_view:")
             print(traceback.format_exc())
             print(f"{'='*80}\n")
             error_message = f"Error fetching forecast: {str(e)}"
 
-    context = {
-        'error_message': error_message,
-        'city_name': city_name,
-        'selected_days': selected_days,
-        'show_extended_horizon_caveat': False,
-        'chart_available': False,
-        'crop_type': crop_type,
-        'soil_type': soil_type,
-        'crop_label': next((item["label"] for item in crop_options if item["value"] == crop_type), "Wheat"),
-        'soil_label': next((item["label"] for item in soil_options if item["value"] == soil_type), "Loam"),
-        'crop_options': crop_options,
-        'soil_options': soil_options,
-        'available_cities': all_cities,
-        'cities_by_region': cities_by_region,
-    }
-    
-    return render(request, 'et/env_canada_forecast.html', context)
+    return render(request, "et/env_canada_forecast.html", base_context())
 
 def aquacrop_simulation(request):
     """
@@ -2554,20 +2782,29 @@ def aquacrop_simulation(request):
     available_cities = sorted(ALBERTA_LOCATIONS.keys())
 
     context = {
-        'crops': list(AquaCropSimulator.AVAILABLE_CROPS.keys()),
-        'soil_types': list(AquaCropSimulator.SOIL_TYPES.keys()),
-        'available_cities': available_cities,
-        'selected_city': default_city,
-        'selected_crop': '',
-        'selected_soil': '',
-        'selected_irrigation': 'full',
-        'timestep': '',
-        'start_date': '',
-        'end_date': '',
-        'irrigation_methods': [
-            ('rainfed', 'Rainfed (No Irrigation)'),
-            ('full', 'Full Irrigation (80% SMT)'),
-            ('deficit', 'Deficit Irrigation (60% SMT)'),
+        "crops": list(AquaCropSimulator.AVAILABLE_CROPS.keys()),
+        "soil_types": list(AquaCropSimulator.SOIL_TYPES.keys()),
+        "available_cities": available_cities,
+        "selected_city": default_city,
+        "selected_crop": "",
+        "selected_soil": "",
+        "selected_irrigation": "full",
+        "timestep": "",
+        "start_date": f"{pd.Timestamp.now().year}/05/01",
+        "end_date": f"{pd.Timestamp.now().year}/09/30",
+        "sim_mode": "historical_range",
+        "historical_range_type": "custom",
+        "simulation_year": "",
+        "hist_year_start": "",
+        "hist_year_end": "",
+        "historical_results_rows": [],
+        "weekly_yield_projection": [],
+        "forecast_mode_caveat": None,
+        "multi_year_mode": False,
+        "irrigation_methods": [
+            ("rainfed", "Rainfed (No Irrigation)"),
+            ("full", "Full Irrigation (80% SMT)"),
+            ("deficit", "Deficit Irrigation (60% SMT)"),
         ],
     }
 
@@ -2590,108 +2827,278 @@ def aquacrop_simulation(request):
             )
         return None
     
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
-            # Get form data
-            timestep = request.POST.get('timestep', 'weekly')
-            crop = request.POST.get('crop', 'Wheat')
-            soil = request.POST.get('soil', 'Loam')
-            irrigation = request.POST.get('irrigation', 'full')
-            city_name = request.POST.get('city_name', default_city).strip()
+            timestep = request.POST.get("timestep", "weekly")
+            crop = request.POST.get("crop", "Wheat")
+            soil = request.POST.get("soil", "Loam")
+            irrigation = request.POST.get("irrigation", "full")
+            city_name = request.POST.get("city_name", default_city).strip()
             if city_name and city_name not in available_cities:
                 city_name = default_city
-            start_date = request.POST.get('start_date', '')
-            end_date = request.POST.get('end_date', '')
-            context['maturity_warning'] = _maturity_warning(crop, end_date)
-            
-            # Handle weather data upload
+
+            sim_mode = request.POST.get("sim_mode", "historical_range").strip()
+            if sim_mode not in ("single_year", "historical_range", "forecast"):
+                sim_mode = "historical_range"
+            historical_range_type = request.POST.get("historical_range_type", "custom").strip()
+            if historical_range_type not in ("years", "custom"):
+                historical_range_type = "custom"
+
+            start_date = request.POST.get("start_date", "").strip()
+            end_date = request.POST.get("end_date", "").strip()
+
+            try:
+                simulation_year = int(request.POST.get("simulation_year", "").strip() or 0)
+            except (TypeError, ValueError):
+                simulation_year = 0
+            try:
+                hist_year_start = int(request.POST.get("hist_year_start", "").strip() or 0)
+            except (TypeError, ValueError):
+                hist_year_start = 0
+            try:
+                hist_year_end = int(request.POST.get("hist_year_end", "").strip() or 0)
+            except (TypeError, ValueError):
+                hist_year_end = 0
+
+            context["sim_mode"] = sim_mode
+            context["historical_range_type"] = historical_range_type
+            context["simulation_year"] = str(simulation_year) if simulation_year else ""
+            context["hist_year_start"] = str(hist_year_start) if hist_year_start else ""
+            context["hist_year_end"] = str(hist_year_end) if hist_year_end else ""
+
             weather_df = None
-            if 'weather_file' in request.FILES:
-                file = request.FILES['weather_file']
-                
-                if file.name.endswith('.csv'):
+            historical_results_rows = []
+            multi_year_mode = False
+            forecast_mode_caveat = None
+            had_file_upload = False
+
+            if "weather_file" in request.FILES:
+                had_file_upload = True
+                file = request.FILES["weather_file"]
+                if file.name.endswith(".csv"):
                     weather_df = pd.read_csv(file)
-                elif file.name.endswith(('.xlsx', '.xls')):
+                elif file.name.endswith((".xlsx", ".xls")):
                     weather_df = pd.read_excel(file)
                 else:
-                    context['error_message'] = "Please upload a CSV or Excel file"
-                    return render(request, 'et/aquacrop_simulation.html', context)
+                    context["error_message"] = "Please upload a CSV or Excel file"
+                    return render(request, "et/aquacrop_simulation.html", context)
             else:
                 city_coords = ALBERTA_LOCATIONS.get(city_name)
                 if not city_coords:
                     raise ValueError(f"No coordinates found for selected city: {city_name}")
-                weather_df = build_aquacrop_weather_from_eccc(
-                    latitude=city_coords['lat'],
-                    longitude=city_coords['lon'],
-                    start_date=start_date,
-                    end_date=end_date,
-                )
-                weather_warnings = list(weather_df.attrs.get("warnings", [])) if hasattr(weather_df, "attrs") else []
+                lat, lon = float(city_coords["lat"]), float(city_coords["lon"])
+
+                if sim_mode == "single_year":
+                    if simulation_year <= 0:
+                        simulation_year = pd.Timestamp.now().year
+                    start_date = f"{simulation_year}/05/01"
+                    end_date = f"{simulation_year}/09/30"
+                    context["simulation_year"] = str(simulation_year)
+                    weather_df = build_aquacrop_weather_from_eccc(
+                        latitude=lat,
+                        longitude=lon,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
+                elif sim_mode == "historical_range" and historical_range_type == "years":
+                    multi_year_mode = True
+                    if hist_year_start <= 0 or hist_year_end <= 0:
+                        raise ValueError("Enter both start year and end year for multi-year historical mode.")
+                    if hist_year_end < hist_year_start:
+                        raise ValueError("End year must be greater than or equal to start year.")
+                    if hist_year_end - hist_year_start > 40:
+                        raise ValueError("Please limit the historical year span to 40 years or fewer.")
+
+                    results = None
+                    for year in range(hist_year_start, hist_year_end + 1):
+                        sd = f"{year}/05/01"
+                        ed = f"{year}/09/30"
+                        try:
+                            wd_y = build_aquacrop_weather_from_eccc(
+                                latitude=lat,
+                                longitude=lon,
+                                start_date=sd,
+                                end_date=ed,
+                            )
+                            r_y = run_aquacrop_simulation(
+                                crop=crop,
+                                soil=soil,
+                                start_date=sd,
+                                end_date=ed,
+                                irrigation=irrigation,
+                                weather_df=wd_y,
+                            )
+                            historical_results_rows.append(
+                                {
+                                    "label": str(year),
+                                    "year": year,
+                                    "start_date": sd,
+                                    "end_date": ed,
+                                    "yield_fresh": float(r_y.get("yield_fresh", 0) or 0),
+                                    "total_et": float(r_y.get("total_et", 0) or 0),
+                                    "partial_results": bool(r_y.get("partial_results")),
+                                }
+                            )
+                            results = r_y
+                            weather_df = wd_y
+                            start_date, end_date = sd, ed
+                        except Exception as ex_y:
+                            historical_results_rows.append(
+                                {
+                                    "label": str(year),
+                                    "year": year,
+                                    "start_date": sd,
+                                    "end_date": ed,
+                                    "error": str(ex_y),
+                                }
+                            )
+
+                    if results is None:
+                        raise ValueError("No successful AquaCrop runs in the selected year range.")
+                elif sim_mode == "forecast":
+                    if not start_date or not end_date:
+                        raise ValueError("Forecast mode requires start and end dates.")
+                    weather_df = build_aquacrop_weather_from_openmeteo_forecast(
+                        latitude=lat,
+                        longitude=lon,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
+                    forecast_mode_caveat = (
+                        "Forecast drivers are limited to the Open-Meteo horizon (about 16 days). "
+                        "Yield and ET are exploratory only."
+                    )
+                else:
+                    weather_df = build_aquacrop_weather_from_eccc(
+                        latitude=lat,
+                        longitude=lon,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
+
+            if weather_df is not None and hasattr(weather_df, "attrs"):
+                weather_warnings = list(weather_df.attrs.get("warnings", []))
                 if weather_warnings:
-                    context['warning_messages'] = weather_warnings
-                weather_source_summary = (
-                    weather_df.attrs.get("temperature_source_summary", {})
-                    if hasattr(weather_df, "attrs")
-                    else {}
-                )
+                    context["warning_messages"] = weather_warnings
+                weather_source_summary = weather_df.attrs.get("temperature_source_summary", {})
                 if weather_source_summary:
                     context["temperature_source_summary"] = weather_source_summary
 
-            # Run simulation
-            results = run_aquacrop_simulation(
-                crop=crop,
-                soil=soil,
-                start_date=start_date,
-                end_date=end_date,
-                irrigation=irrigation,
-                weather_df=weather_df
+            context["maturity_warning"] = _maturity_warning(crop, end_date)
+
+            if not multi_year_mode:
+                results = run_aquacrop_simulation(
+                    crop=crop,
+                    soil=soil,
+                    start_date=start_date,
+                    end_date=end_date,
+                    irrigation=irrigation,
+                    weather_df=weather_df,
+                )
+                if had_file_upload:
+                    historical_results_rows = [
+                        {
+                            "label": "Uploaded weather",
+                            "year": "",
+                            "start_date": start_date,
+                            "end_date": end_date,
+                            "yield_fresh": float(results.get("yield_fresh", 0) or 0),
+                            "total_et": float(results.get("total_et", 0) or 0),
+                            "partial_results": bool(results.get("partial_results")),
+                        }
+                    ]
+                elif sim_mode == "historical_range" and historical_range_type == "custom":
+                    historical_results_rows = [
+                        {
+                            "label": f"{start_date} – {end_date}",
+                            "year": "",
+                            "start_date": start_date,
+                            "end_date": end_date,
+                            "yield_fresh": float(results.get("yield_fresh", 0) or 0),
+                            "total_et": float(results.get("total_et", 0) or 0),
+                            "partial_results": bool(results.get("partial_results")),
+                        }
+                    ]
+                elif sim_mode == "single_year":
+                    historical_results_rows = [
+                        {
+                            "label": str(simulation_year),
+                            "year": simulation_year,
+                            "start_date": start_date,
+                            "end_date": end_date,
+                            "yield_fresh": float(results.get("yield_fresh", 0) or 0),
+                            "total_et": float(results.get("total_et", 0) or 0),
+                            "partial_results": bool(results.get("partial_results")),
+                        }
+                    ]
+                elif sim_mode == "forecast":
+                    historical_results_rows = [
+                        {
+                            "label": "Forecast window",
+                            "year": "",
+                            "start_date": start_date,
+                            "end_date": end_date,
+                            "yield_fresh": float(results.get("yield_fresh", 0) or 0),
+                            "total_et": float(results.get("total_et", 0) or 0),
+                            "partial_results": bool(results.get("partial_results")),
+                        }
+                    ]
+
+            weekly_yield_projection = []
+            if results.get("daily_output") is not None and len(results["daily_output"]) > 0:
+                daily_df = results["daily_output"].copy()
+                weekly_yield_projection = build_weekly_yield_projection(
+                    daily_df, crop, start_date
+                )
+                if "Date" not in daily_df.columns:
+                    start_dt = pd.to_datetime(start_date)
+                    daily_df["Date"] = pd.date_range(start_dt, periods=len(daily_df), freq="D")
+
+                resampled = aggregate_aquacrop_timeseries(daily_df, timestep)
+
+                y_col = (
+                    "biomass"
+                    if "biomass" in resampled.columns
+                    else resampled.select_dtypes("number").columns[0]
+                )
+                ts_chart = plot_aquacrop_timeseries(
+                    resampled,
+                    y_col=y_col,
+                    title=f"{'Weekly' if timestep == 'weekly' else 'Biweekly'} Biomass Accumulation",
+                    color="#087F8C",
+                    timestep=timestep,
+                )
+                context["resampled_chart"] = ts_chart
+                resampled_table = resampled[["Period", y_col]].rename(columns={y_col: "value"})
+                context["resampled_data"] = resampled_table.to_dict("records")
+                dry_biomass = results.get("yield_dry", results.get("yield_fresh", 0))
+                context["yield_tha"] = compute_yield_tha(dry_biomass, crop)
+                context["timestep"] = timestep
+
+            context.update(
+                {
+                    "results": results,
+                    "selected_crop": crop,
+                    "selected_soil": soil,
+                    "selected_irrigation": irrigation,
+                    "selected_city": city_name,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "has_results": True,
+                    "timestep": timestep,
+                    "historical_results_rows": historical_results_rows,
+                    "weekly_yield_projection": weekly_yield_projection,
+                    "forecast_mode_caveat": forecast_mode_caveat,
+                    "multi_year_mode": multi_year_mode,
+                }
             )
 
-            # Weekly/biweekly aggregation
-            if results.get('daily_output') is not None and len(results['daily_output']) > 0:
-                daily_df = results['daily_output'].copy()
-                # Add a Date column if not present (use day index)
-                if 'Date' not in daily_df.columns:
-                    start_dt = pd.to_datetime(start_date)
-                    daily_df['Date'] = pd.date_range(start_dt, periods=len(daily_df), freq='D')
-                
-                resampled = aggregate_aquacrop_timeseries(daily_df, timestep)
-                
-                # Pick a meaningful column to plot — canopy_cover or biomass
-                y_col = 'biomass' if 'biomass' in resampled.columns else resampled.select_dtypes('number').columns[0]
-                ts_chart = plot_aquacrop_timeseries(
-                    resampled, y_col=y_col,
-                    title=f"{'Weekly' if timestep == 'weekly' else 'Biweekly'} Biomass Accumulation",
-                    color='#087F8C',
-                    timestep=timestep
-                )
-                context['resampled_chart'] = ts_chart
-                resampled_table = resampled[['Period', y_col]].rename(columns={y_col: 'value'})
-                context['resampled_data'] = resampled_table.to_dict('records')
-                # Yield in t/ha using Harvest Index
-                dry_biomass = results.get('yield_dry', results.get('yield_fresh', 0))
-                context['yield_tha'] = compute_yield_tha(dry_biomass, crop)
-                context['timestep'] = timestep
-            
-            # Add results to context
-            context.update({
-                'results': results,
-                'selected_crop': crop,
-                'selected_soil': soil,
-                'selected_irrigation': irrigation,
-                'selected_city': city_name,
-                'start_date': start_date,
-                'end_date': end_date,
-                'has_results': True,
-                'timestep': timestep,        # add this
-            })
-                        
         except Exception as e:
             print("[AQUACROP_DEBUG] aquacrop_simulation exception traceback:")
             print(traceback.format_exc())
-            context['error_message'] = f"Simulation error: {str(e)}"
-    
-    return render(request, 'et/aquacrop_simulation.html', context)
+            context["error_message"] = f"Simulation error: {str(e)}"
+
+    return render(request, "et/aquacrop_simulation.html", context)
 
 
 def aquacrop_api(request):

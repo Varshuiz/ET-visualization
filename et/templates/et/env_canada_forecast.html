@@ -1,7 +1,7 @@
 {% extends 'et/base.html' %}
 {% load static %}
 
-{% block title %}Forecast and Water Plan | Aqualys{% endblock %}
+{% block title %}Forecast and Water Plan | AqualET{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -449,7 +449,7 @@
 <div class="container">
     <div class="page-header">
         <h1>Environment Canada Forecast</h1>
-        <p class="subtitle">Weather outlook and irrigation planning for Alberta locations</p>
+        <p class="subtitle">Weather outlook and irrigation planning for Alberta, British Columbia, Saskatchewan, and Manitoba (Environment Canada city forecasts)</p>
     </div>
 
     {% if error_message %}
@@ -463,31 +463,31 @@
         <label>Forecast Period</label>
         <div class="period-buttons">
             <button type="button" class="period-btn {% if selected_days == 3 %}selected{% endif %}" 
-                    onclick="selectPeriod(3)">
+                    onclick="selectPeriod(3, this)">
                 3 Days
             </button>
             <button type="button" class="period-btn {% if selected_days == 5 %}selected{% endif %}" 
-                    onclick="selectPeriod(5)">
+                    onclick="selectPeriod(5, this)">
                 5 Days
             </button>
             <button type="button" class="period-btn {% if selected_days == 7 %}selected{% endif %}" 
-                    onclick="selectPeriod(7)">
+                    onclick="selectPeriod(7, this)">
                 7 Days
             </button>
             <button type="button" class="period-btn {% if selected_days == 10 %}selected{% endif %}" 
-                    onclick="selectPeriod(10)">
+                    onclick="selectPeriod(10, this)">
                 10 Days
             </button>
             <button type="button" class="period-btn {% if selected_days == 14 %}selected{% endif %}" 
-                    onclick="selectPeriod(14)">
+                    onclick="selectPeriod(14, this)">
                 14 Days
             </button>
             <button type="button" class="period-btn {% if selected_days == 21 %}selected{% endif %}" 
-                    onclick="selectPeriod(21)">
+                    onclick="selectPeriod(21, this)">
                 21 Days
             </button>
             <button type="button" class="period-btn {% if selected_days == 30 %}selected{% endif %}" 
-                    onclick="selectPeriod(30)">
+                    onclick="selectPeriod(30, this)">
                 30 Days
             </button>
         </div>
@@ -495,14 +495,25 @@
 
     <!-- City Selector with Dropdown -->
     <div class="city-selector">
-        <h3 style="color: #095256; margin-bottom: 15px;">Select a city ({{ available_cities|length }} available)</h3>
+        <h3 style="color: #095256; margin-bottom: 15px;">Select location (<span id="cityCountLabel">{{ available_cities|length }}</span> cities in <span id="provinceLabel">{{ selected_province }}</span>)</h3>
         
+        {{ cities_by_province|json_script:"forecast-cities-data" }}
+        {{ default_city_by_province|json_script:"forecast-default-city-data" }}
+
         <form method="post" id="forecastForm" data-loading-text="Updating forecast and recommendations...">
             {% csrf_token %}
             <input type="hidden" name="city_name" id="city_name_input" value="{{ city_name }}">
             <input type="hidden" name="days" id="days_input" value="{{ selected_days }}">
             
             <div class="form-controls">
+                <div class="selection-group">
+                    <label for="province_select">Province</label>
+                    <select id="province_select" name="province" aria-label="Province">
+                        {% for p in province_options %}
+                        <option value="{{ p.value }}" {% if p.value == selected_province %}selected{% endif %}>{{ p.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="selection-group selection-group-city">
                     <label for="citySearchInput">City</label>
                     <div class="city-input-wrapper">
@@ -522,9 +533,8 @@
                             <div class="city-dropdown-header">{{ region }}</div>
                             {% for city in cities %}
                             <div class="city-dropdown-item {% if city == city_name %}selected{% endif %}" 
-                                 data-city="{{ city }}"
-                                 data-region="{{ region }}"
-                                 onclick="selectCity('{{ city }}')">
+                                 data-city="{{ city|escape }}"
+                                 data-region="{{ region|escape }}">
                                 {{ city }}
                             </div>
                             {% endfor %}
@@ -787,6 +797,39 @@
                     <div class="stat-label">Precipitation</div>
                     <div class="stat-value">{{ forecast.Precipitation_mm|floatformat:1 }} mm</div>
                 </div>
+
+                <div class="stat-box">
+                    <div class="stat-label">Reference ET₀ (FAO-PM)</div>
+                    <div class="stat-value" style="font-size:1.05rem;">
+                        {% if forecast.et0_mm is not None %}
+                            {{ forecast.et0_mm|floatformat:2 }} mm/day
+                        {% else %}
+                            <span style="font-size: 0.85rem; color: #999;">Not available</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-label">ET flux (latent heat)</div>
+                    <div class="stat-value" style="font-size:1.05rem;">
+                        {% if forecast.et_flux_wm2 is not None %}
+                            {{ forecast.et_flux_wm2|floatformat:1 }} W/m²
+                        {% else %}
+                            <span style="font-size: 0.85rem; color: #999;">Not available</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-label">Crop-stage ET (estimate)</div>
+                    <div class="stat-value" style="font-size:1.05rem;">
+                        {% if forecast.adjusted_et_mm is not None %}
+                            {{ forecast.adjusted_et_mm|floatformat:2 }} mm/day
+                        {% else %}
+                            <span style="font-size: 0.85rem; color: #999;">Not available</span>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
             
             {% if forecast.Forecast %}
@@ -837,41 +880,86 @@
 {% endif %}
 
 <script>
-// City dropdown functionality
+(function() {
 const cityInput = document.getElementById('citySearchInput');
 const cityDropdown = document.getElementById('cityDropdown');
 const cityNameInput = document.getElementById('city_name_input');
+const provinceSelect = document.getElementById('province_select');
+const cityCountLabel = document.getElementById('cityCountLabel');
+const provinceLabel = document.getElementById('provinceLabel');
 
-// Show dropdown when input is focused
+function parseJsonScript(id) {
+    const el = document.getElementById(id);
+    if (!el || !el.textContent) return null;
+    try { return JSON.parse(el.textContent); } catch (e) { return null; }
+}
+
+const FORECAST_CITIES_BY_PROVINCE = parseJsonScript('forecast-cities-data') || {};
+const DEFAULT_CITY_BY_PROVINCE = parseJsonScript('forecast-default-city-data') || {};
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function attrEscape(str) {
+    return escapeHtml(str).replace(/'/g, '&#39;');
+}
+
+function countCities(regionMap) {
+    let n = 0;
+    Object.keys(regionMap || {}).forEach(function(r) {
+        n += (regionMap[r] || []).length;
+    });
+    return n;
+}
+
+function rebuildCityDropdown(province) {
+    const data = FORECAST_CITIES_BY_PROVINCE[province] || {};
+    let html = '';
+    Object.keys(data).sort().forEach(function(region) {
+        const cities = data[region] || [];
+        html += '<div class="city-dropdown-section"><div class="city-dropdown-header">' + escapeHtml(region) + '</div>';
+        cities.forEach(function(city) {
+            html += '<div class="city-dropdown-item" data-city="' + attrEscape(city) + '" data-region="' + attrEscape(region) + '">' + escapeHtml(city) + '</div>';
+        });
+        html += '</div>';
+    });
+    cityDropdown.innerHTML = html;
+    if (cityCountLabel) cityCountLabel.textContent = String(countCities(data));
+    if (provinceLabel) provinceLabel.textContent = province;
+}
+
 function showDropdown() {
     cityDropdown.classList.add('active');
     filterCities();
 }
 
-// Hide dropdown when clicking outside
 document.addEventListener('click', function(e) {
     if (!e.target.closest('.city-input-wrapper')) {
         cityDropdown.classList.remove('active');
     }
 });
 
-// Filter cities as user types
+if (cityInput) {
 cityInput.addEventListener('input', function() {
     filterCities();
     cityDropdown.classList.add('active');
 });
+}
 
 function filterCities() {
+    if (!cityInput) return;
     const searchValue = cityInput.value.toLowerCase();
     const sections = cityDropdown.querySelectorAll('.city-dropdown-section');
-    
     sections.forEach(section => {
         const items = section.querySelectorAll('.city-dropdown-item');
         let visibleCount = 0;
-        
         items.forEach(item => {
-            const cityName = item.getAttribute('data-city').toLowerCase();
-            
+            const cityName = (item.getAttribute('data-city') || '').toLowerCase();
             if (cityName.includes(searchValue)) {
                 item.classList.remove('hidden');
                 visibleCount++;
@@ -879,86 +967,50 @@ function filterCities() {
                 item.classList.add('hidden');
             }
         });
-        
-        // Hide section if no items are visible
-        if (visibleCount === 0) {
-            section.style.display = 'none';
-        } else {
-            section.style.display = 'block';
-        }
+        section.style.display = visibleCount === 0 ? 'none' : 'block';
     });
 }
 
-function selectCity(cityName) {
+function selectCity(cityName, itemEl) {
+    if (!cityName || !cityInput || !cityNameInput) return;
     cityInput.value = cityName;
     cityNameInput.value = cityName;
     cityDropdown.classList.remove('active');
-    
-    // Update selected state
     document.querySelectorAll('.city-dropdown-item').forEach(item => {
         item.classList.remove('selected');
     });
-    
-    event.target.classList.add('selected');
-    
-    // Auto-submit form
-    document.getElementById('forecastForm').submit();
+    if (itemEl) itemEl.classList.add('selected');
+    const form = document.getElementById('forecastForm');
+    if (form) form.submit();
 }
 
-function selectPeriod(days) {
-    document.getElementById('days_input').value = days;
-    
-    // Update button states
-    document.querySelectorAll('.period-btn').forEach(btn => {
-        btn.classList.remove('selected');
+if (cityDropdown) {
+    cityDropdown.addEventListener('click', function(e) {
+        const item = e.target.closest('.city-dropdown-item');
+        if (!item) return;
+        const cityName = item.getAttribute('data-city');
+        if (cityName) selectCity(cityName, item);
     });
-    event.target.classList.add('selected');
-    
-    // Auto-submit
-    document.getElementById('forecastForm').submit();
 }
 
-function downloadForecastCSV() {
-    const forecastDataElement = document.getElementById('forecast-data');
-    if (!forecastDataElement) {
-        alert('No forecast data available');
-        return;
-    }
-    
-    const forecasts = JSON.parse(forecastDataElement.textContent);
-    
-    let csv = 'Date,Period,High (°C),Low (°C),RH (%),Rs (MJ/m²),u2 (m/s),Wind max (km/h),Precipitation (mm),Forecast\n';
-    
-    forecasts.forEach(f => {
-        const date = new Date(f.Date).toISOString().split('T')[0];
-        const high = f.Temp_High !== null ? f.Temp_High : 'Not Available';
-        const low = f.Temp_Low !== null ? f.Temp_Low : 'Not Available';
-        const rh = f.RH_percent !== null && f.RH_percent !== undefined ? f.RH_percent : 'Not Available';
-        const rs = f.Rs_mjm2 !== null && f.Rs_mjm2 !== undefined ? Number(f.Rs_mjm2).toFixed(2) : 'Not Available';
-        const u2 = f.u2_ms !== null && f.u2_ms !== undefined ? Number(f.u2_ms).toFixed(2) : 'Not Available';
-        const wkmh = f.Wind_kmh_max !== null && f.Wind_kmh_max !== undefined ? f.Wind_kmh_max : 'Not Available';
-        const precip = (f.Precipitation_mm || 0).toFixed(1);
-        const forecast = (f.Forecast || '').replace(/"/g, '""');
-        
-        csv += `"${date}","${f.Period}","${high}","${low}","${rh}","${rs}","${u2}","${wkmh}","${precip}","${forecast}"\n`;
+if (provinceSelect) {
+    provinceSelect.addEventListener('change', function() {
+        const prov = provinceSelect.value;
+        rebuildCityDropdown(prov);
+        const def = DEFAULT_CITY_BY_PROVINCE[prov] || '';
+        if (cityInput) cityInput.value = def;
+        if (cityNameInput) cityNameInput.value = def;
+        document.querySelectorAll('.city-dropdown-item').forEach(function(el) {
+            el.classList.toggle('selected', el.getAttribute('data-city') === def);
+        });
+        filterCities();
     });
-    
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = '{{ city_name }}_forecast_' + new Date().toISOString().split('T')[0] + '.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
 }
 
-// Keyboard navigation for dropdown
+if (cityInput) {
 cityInput.addEventListener('keydown', function(e) {
     const visibleItems = Array.from(document.querySelectorAll('.city-dropdown-item:not(.hidden)'));
     const currentIndex = visibleItems.findIndex(item => item.classList.contains('selected'));
-    
     if (e.key === 'ArrowDown') {
         e.preventDefault();
         if (currentIndex < visibleItems.length - 1) {
@@ -976,10 +1028,65 @@ cityInput.addEventListener('keydown', function(e) {
     } else if (e.key === 'Enter') {
         e.preventDefault();
         if (currentIndex >= 0) {
-            const cityName = visibleItems[currentIndex].getAttribute('data-city');
-            selectCity(cityName);
+            const item = visibleItems[currentIndex];
+            const cityName = item.getAttribute('data-city');
+            selectCity(cityName, item);
         }
     }
 });
+}
+
+function selectPeriod(days, btn) {
+    document.getElementById('days_input').value = days;
+    document.querySelectorAll('.period-btn').forEach(b => {
+        b.classList.remove('selected');
+    });
+    if (btn) btn.classList.add('selected');
+    document.getElementById('forecastForm').submit();
+}
+
+function downloadForecastCSV() {
+    const forecastDataElement = document.getElementById('forecast-data');
+    if (!forecastDataElement) {
+        alert('No forecast data available');
+        return;
+    }
+    const forecasts = JSON.parse(forecastDataElement.textContent);
+    let csv = 'Date,Period,High (°C),Low (°C),RH (%),Rs (MJ/m²),u2 (m/s),Wind max (km/h),Precipitation (mm),ET0 (mm/day),ET flux (W/m²),Crop-stage ET (mm/day),Forecast\n';
+    forecasts.forEach(f => {
+        const date = new Date(f.Date).toISOString().split('T')[0];
+        const high = f.Temp_High !== null ? f.Temp_High : 'Not Available';
+        const low = f.Temp_Low !== null ? f.Temp_Low : 'Not Available';
+        const rh = f.RH_percent !== null && f.RH_percent !== undefined ? f.RH_percent : 'Not Available';
+        const rs = f.Rs_mjm2 !== null && f.Rs_mjm2 !== undefined ? Number(f.Rs_mjm2).toFixed(2) : 'Not Available';
+        const u2 = f.u2_ms !== null && f.u2_ms !== undefined ? Number(f.u2_ms).toFixed(2) : 'Not Available';
+        const wkmh = f.Wind_kmh_max !== null && f.Wind_kmh_max !== undefined ? f.Wind_kmh_max : 'Not Available';
+        const precip = (f.Precipitation_mm || 0).toFixed(1);
+        const et0 = f.et0_mm !== null && f.et0_mm !== undefined && !Number.isNaN(Number(f.et0_mm))
+            ? Number(f.et0_mm).toFixed(2) : 'Not Available';
+        const flux = f.et_flux_wm2 !== null && f.et_flux_wm2 !== undefined && !Number.isNaN(Number(f.et_flux_wm2))
+            ? Number(f.et_flux_wm2).toFixed(1) : 'Not Available';
+        const adjEt = f.adjusted_et_mm !== null && f.adjusted_et_mm !== undefined && !Number.isNaN(Number(f.adjusted_et_mm))
+            ? Number(f.adjusted_et_mm).toFixed(2) : 'Not Available';
+        const forecast = (f.Forecast || '').replace(/"/g, '""');
+        csv += `"${date}","${f.Period}","${high}","${low}","${rh}","${rs}","${u2}","${wkmh}","${precip}","${et0}","${flux}","${adjEt}","${forecast}"\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '{{ city_name }}_forecast_' + new Date().toISOString().split('T')[0] + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+
+window.showDropdown = showDropdown;
+window.selectCity = selectCity;
+window.selectPeriod = selectPeriod;
+window.downloadForecastCSV = downloadForecastCSV;
+window.filterCities = filterCities;
+})();
 </script>
 {% endblock %}

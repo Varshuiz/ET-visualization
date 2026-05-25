@@ -6,8 +6,8 @@ NOTE: The old RSS feed (weather.gc.ca/rss/city/ab-XX_e.xml) was discontinued in 
 This version uses the MSC Datamart at dd.weather.gc.ca which is the official replacement.
 
 Two URL strategies are attempted in order:
-  1. Stable legacy path: dd.weather.gc.ca/citypage_weather/xml/AB/s0000XXX_e.xml
-  2. New timestamped path: dd.weather.gc.ca/today/citypage_weather/AB/{HH}/ (directory listing)
+  1. Stable legacy path: dd.weather.gc.ca/citypage_weather/xml/{PROV}/s0000XXX_e.xml
+  2. New timestamped path: dd.weather.gc.ca/today/citypage_weather/{PROV}/{HH}/ (directory listing)
 """
 
 import requests
@@ -18,8 +18,32 @@ from datetime import datetime, timedelta, timezone
 import time
 import numpy as np
 
+from .eccc_forecast_registry import (
+    FORECAST_PROVINCE_ECC_CODE,
+    FORECAST_SITE_META_BY_PROVINCE,
+    get_lat_lon,
+)
 from .location_services import ALBERTA_LOCATIONS
 from .weather_ingestion import kmh_max_wind_to_u2_ms
+
+
+def _location_codes_by_eccc_province(ab_location_codes):
+    """Merge Alberta manual codes with BC/SK/MB sites from the official ECCC site list."""
+    out = {"AB": dict(ab_location_codes)}
+    for pname, cities in FORECAST_SITE_META_BY_PROVINCE.items():
+        ecc = FORECAST_PROVINCE_ECC_CODE[pname]
+        out[ecc] = {c: d["code"] for c, d in cities.items()}
+    return out
+
+
+_DEFAULT_CITY_BY_PROVINCE = {
+    "AB": "Calgary",
+    "BC": "Vancouver",
+    "SK": "Saskatoon",
+    "MB": "Winnipeg",
+}
+
+_ECC_TO_FORECAST_PROV_NAME = {v: k for k, v in FORECAST_PROVINCE_ECC_CODE.items()}
 
 
 class EnvironmentCanadaScraper:
@@ -105,35 +129,47 @@ class EnvironmentCanadaScraper:
         'St. Paul':             's0000001',   # uses Athabasca
     }
 
-    BASE_URL_STABLE = "https://dd.weather.gc.ca/citypage_weather/xml/AB/{code}_e.xml"
-    BASE_URL_TODAY  = "https://dd.weather.gc.ca/today/citypage_weather/AB/{hour}/"
+    BASE_URL_STABLE = "https://dd.weather.gc.ca/citypage_weather/xml/{prov}/{code}_e.xml"
+    BASE_URL_TODAY = "https://dd.weather.gc.ca/today/citypage_weather/{prov}/{hour}/"
     ECCC_CLIMATE_DAILY_URL = "https://api.weather.gc.ca/collections/climate-daily/items"
     CACHE_TTL_SECONDS = 600  # 10 minutes
     _FORECAST_CACHE = {}
+    _LOCATION_CODES_BY_PROVINCE = None
 
-    def get_location_code(self, city_name):
-        """Return the s0000XXX site code for a city."""
-        if city_name in self.LOCATION_CODES:
-            return self.LOCATION_CODES[city_name]
-        for city, code in self.LOCATION_CODES.items():
+    @classmethod
+    def _codes_for_province(cls, province_code):
+        if cls._LOCATION_CODES_BY_PROVINCE is None:
+            cls._LOCATION_CODES_BY_PROVINCE = _location_codes_by_eccc_province(cls.LOCATION_CODES)
+        prov = (province_code or "AB").upper()
+        return cls._LOCATION_CODES_BY_PROVINCE.get(prov, cls._LOCATION_CODES_BY_PROVINCE["AB"])
+
+    def get_location_code(self, city_name, province_code="AB"):
+        """Return the s0000XXX site code for a city in the given MSC province (AB, BC, SK, MB)."""
+        pmap = self._codes_for_province(province_code)
+        if city_name in pmap:
+            return pmap[city_name]
+        for city, code in pmap.items():
             if city.lower() == city_name.lower():
                 return code
-        print(f"Warning: Location '{city_name}' not found, defaulting to Calgary")
-        return self.LOCATION_CODES['Calgary']
+        prov = (province_code or "AB").upper()
+        fallback_city = _DEFAULT_CITY_BY_PROVINCE.get(prov, "Calgary")
+        print(f"Warning: Location '{city_name}' not found in {prov}, defaulting to {fallback_city}")
+        return pmap.get(fallback_city) or pmap.get("Calgary") or next(iter(pmap.values()))
 
     # ------------------------------------------------------------------
     # URL resolution
     # ------------------------------------------------------------------
 
-    def _fetch_xml_content(self, site_code):
+    def _fetch_xml_content(self, site_code, province_code="AB"):
         """
         Try two strategies to get the XML content for a site code.
         Strategy 1: stable /citypage_weather/xml/ path
         Strategy 2: timestamped /today/citypage_weather/ directory listing
         Returns (url, content_bytes) or raises ValueError.
         """
+        prov = (province_code or "AB").upper()
         # Strategy 1: stable path
-        stable_url = self.BASE_URL_STABLE.format(code=site_code)
+        stable_url = self.BASE_URL_STABLE.format(prov=prov, code=site_code)
         try:
             r = requests.get(stable_url, timeout=10,
                              headers={'User-Agent': 'Mozilla/5.0'})
@@ -147,7 +183,7 @@ class EnvironmentCanadaScraper:
         now_utc = datetime.now(timezone.utc)
         for offset in range(4):
             hour = (now_utc.hour - offset) % 24
-            dir_url = self.BASE_URL_TODAY.format(hour=f"{hour:02d}")
+            dir_url = self.BASE_URL_TODAY.format(prov=prov, hour=f"{hour:02d}")
             try:
                 r = requests.get(dir_url, timeout=10,
                                  headers={'User-Agent': 'Mozilla/5.0'})
@@ -168,7 +204,7 @@ class EnvironmentCanadaScraper:
                 continue
 
         raise ValueError(
-            f"Could not retrieve XML for site {site_code}. "
+            f"Could not retrieve XML for site {site_code} ({prov}). "
             "Both stable and timestamped URL strategies failed."
         )
 
@@ -176,7 +212,7 @@ class EnvironmentCanadaScraper:
     # Main forecast fetch
     # ------------------------------------------------------------------
 
-    def fetch_forecast(self, city_name='Calgary', days=None):
+    def fetch_forecast(self, city_name='Calgary', days=None, province_code='AB'):
         """
         Fetch weather forecast from Environment Canada MSC Datamart XML.
 
@@ -185,6 +221,7 @@ class EnvironmentCanadaScraper:
         city_name : str   e.g. 'Calgary', 'Edmonton'
         days      : int|None   Number of daily forecast periods to return.
                                None returns full available range.
+        province_code : str   MSC two-letter province (AB, BC, SK, MB).
 
         Returns
         -------
@@ -194,15 +231,16 @@ class EnvironmentCanadaScraper:
             Precipitation_mm, Forecast
         """
         try:
-            site_code = self.get_location_code(city_name)
-            cache_key = site_code
+            prov = (province_code or "AB").upper()
+            site_code = self.get_location_code(city_name, prov)
+            cache_key = f"{prov}:{site_code}"
             now_ts = time.time()
 
             cached = self._FORECAST_CACHE.get(cache_key)
             if cached and (now_ts - cached["ts"] <= self.CACHE_TTL_SECONDS):
                 full_df = cached["df"]
             else:
-                url, content = self._fetch_xml_content(site_code)
+                url, content = self._fetch_xml_content(site_code, prov)
                 _ = url  # keep for debugging hooks
                 root = ET.fromstring(content)
 
@@ -272,6 +310,7 @@ class EnvironmentCanadaScraper:
                 city_name=city_name,
                 start_date=full_df["Date"].max() + timedelta(days=1),
                 extra_days=extra_days,
+                province_code=prov,
             )
             if extended_df is None or extended_df.empty:
                 return full_df.copy()
@@ -281,15 +320,26 @@ class EnvironmentCanadaScraper:
             print(f"   Error: {e}\n")
             raise ValueError(f"Failed to fetch forecast: {e}")
 
-    def _resolve_city_coords(self, city_name):
-        loc = ALBERTA_LOCATIONS.get(city_name)
-        if loc:
-            return float(loc["lat"]), float(loc["lon"])
-        # fallback to Calgary
-        calg = ALBERTA_LOCATIONS.get("Calgary", {"lat": 51.05, "lon": -114.07})
-        return float(calg["lat"]), float(calg["lon"])
+    def _resolve_city_coords(self, city_name, province_code="AB"):
+        prov = (province_code or "AB").upper()
+        if prov == "AB":
+            loc = ALBERTA_LOCATIONS.get(city_name)
+            if loc:
+                return float(loc["lat"]), float(loc["lon"])
+            calg = ALBERTA_LOCATIONS.get("Calgary", {"lat": 51.05, "lon": -114.07})
+            return float(calg["lat"]), float(calg["lon"])
+        disp = _ECC_TO_FORECAST_PROV_NAME.get(prov)
+        if disp:
+            lat, lon = get_lat_lon(disp, city_name)
+            if lat is not None and lon is not None:
+                return lat, lon
+            fb = _DEFAULT_CITY_BY_PROVINCE.get(prov, "Vancouver")
+            lat, lon = get_lat_lon(disp, fb)
+            if lat is not None and lon is not None:
+                return lat, lon
+        return 53.0, -114.0
 
-    def _build_extended_outlook(self, city_name, start_date, extra_days):
+    def _build_extended_outlook(self, city_name, start_date, extra_days, province_code="AB"):
         """
         Build extended day-level outlook from ECCC climate-daily recent observations.
         This is a climate-based estimate when citypage forecast horizon is exceeded.
@@ -301,7 +351,7 @@ class EnvironmentCanadaScraper:
         if extra_days <= 0:
             return pd.DataFrame(columns=empty_cols)
 
-        lat, lon = self._resolve_city_coords(city_name)
+        lat, lon = self._resolve_city_coords(city_name, province_code)
         bbox = f"{lon - 0.3},{lat - 0.3},{lon + 0.3},{lat + 0.3}"
         hist_end = pd.Timestamp.utcnow().normalize() - pd.Timedelta(days=1)
         hist_start = hist_end - pd.Timedelta(days=59)
@@ -671,14 +721,15 @@ class EnvironmentCanadaScraper:
     # Debug helper
     # ------------------------------------------------------------------
 
-    def debug_forecast(self, city_name='Calgary', days=5):
+    def debug_forecast(self, city_name='Calgary', days=5, province_code='AB'):
         """Print raw XML structure for debugging."""
-        site_code = self.get_location_code(city_name)
+        prov = (province_code or "AB").upper()
+        site_code = self.get_location_code(city_name, prov)
         print(f"\n{'='*80}")
-        print(f"DEBUG: site_code={site_code}  city='{city_name}'")
+        print(f"DEBUG: site_code={site_code}  city='{city_name}'  prov='{prov}'")
         print(f"{'='*80}\n")
         try:
-            url, content = self._fetch_xml_content(site_code)
+            url, content = self._fetch_xml_content(site_code, prov)
             root = ET.fromstring(content)
             fg = root.find('.//forecastGroup')
             if fg is None:
@@ -705,24 +756,24 @@ class EnvironmentCanadaScraper:
 
 
 # ---------------------------------------------------------------------------
-# Convenience functions — same API as before so views.py needs NO changes
+# Convenience functions
 # ---------------------------------------------------------------------------
 
-def fetch_env_canada_forecast(city_name='Calgary', days=None):
+def fetch_env_canada_forecast(city_name='Calgary', days=None, province_code='AB'):
     """Drop-in replacement for the old RSS-based function."""
     scraper = EnvironmentCanadaScraper()
-    return scraper.fetch_forecast(city_name, days)
+    return scraper.fetch_forecast(city_name, days, province_code)
 
 
-def print_precipitation_forecast(city_name='Calgary', days=5):
+def print_precipitation_forecast(city_name='Calgary', days=5, province_code='AB'):
     """Pretty-print a precipitation forecast to stdout."""
     print(f"\n{'='*70}")
     print(f"Environment Canada Precipitation Forecast")
-    print(f"Location: {city_name}, Alberta")
+    print(f"Location: {city_name}, province={province_code or 'AB'}")
     print(f"{'='*70}")
 
     try:
-        df = fetch_env_canada_forecast(city_name, days)
+        df = fetch_env_canada_forecast(city_name, days, province_code)
         for _, row in df.iterrows():
             date_str = row['Date'].strftime('%A, %B %d, %Y')
             high_str = f"{row['Temp_High']:.0f}C" if row['Temp_High'] is not None else "N/A"
