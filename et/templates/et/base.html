@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -571,9 +572,20 @@
 
         .global-attribution {
             text-align: center;
-            font-size: 0.85rem;
-            color: #5f6f6d;
-            padding: 8px 14px 14px;
+            font-size: 0.75rem;
+            color: #707978;
+            border-top: 1px solid #e1e3e2;
+            padding: 10px 14px 12px;
+            letter-spacing: 0.01em;
+        }
+        body.dashboard-page .global-attribution,
+        body.acis-setup-page .global-attribution,
+        body.et-results-page .global-attribution,
+        body.aquacrop-page .global-attribution,
+        body.forecast-page .global-attribution,
+        body.farm-profile-page .global-attribution {
+            margin-left: 260px;
+            width: calc(100% - 260px);
         }
 
         @media print {
@@ -596,11 +608,8 @@
     <nav class="navbar">
         <div class="nav-container">
             <a href="{% if supabase_logged_in %}{% url 'et:dashboard' %}{% else %}{% url 'et:login' %}{% endif %}" class="nav-brand">
-                <div class="brand-icon">
-                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M11 2C11 2 5 9 5 13.5C5 16.538 7.686 19 11 19C14.314 19 17 16.538 17 13.5C17 9 11 2 11 2Z" fill="#BB9F06" opacity="0.85"/>
-                        <path d="M11 8C11 8 7.5 12.5 7.5 14.5C7.5 16.157 9.067 17.5 11 17.5" stroke="rgba(255,255,255,0.5)" stroke-width="1" fill="none" stroke-linecap="round"/>
-                    </svg>
+                <div class="brand-icon" style="background: transparent; border: none;">
+                    <img src="{% static 'et/img/logo.png' %}" alt="AqualET logo" style="width: 38px; height: 38px; border-radius: 10px; object-fit: cover;">
                 </div>
                 <div class="brand-text">
                     <span class="brand-name">AqualET</span>
@@ -650,7 +659,7 @@
         {% endif %}
         {% block content %}{% endblock %}
     </div>
-    <div class="global-attribution">© 2026 Dr. Evan Davies &amp; Smriti Mohapatra</div>
+    <footer class="global-attribution">© 2026 Dr. Evan Davies &amp; Smriti Mohapatra</footer>
 
     <script>
         // Mobile menu toggle + close after navigation (better on phones)

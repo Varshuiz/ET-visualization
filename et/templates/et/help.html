@@ -2,299 +2,394 @@
 
 {% block title %}Help and Workflow Guide | AqualET{% endblock %}
 
+{% block body_class %}help-page{% endblock %}
+
+{% block head_assets %}
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                "primary-container": "#2d6a6a",
+                "on-primary-container": "#abe8e7",
+                "on-surface": "#191c1c",
+                "on-surface-variant": "#3f4848",
+                "outline": "#707978",
+                "outline-variant": "#bfc8c8",
+                "surface-container-low": "#f2f4f3",
+                "surface-container-lowest": "#ffffff",
+                "primary": "#0c5252",
+                "background": "#f8faf9",
+            },
+            fontFamily: { sans: ["Inter", "sans-serif"] },
+        },
+    },
+};
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    body.help-page { font-family: 'Inter', sans-serif; background: #f8faf9; color: #191c1c; }
+    body.help-page .navbar { display: none !important; }
+    body.help-page > .container {
+        max-width: none;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+    body.help-page > .container > .info-box,
+    body.help-page > .container > .error-message { display: none; }
+    body.help-page a { color: #0c5252; }
+    body.help-page a:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header fade-in">
-    <h1>Help and Workflow Guide</h1>
-    <p>Step-by-step instructions for loading weather data and using ET outputs</p>
-</div>
+<div class="flex min-h-screen bg-background">
+    {% include 'et/partials/stitch_sidebar.html' %}
 
-<div class="card fade-in">
-    <h2 style="color: var(--midnight-green); margin-bottom: 20px;">Data Upload Guide</h2>
-    
-    <div style="background: var(--light-green); padding: 20px; border-radius: 15px; margin-bottom: 30px;">
-        <h3 style="color: var(--midnight-green); margin-bottom: 15px;">CSV File Requirements</h3>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px;">
-            <div>
-                <h4 style="color: var(--teal); margin-bottom: 10px;">File Format:</h4>
-                <ul style="color: var(--midnight-green); line-height: 1.6;">
-                    <li>CSV format (.csv extension)</li>
-                    <li>Header row with column names</li>
-                    <li>One record per day</li>
-                    <li>No missing critical data points</li>
-                </ul>
+    <main class="ml-[260px] flex-1 flex flex-col min-h-screen">
+        <header class="w-full min-h-[180px] flex flex-col justify-end relative overflow-hidden shadow-sm p-8" style="background-color: #2D6A6A;">
+            <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
+            <div class="relative z-10 max-w-4xl">
+                <span class="text-xs font-bold tracking-widest uppercase text-[#c2e4da]/80">Support</span>
+                <h1 class="text-3xl md:text-4xl font-bold text-white mt-2 mb-2">Help and Workflow Guide</h1>
+                <p class="text-[#abe8e7]/90 text-base">Step-by-step instructions for loading weather data and using ET outputs</p>
             </div>
-            <div>
-                <h4 style="color: var(--teal); margin-bottom: 10px;">Column Names (flexible):</h4>
-                <ul style="color: var(--midnight-green); line-height: 1.6;">
-                    <li><strong>Date:</strong> date, Date, DATE</li>
-                    <li><strong>Temperature:</strong> tmax and tmin (or max/min temperature columns)</li>
-                    <li><strong>Solar Radiation:</strong> solar, rad, radiation</li>
-                    <li><strong>Humidity:</strong> rh, humidity, relative_humidity</li>
-                    <li><strong>Wind:</strong> wind_speed, ws, or u2</li>
+        </header>
+
+        <div class="p-8 max-w-5xl w-full mx-auto flex-1 space-y-6">
+
+            <section class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-6 md:p-8">
+                <h2 class="text-xl font-semibold text-primary mb-5 flex items-center gap-2">
+                    <span class="material-symbols-outlined">upload_file</span>
+                    Data Upload Guide
+                </h2>
+
+                <div class="bg-surface-container-low rounded-xl p-5 md:p-6 mb-6 border border-outline-variant/20">
+                    <h3 class="text-lg font-semibold text-primary mb-4">CSV File Requirements</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-2">File Format:</h4>
+                            <ul class="text-sm text-on-surface-variant space-y-1.5 list-disc pl-5 leading-relaxed">
+                                <li>CSV format (.csv extension)</li>
+                                <li>Header row with column names</li>
+                                <li>One record per day</li>
+                                <li>No missing critical data points</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-2">Column Names (flexible):</h4>
+                            <ul class="text-sm text-on-surface-variant space-y-1.5 list-disc pl-5 leading-relaxed">
+                                <li><strong>Date:</strong> date, Date, DATE</li>
+                                <li><strong>Temperature:</strong> tmax and tmin (or max/min temperature columns)</li>
+                                <li><strong>Solar Radiation:</strong> solar, rad, radiation</li>
+                                <li><strong>Humidity:</strong> rh, humidity, relative_humidity</li>
+                                <li><strong>Wind:</strong> wind_speed, ws, or u2</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 class="text-lg font-semibold text-on-surface mb-3">Sample CSV Structure</h3>
+                <div class="bg-surface-container-low border border-outline-variant/30 rounded-xl p-4 overflow-x-auto">
+                    <code class="font-mono text-sm text-on-surface-variant whitespace-pre">Date,Tmax,Tmin,Solar_Radiation,Humidity,Wind_Speed
+2024-01-01,25.5,14.3,18.2,65,2.1
+2024-01-02,24.1,13.8,19.8,60,1.8
+2024-01-03,21.3,10.9,16.5,70,2.4
+...</code>
+                </div>
+            </section>
+
+            <section class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-6 md:p-8">
+                <h2 class="text-xl font-semibold text-primary mb-5 flex items-center gap-2">
+                    <span class="material-symbols-outlined">calculate</span>
+                    Using the Calculator
+                </h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="rounded-xl p-5 border border-outline-variant/30 bg-gradient-to-br from-[#f2f8f0] to-surface-container-lowest">
+                        <h3 class="text-base font-semibold text-primary mb-3 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-lg">wb_sunny</span>
+                            Priestley-Taylor
+                        </h3>
+                        <ol class="text-sm text-on-surface-variant space-y-2 list-decimal pl-5 leading-relaxed">
+                            <li>Visit the Priestley-Taylor page</li>
+                            <li>Upload CSV with temperature and solar radiation</li>
+                            <li>Click "Calculate Priestley-Taylor ET"</li>
+                            <li>View results and download data</li>
+                        </ol>
+                    </div>
+
+                    <div class="rounded-xl p-5 border border-outline-variant/30 bg-gradient-to-br from-[#eef7f7] to-surface-container-lowest">
+                        <h3 class="text-base font-semibold text-primary mb-3 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-lg">air</span>
+                            Penman-Monteith
+                        </h3>
+                        <ol class="text-sm text-on-surface-variant space-y-2 list-decimal pl-5 leading-relaxed">
+                            <li>Visit the Penman-Monteith page</li>
+                            <li>Upload CSV with all meteorological data</li>
+                            <li>Click "Calculate Penman-Monteith ET"</li>
+                            <li>Review comprehensive results</li>
+                        </ol>
+                    </div>
+
+                    <div class="rounded-xl p-5 border border-outline-variant/30 bg-gradient-to-br from-[#f0f6fc] to-surface-container-lowest">
+                        <h3 class="text-base font-semibold text-primary mb-3 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-lg">analytics</span>
+                            Comparison
+                        </h3>
+                        <ol class="text-sm text-on-surface-variant space-y-2 list-decimal pl-5 leading-relaxed">
+                            <li>Open Compare ET Methods</li>
+                            <li>Upload your weather CSV or fetch historical data</li>
+                            <li>Run calculations for available methods</li>
+                            <li>Review side-by-side ET results and download data</li>
+                        </ol>
+                    </div>
+
+                    <div class="rounded-xl p-5 border border-outline-variant/30 bg-gradient-to-br from-[#eef7f7] to-surface-container-lowest">
+                        <h3 class="text-base font-semibold text-primary mb-3 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-lg">thunderstorm</span>
+                            Forecast &amp; Water Plan
+                        </h3>
+                        <ol class="text-sm text-on-surface-variant space-y-2 list-decimal pl-5 leading-relaxed">
+                            <li>Visit the Forecast &amp; Water Plan page</li>
+                            <li>Enter your city or town name in the search box</li>
+                            <li>Select your crop type from the dropdown</li>
+                            <li>Select your soil type from the dropdown</li>
+                            <li>Choose your forecast horizon (3 to 30 days)</li>
+                            <li>Click "Get Forecast"</li>
+                            <li>Review the daily forecast cards showing temperature, precipitation, and estimated ET</li>
+                            <li>Check the irrigation recommendation summary (Low / Moderate / High)</li>
+                            <li>Read the Irrigation Confidence Band chart - the grey band shows the P10&ndash;P90 range from historical years, the dashed line is the historical median, and the teal line is your current forecast. If the teal line runs near the top of the band, prepare for more irrigation than a typical year.</li>
+                        </ol>
+                        <p class="mt-3 text-sm text-on-surface-variant leading-relaxed">
+                            <strong>Note:</strong> Forecasts beyond 7 days are less reliable. Use the grey band and historical range as your guide rather than the single millimetre figure for extended horizons.
+                        </p>
+                    </div>
+
+                    <div class="rounded-xl p-5 border border-outline-variant/30 bg-gradient-to-br from-[#f2f8f0] to-surface-container-lowest md:col-span-2">
+                        <h3 class="text-base font-semibold text-primary mb-3 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-lg">agriculture</span>
+                            AquaCrop Simulation
+                        </h3>
+                        <p class="text-sm text-on-surface-variant leading-relaxed mb-3">
+                            AquaCrop is a crop water productivity model developed by the FAO. It simulates how crops grow and use water through the season, giving a more detailed picture of crop water demand than a simple ET calculation.
+                        </p>
+                        <ol class="text-sm text-on-surface-variant space-y-2 list-decimal pl-5 leading-relaxed">
+                            <li>Visit the Crop Simulation page</li>
+                            <li>Enter your location (city or township)</li>
+                            <li>Select your crop type (wheat, maize, etc.)</li>
+                            <li>Set your planting date and end date - use dates within the growing season (May 1&ndash;September 1 recommended for Alberta)</li>
+                            <li>Click "Run AquaCrop Simulation"</li>
+                            <li>Review the weekly output charts showing biomass, canopy cover, and water use</li>
+                            <li>Download the results if needed</li>
+                        </ol>
+                        <p class="mt-3 text-sm text-on-surface-variant leading-relaxed">
+                            <strong>Important:</strong> Dates must fall within the growing season. Simulations outside May&ndash;September for Alberta will produce no output. If you see "Simulation produced no output", check that your date range falls within the growing season and that your location has available weather data.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-6 md:p-8">
+                <h2 class="text-xl font-semibold text-primary mb-5 flex items-center gap-2">
+                    <span class="material-symbols-outlined">bar_chart</span>
+                    Understanding Results
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <h3 class="text-base font-semibold text-primary mb-3">Statistics Explained</h3>
+                        <div class="bg-surface-container-low rounded-xl p-4 border border-outline-variant/20">
+                            <ul class="text-sm text-on-surface-variant space-y-1.5 list-disc pl-5 leading-relaxed">
+                                <li><strong>Average ET₀:</strong> Mean daily evapotranspiration</li>
+                                <li><strong>Maximum ET₀:</strong> Highest daily value</li>
+                                <li><strong>Minimum ET₀:</strong> Lowest daily value</li>
+                                <li><strong>Standard Deviation:</strong> Measure of variability</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-semibold text-primary mb-3">Chart Interpretation</h3>
+                        <div class="bg-surface-container-low rounded-xl p-4 border border-outline-variant/20">
+                            <ul class="text-sm text-on-surface-variant space-y-1.5 list-disc pl-5 leading-relaxed">
+                                <li><strong>Daily Values:</strong> Raw ET calculations</li>
+                                <li><strong>Smooth Line:</strong> 5-day rolling average</li>
+                                <li><strong>Seasonal Patterns:</strong> Look for trends</li>
+                                <li><strong>Peak Values:</strong> Summer maximums</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-6 md:p-8">
+                <h2 class="text-xl font-semibold text-primary mb-5 flex items-center gap-2">
+                    <span class="material-symbols-outlined">warning</span>
+                    Troubleshooting
+                </h2>
+                <div class="flex flex-col gap-4">
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                        <h4 class="text-sm font-semibold text-amber-900 mb-2">File Upload Issues</h4>
+                        <ul class="text-sm text-amber-900/90 space-y-1 list-disc pl-5">
+                            <li>Ensure file is in CSV format</li>
+                            <li>Check that column headers match expected names</li>
+                            <li>Verify no special characters in data</li>
+                            <li>File size should be under 10MB</li>
+                        </ul>
+                    </div>
+                    <div class="rounded-xl border border-red-200 bg-red-50 p-4">
+                        <h4 class="text-sm font-semibold text-red-900 mb-2">Calculation Errors</h4>
+                        <ul class="text-sm text-red-900/90 space-y-1 list-disc pl-5">
+                            <li>Check for missing required columns</li>
+                            <li>Ensure numeric data is properly formatted</li>
+                            <li>Remove any text in numeric columns</li>
+                            <li>Verify date format (YYYY-MM-DD preferred)</li>
+                        </ul>
+                    </div>
+                    <div class="rounded-xl border border-sky-200 bg-sky-50 p-4">
+                        <h4 class="text-sm font-semibold text-sky-900 mb-2">Result Issues</h4>
+                        <ul class="text-sm text-sky-900/90 space-y-1 list-disc pl-5">
+                            <li>Very high/low values may indicate data errors</li>
+                            <li>Check units: temperature in °C, radiation in MJ/m²/day</li>
+                            <li>Missing data points will be skipped</li>
+                            <li>Compare results with local ET estimates</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-6 md:p-8">
+                <h2 class="text-xl font-semibold text-primary mb-5 flex items-center gap-2">
+                    <span class="material-symbols-outlined">download</span>
+                    Data Export
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-surface-container-low rounded-xl p-5 border border-outline-variant/20">
+                        <h3 class="text-base font-semibold text-on-surface mb-3">Download Options</h3>
+                        <ul class="text-sm text-on-surface-variant space-y-1.5 list-disc pl-5 leading-relaxed">
+                            <li>Complete calculated dataset</li>
+                            <li>Original data with ET values added</li>
+                            <li>Smoothed values included</li>
+                            <li>CSV format for easy import</li>
+                        </ul>
+                    </div>
+                    <div class="bg-surface-container-low rounded-xl p-5 border border-outline-variant/20">
+                        <h3 class="text-base font-semibold text-on-surface mb-3">Use Downloaded Data</h3>
+                        <ul class="text-sm text-on-surface-variant space-y-1.5 list-disc pl-5 leading-relaxed">
+                            <li>Import into Excel or other tools</li>
+                            <li>Create custom visualizations</li>
+                            <li>Perform additional analysis</li>
+                            <li>Archive for future reference</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-6 md:p-8">
+                <h2 class="text-xl font-semibold text-primary mb-5 flex items-center gap-2">
+                    <span class="material-symbols-outlined">lightbulb</span>
+                    Tips for Best Results
+                </h2>
+                <div class="bg-gradient-to-br from-surface-container-low to-[#e6f7f1] rounded-xl p-6 border border-outline-variant/20">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <div>
+                            <h4 class="text-sm font-semibold text-primary mb-2 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-base">check_circle</span>
+                                Data Quality
+                            </h4>
+                            <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 leading-relaxed">
+                                <li>Use high-quality weather station data</li>
+                                <li>Ensure consistent measurement intervals</li>
+                                <li>Verify data for obvious errors</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-semibold text-primary mb-2 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-base">calendar_month</span>
+                                Time Period
+                            </h4>
+                            <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 leading-relaxed">
+                                <li>Use complete growing seasons</li>
+                                <li>Include multiple years for patterns</li>
+                                <li>Consider seasonal variations</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-semibold text-primary mb-2 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-base">location_on</span>
+                                Location
+                            </h4>
+                            <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 leading-relaxed">
+                                <li>Use data from nearby weather stations</li>
+                                <li>Consider elevation differences</li>
+                                <li>Account for local microclimates</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-6 md:p-8">
+                <h2 class="text-xl font-semibold text-primary mb-5">Credits &amp; Data Sources</h2>
+
+                <h3 class="text-base font-semibold text-primary mb-3">ET Methods &amp; References</h3>
+                <ul class="text-sm text-on-surface-variant space-y-2 list-disc pl-5 leading-relaxed mb-6">
+                    <li>Penman-Monteith (FAO-56): Allen, R.G., Pereira, L.S., Raes, D., Smith, M. (1998). Crop evapotranspiration: Guidelines for computing crop water requirements. FAO Irrigation and Drainage Paper 56. <a href="https://www.fao.org/3/x0490e/x0490e00.htm" target="_blank" rel="noopener noreferrer">https://www.fao.org/3/x0490e/x0490e00.htm</a></li>
+                    <li>Priestley-Taylor: Priestley, C.H.B. and Taylor, R.J. (1972). On the assessment of surface heat flux and evaporation using large-scale parameters. Monthly Weather Review, 100, 81&ndash;92.</li>
+                    <li>Hargreaves-Samani: Hargreaves, G.H. and Samani, Z.A. (1985). Reference crop evapotranspiration from temperature. Applied Engineering in Agriculture, 1(2), 96&ndash;99.</li>
+                    <li>Maule: This implementation uses a project-calibrated Maul&eacute;-style ET formulation tuned for Prairie conditions (see method notes in code).</li>
                 </ul>
-            </div>
-        </div>
-    </div>
 
-    <h3 style="color: var(--midnight-green); margin-bottom: 15px;">Sample CSV Structure</h3>
-    <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 10px; padding: 15px; margin-bottom: 20px; overflow-x: auto;">
-        <code style="font-family: 'Courier New', monospace; font-size: 0.9rem;">
-Date,Tmax,Tmin,Solar_Radiation,Humidity,Wind_Speed<br>
-2024-01-01,25.5,14.3,18.2,65,2.1<br>
-2024-01-02,24.1,13.8,19.8,60,1.8<br>
-2024-01-03,21.3,10.9,16.5,70,2.4<br>
-...
-        </code>
-    </div>
-</div>
-
-<div class="card fade-in">
-    <h2 style="color: var(--midnight-green); margin-bottom: 20px;">Using the Calculator</h2>
-    
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px;">
-        <div style="background: linear-gradient(135deg, #e8f5e8, #f0f8f0); padding: 20px; border-radius: 15px;">
-            <h3 style="color: var(--asparagus); margin-bottom: 15px;"><i class="fas fa-leaf"></i> Priestley-Taylor</h3>
-            <ol style="color: var(--midnight-green); line-height: 1.8;">
-                <li>Visit the Priestley-Taylor page</li>
-                <li>Upload CSV with temperature and solar radiation</li>
-                <li>Click "Calculate Priestley-Taylor ET"</li>
-                <li>View results and download data</li>
-            </ol>
-        </div>
-        
-        <div style="background: linear-gradient(135deg, #e6f7f7, #f0fafa); padding: 20px; border-radius: 15px;">
-            <h3 style="color: var(--teal); margin-bottom: 15px;"><i class="fas fa-wind"></i> Penman-Monteith</h3>
-            <ol style="color: var(--midnight-green); line-height: 1.8;">
-                <li>Visit the Penman-Monteith page</li>
-                <li>Upload CSV with all meteorological data</li>
-                <li>Click "Calculate Penman-Monteith ET"</li>
-                <li>Review comprehensive results</li>
-            </ol>
-        </div>
-        
-        <div style="background: linear-gradient(135deg, #f0f8ff, #f8f9ff); padding: 20px; border-radius: 15px;">
-            <h3 style="color: var(--zomp); margin-bottom: 15px;"><i class="fas fa-chart-line"></i> Comparison</h3>
-            <ol style="color: var(--midnight-green); line-height: 1.8;">
-                <li>Open Compare ET Methods</li>
-                <li>Upload your weather CSV or fetch historical data</li>
-                <li>Run calculations for available methods</li>
-                <li>Review side-by-side ET results and download data</li>
-            </ol>
-        </div>
-
-        <div style="background: linear-gradient(135deg, #e7f7f7, #f4fbfb); padding: 20px; border-radius: 15px;">
-            <h3 style="color: var(--teal); margin-bottom: 15px;"><i class="fas fa-cloud-sun-rain"></i> Forecast &amp; Water Plan</h3>
-            <ol style="color: var(--midnight-green); line-height: 1.8;">
-                <li>Visit the Forecast &amp; Water Plan page</li>
-                <li>Enter your city or town name in the search box</li>
-                <li>Select your crop type from the dropdown</li>
-                <li>Select your soil type from the dropdown</li>
-                <li>Choose your forecast horizon (3 to 30 days)</li>
-                <li>Click "Get Forecast"</li>
-                <li>Review the daily forecast cards showing temperature, precipitation, and estimated ET</li>
-                <li>Check the irrigation recommendation summary (Low / Moderate / High)</li>
-                <li>Read the Irrigation Confidence Band chart - the grey band shows the P10&ndash;P90 range from historical years, the dashed line is the historical median, and the teal line is your current forecast. If the teal line runs near the top of the band, prepare for more irrigation than a typical year.</li>
-            </ol>
-            <p style="margin-top: 12px; color: var(--midnight-green); line-height: 1.7;">
-                <strong>Note:</strong> Forecasts beyond 7 days are less reliable. Use the grey band and historical range as your guide rather than the single millimetre figure for extended horizons.
-            </p>
-        </div>
-
-        <div style="background: linear-gradient(135deg, #f1f8f1, #f8fcf8); padding: 20px; border-radius: 15px;">
-            <h3 style="color: var(--asparagus); margin-bottom: 15px;"><i class="fas fa-seedling"></i> AquaCrop Simulation</h3>
-            <p style="color: var(--midnight-green); line-height: 1.7; margin-bottom: 12px;">
-                AquaCrop is a crop water productivity model developed by the FAO. It simulates how crops grow and use water through the season, giving a more detailed picture of crop water demand than a simple ET calculation.
-            </p>
-            <ol style="color: var(--midnight-green); line-height: 1.8;">
-                <li>Visit the Crop Simulation page</li>
-                <li>Enter your location (city or township)</li>
-                <li>Select your crop type (wheat, maize, etc.)</li>
-                <li>Set your planting date and end date - use dates within the growing season (May 1&ndash;September 1 recommended for Alberta)</li>
-                <li>Click "Run AquaCrop Simulation"</li>
-                <li>Review the weekly output charts showing biomass, canopy cover, and water use</li>
-                <li>Download the results if needed</li>
-            </ol>
-            <p style="margin-top: 12px; color: var(--midnight-green); line-height: 1.7;">
-                <strong>Important:</strong> Dates must fall within the growing season. Simulations outside May&ndash;September for Alberta will produce no output. If you see "Simulation produced no output", check that your date range falls within the growing season and that your location has available weather data.
-            </p>
-        </div>
-    </div>
-</div>
-
-<div class="card fade-in">
-    <h2 style="color: var(--midnight-green); margin-bottom: 20px;"><i class="fas fa-chart-bar"></i> Understanding Results</h2>
-    
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
-        <div>
-            <h3 style="color: var(--teal); margin-bottom: 15px;">Statistics Explained</h3>
-            <div style="background: var(--light-green); padding: 15px; border-radius: 10px;">
-                <ul style="color: var(--midnight-green); line-height: 1.6;">
-                    <li><strong>Average ET₀:</strong> Mean daily evapotranspiration</li>
-                    <li><strong>Maximum ET₀:</strong> Highest daily value</li>
-                    <li><strong>Minimum ET₀:</strong> Lowest daily value</li>
-                    <li><strong>Standard Deviation:</strong> Measure of variability</li>
+                <h3 class="text-base font-semibold text-primary mb-3">AquaCrop</h3>
+                <ul class="text-sm text-on-surface-variant space-y-2 list-disc pl-5 leading-relaxed mb-6">
+                    <li>AquaCrop model developed by Dirk Raes, Pasquale Steduto, Theodore C. Hsiao, and Elias Fereres (FAO, 2009).</li>
+                    <li>FAO AquaCrop model: <a href="https://www.fao.org/aquacrop" target="_blank" rel="noopener noreferrer">https://www.fao.org/aquacrop</a></li>
+                    <li>AquaCrop Python package: <a href="https://github.com/aquacropos/aquacrop" target="_blank" rel="noopener noreferrer">https://github.com/aquacropos/aquacrop</a></li>
                 </ul>
-            </div>
-        </div>
-        
-        <div>
-            <h3 style="color: var(--teal); margin-bottom: 15px;">Chart Interpretation</h3>
-            <div style="background: var(--light-green); padding: 15px; border-radius: 10px;">
-                <ul style="color: var(--midnight-green); line-height: 1.6;">
-                    <li><strong>Daily Values:</strong> Raw ET calculations</li>
-                    <li><strong>Smooth Line:</strong> 5-day rolling average</li>
-                    <li><strong>Seasonal Patterns:</strong> Look for trends</li>
-                    <li><strong>Peak Values:</strong> Summer maximums</li>
+
+                <h3 class="text-base font-semibold text-primary mb-3">Weather Data Sources</h3>
+                <ul class="text-sm text-on-surface-variant space-y-2 list-disc pl-5 leading-relaxed">
+                    <li>Historical &amp; forecast weather: Open-Meteo Archive/Forecast APIs (<a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer">https://open-meteo.com</a>)</li>
+                    <li>Canadian weather data (forecast/climate observations): Environment and Climate Change Canada (ECCC) via MSC Datamart and climate API endpoints (<a href="https://weather.gc.ca" target="_blank" rel="noopener noreferrer">https://weather.gc.ca</a>, <a href="https://dd.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://dd.weather.gc.ca</a>, <a href="https://api.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://api.weather.gc.ca</a>)</li>
                 </ul>
+            </section>
+
+            <div class="flex flex-wrap justify-center gap-4 py-4">
+                <a href="{% url 'et:comparison' %}" class="inline-flex items-center gap-2 bg-primary text-white font-semibold px-6 py-3 rounded-xl shadow-md hover:bg-primary-container transition-colors no-underline">
+                    <span class="material-symbols-outlined">calculate</span>
+                    Start Calculating
+                </a>
+                <a href="{% url 'et:method_info' %}" class="inline-flex items-center gap-2 bg-[#5AAA95] text-white font-semibold px-6 py-3 rounded-xl shadow-md hover:opacity-90 transition-opacity no-underline">
+                    <span class="material-symbols-outlined">menu_book</span>
+                    Learn About Methods
+                </a>
             </div>
+
+            <section class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-6 md:p-8">
+                <h2 class="text-xl font-semibold text-primary mb-4">Contact</h2>
+                <p class="text-sm text-on-surface-variant leading-relaxed mb-3">For questions or feedback about this tool:</p>
+                <p class="text-sm text-on-surface-variant leading-relaxed mb-3">
+                    Smriti Mohapatra<br>
+                    University of Alberta<br>
+                    smritimohapatra21@gmail.com
+                </p>
+                <p class="text-sm text-on-surface-variant leading-relaxed">
+                    Supervisor: Dr. Evan Davies<br>
+                    University of Alberta, Department of Civil and Environmental Engineering<br>
+                    evan.davies@ualberta.ca
+                </p>
+            </section>
+
         </div>
-    </div>
+    </main>
 </div>
-
-<div class="card fade-in">
-    <h2 style="color: var(--midnight-green); margin-bottom: 20px;"><i class="fas fa-exclamation-triangle"></i> Troubleshooting</h2>
-    
-    <div style="display: flex; flex-direction: column; gap: 15px;">
-        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-            <h4 style="color: #856404; margin-bottom: 10px;">File Upload Issues</h4>
-            <ul style="color: #856404; padding-left: 20px;">
-                <li>Ensure file is in CSV format</li>
-                <li>Check that column headers match expected names</li>
-                <li>Verify no special characters in data</li>
-                <li>File size should be under 10MB</li>
-            </ul>
-        </div>
-        
-        <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-            <h4 style="color: #721c24; margin-bottom: 10px;">Calculation Errors</h4>
-            <ul style="color: #721c24; padding-left: 20px;">
-                <li>Check for missing required columns</li>
-                <li>Ensure numeric data is properly formatted</li>
-                <li>Remove any text in numeric columns</li>
-                <li>Verify date format (YYYY-MM-DD preferred)</li>
-            </ul>
-        </div>
-        
-        <div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 10px; padding: 15px;">
-            <h4 style="color: #0c5460; margin-bottom: 10px;">Result Issues</h4>
-            <ul style="color: #0c5460; padding-left: 20px;">
-                <li>Very high/low values may indicate data errors</li>
-                <li>Check units: temperature in °C, radiation in MJ/m²/day</li>
-                <li>Missing data points will be skipped</li>
-                <li>Compare results with local ET estimates</li>
-            </ul>
-        </div>
-    </div>
-</div>
-
-<div class="card fade-in">
-    <h2 style="color: var(--midnight-green); margin-bottom: 20px;"><i class="fas fa-download"></i> Data Export</h2>
-    
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px;">
-        <div style="background: var(--light-green); padding: 20px; border-radius: 15px;">
-            <h3 style="color: var(--midnight-green); margin-bottom: 15px;">Download Options</h3>
-            <ul style="color: var(--zomp); line-height: 1.6;">
-                <li>Complete calculated dataset</li>
-                <li>Original data with ET values added</li>
-                <li>Smoothed values included</li>
-                <li>CSV format for easy import</li>
-            </ul>
-        </div>
-        
-        <div style="background: var(--light-green); padding: 20px; border-radius: 15px;">
-            <h3 style="color: var(--midnight-green); margin-bottom: 15px;">Use Downloaded Data</h3>
-            <ul style="color: var(--zomp); line-height: 1.6;">
-                <li>Import into Excel or other tools</li>
-                <li>Create custom visualizations</li>
-                <li>Perform additional analysis</li>
-                <li>Archive for future reference</li>
-            </ul>
-        </div>
-    </div>
-</div>
-
-<div class="card fade-in">
-    <h2 style="color: var(--midnight-green); margin-bottom: 20px;"><i class="fas fa-lightbulb"></i> Tips for Best Results</h2>
-    
-    <div style="background: linear-gradient(135deg, var(--light-green), #e6f7f1); padding: 25px; border-radius: 15px;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 20px;">
-            <div>
-                <h4 style="color: var(--teal); margin-bottom: 10px;"><i class="fas fa-check"></i> Data Quality</h4>
-                <ul style="color: var(--midnight-green); line-height: 1.6;">
-                    <li>Use high-quality weather station data</li>
-                    <li>Ensure consistent measurement intervals</li>
-                    <li>Verify data for obvious errors</li>
-                </ul>
-            </div>
-            <div>
-                <h4 style="color: var(--teal); margin-bottom: 10px;"><i class="fas fa-calendar"></i> Time Period</h4>
-                <ul style="color: var(--midnight-green); line-height: 1.6;">
-                    <li>Use complete growing seasons</li>
-                    <li>Include multiple years for patterns</li>
-                    <li>Consider seasonal variations</li>
-                </ul>
-            </div>
-            <div>
-                <h4 style="color: var(--teal); margin-bottom: 10px;"><i class="fas fa-map-marker-alt"></i> Location</h4>
-                <ul style="color: var(--midnight-green); line-height: 1.6;">
-                    <li>Use data from nearby weather stations</li>
-                    <li>Consider elevation differences</li>
-                    <li>Account for local microclimates</li>
-                </ul>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="card fade-in">
-    <h2 style="color: var(--midnight-green); margin-bottom: 20px;">Credits &amp; Data Sources</h2>
-
-    <h3 style="color: var(--teal); margin-bottom: 12px;">ET Methods &amp; References</h3>
-    <ul style="color: var(--midnight-green); line-height: 1.8; margin-bottom: 18px; padding-left: 20px;">
-        <li>Penman-Monteith (FAO-56): Allen, R.G., Pereira, L.S., Raes, D., Smith, M. (1998). Crop evapotranspiration: Guidelines for computing crop water requirements. FAO Irrigation and Drainage Paper 56. <a href="https://www.fao.org/3/x0490e/x0490e00.htm" target="_blank" rel="noopener noreferrer">https://www.fao.org/3/x0490e/x0490e00.htm</a></li>
-        <li>Priestley-Taylor: Priestley, C.H.B. and Taylor, R.J. (1972). On the assessment of surface heat flux and evaporation using large-scale parameters. Monthly Weather Review, 100, 81&ndash;92.</li>
-        <li>Hargreaves-Samani: Hargreaves, G.H. and Samani, Z.A. (1985). Reference crop evapotranspiration from temperature. Applied Engineering in Agriculture, 1(2), 96&ndash;99.</li>
-        <li>Maule: This implementation uses a project-calibrated Maul&eacute;-style ET formulation tuned for Prairie conditions (see method notes in code).</li>
-    </ul>
-
-    <h3 style="color: var(--teal); margin-bottom: 12px;">AquaCrop</h3>
-    <ul style="color: var(--midnight-green); line-height: 1.8; margin-bottom: 18px; padding-left: 20px;">
-        <li>AquaCrop model developed by Dirk Raes, Pasquale Steduto, Theodore C. Hsiao, and Elias Fereres (FAO, 2009).</li>
-        <li>FAO AquaCrop model: <a href="https://www.fao.org/aquacrop" target="_blank" rel="noopener noreferrer">https://www.fao.org/aquacrop</a></li>
-        <li>AquaCrop Python package: <a href="https://github.com/aquacropos/aquacrop" target="_blank" rel="noopener noreferrer">https://github.com/aquacropos/aquacrop</a></li>
-    </ul>
-
-    <h3 style="color: var(--teal); margin-bottom: 12px;">Weather Data Sources</h3>
-    <ul style="color: var(--midnight-green); line-height: 1.8; padding-left: 20px;">
-        <li>Historical &amp; forecast weather: Open-Meteo Archive/Forecast APIs (<a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer">https://open-meteo.com</a>)</li>
-        <li>Canadian weather data (forecast/climate observations): Environment and Climate Change Canada (ECCC) via MSC Datamart and climate API endpoints (<a href="https://weather.gc.ca" target="_blank" rel="noopener noreferrer">https://weather.gc.ca</a>, <a href="https://dd.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://dd.weather.gc.ca</a>, <a href="https://api.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://api.weather.gc.ca</a>)</li>
-    </ul>
-</div>
-
-<div style="text-align: center; margin: 40px 0;">
-    <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
-        <a href="{% url 'et:comparison' %}" style="background: linear-gradient(135deg, var(--teal), var(--midnight-green)); color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: 600; box-shadow: 0 5px 15px rgba(8, 127, 140, 0.3); display: inline-flex; align-items: center; gap: 10px;">
-            <i class="fas fa-calculator"></i> Start Calculating
-        </a>
-        <a href="{% url 'et:method_info' %}" style="background: linear-gradient(135deg, var(--zomp), var(--asparagus)); color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: 600; box-shadow: 0 5px 15px rgba(90, 170, 149, 0.3); display: inline-flex; align-items: center; gap: 10px;">
-            <i class="fas fa-info-circle"></i> Learn About Methods
-        </a>
-    </div>
-</div>
-
-<div class="card fade-in">
-    <h2 style="color: var(--midnight-green); margin-bottom: 20px;">Contact</h2>
-    <p style="color: var(--midnight-green); line-height: 1.8; margin-bottom: 12px;">For questions or feedback about this tool:</p>
-    <p style="color: var(--midnight-green); line-height: 1.8; margin-bottom: 12px;">
-        Smriti Mohapatra<br>
-        University of Alberta<br>
-        smritimohapatra21@gmail.com
-    </p>
-    <p style="color: var(--midnight-green); line-height: 1.8; margin-bottom: 12px;">
-        Supervisor: Dr. Evan Davies<br>
-        University of Alberta, Department of Civil and Environmental Engineering<br>
-        evan.davies@ualberta.ca
-    </p>
-</div>
-
 {% endblock %}

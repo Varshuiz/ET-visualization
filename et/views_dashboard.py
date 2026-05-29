@@ -14,6 +14,7 @@ from django.views.decorators.http import require_http_methods
 from .auth_supabase import SESSION_ACTIVE_FARM_ID, get_current_user_id, normalize_user_id, supabase_login_required
 from .forms_auth import FarmProfileForm
 from .et_results_display import comparison_context_from_saved_row, parse_run_result_data
+from .saved_run_display import aquacrop_context_from_saved_row, forecast_context_from_saved_row
 from .persistence import log_feature_usage
 from .supabase_storage import (
     get_aquacrop_run_by_id,
@@ -120,24 +121,22 @@ def aquacrop_run_detail_view(request, run_id):
     if not row:
         raise Http404("AquaCrop run not found.")
 
-    result_data = row.get("result_data") or {}
-    if isinstance(result_data, str):
-        try:
-            result_data = json.loads(result_data)
-        except json.JSONDecodeError:
-            result_data = {}
-
-    profile_ctx = _dashboard_profile_context(user_id or "")
-    return render(
-        request,
-        "et/run_aquacrop_detail.html",
-        {
-            "run": row,
-            "result_data": result_data,
-            "result_json": _pretty_json(result_data),
-            **profile_ctx,
-        },
-    )
+    log_feature_usage(request, "aquacrop", "view_saved", {"run_id": str(run_id)})
+    ctx = aquacrop_context_from_saved_row(row)
+    if not ctx.get("has_results"):
+        return render(
+            request,
+            "et/run_aquacrop_detail.html",
+            {
+                "run": row,
+                "result_data": _parse_result_data_row(row),
+                "result_json": _pretty_json(_parse_result_data_row(row)),
+                "display_warning": (
+                    "This saved run does not include chart data. Run a new simulation to see full results."
+                ),
+            },
+        )
+    return render(request, "et/aquacrop_simulation.html", ctx)
 
 
 @supabase_login_required
@@ -147,24 +146,32 @@ def forecast_run_detail_view(request, run_id):
     if not row:
         raise Http404("Forecast run not found.")
 
-    result_data = row.get("result_data") or {}
-    if isinstance(result_data, str):
-        try:
-            result_data = json.loads(result_data)
-        except json.JSONDecodeError:
-            result_data = {}
+    log_feature_usage(request, "forecast", "view_saved", {"run_id": str(run_id)})
+    ctx = forecast_context_from_saved_row(row)
+    if not ctx.get("df_forecast"):
+        return render(
+            request,
+            "et/run_forecast_detail.html",
+            {
+                "run": row,
+                "result_data": _parse_result_data_row(row),
+                "result_json": _pretty_json(_parse_result_data_row(row)),
+                "display_warning": (
+                    "This saved run does not include forecast table data. Run a new forecast to see full results."
+                ),
+            },
+        )
+    return render(request, "et/env_canada_forecast.html", ctx)
 
-    profile_ctx = _dashboard_profile_context(user_id or "")
-    return render(
-        request,
-        "et/run_forecast_detail.html",
-        {
-            "run": row,
-            "result_data": result_data,
-            "result_json": _pretty_json(result_data),
-            **profile_ctx,
-        },
-    )
+
+def _parse_result_data_row(row: dict) -> dict:
+    raw = row.get("result_data") or {}
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = {}
+    return raw if isinstance(raw, dict) else {}
 
 
 @supabase_login_required

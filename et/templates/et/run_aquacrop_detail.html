@@ -1,45 +1,49 @@
-{% extends 'et/base.html' %}
-
-{% block title %}AquaCrop run | AqualET{% endblock %}
-
-{% block content %}
-<div class="container">
-    <p style="margin-bottom: 12px;">
-        <a href="{% url 'et:dashboard' %}" style="color: #087F8C;">← Back to dashboard</a>
-    </p>
-
-    <div class="page-header">
-        <h1>AquaCrop run details</h1>
-        <p class="subtitle">Saved {{ run.created_at|slice:":16" }}</p>
-    </div>
-
-    <div class="card" style="margin-bottom: 20px;">
-        <h2 style="color: #095256; margin-bottom: 12px;">Summary</h2>
-        <table style="width:100%; max-width: 560px;">
-            <tr><td style="padding:6px 8px; color:#5a6f70;">Crop</td>
-                <td style="padding:6px 8px;">{{ run.crop_type|default:"—" }}</td></tr>
-            <tr><td style="padding:6px 8px; color:#5a6f70;">Mode</td>
-                <td style="padding:6px 8px;">{{ run.mode|default:"—" }}</td></tr>
-            <tr><td style="padding:6px 8px; color:#5a6f70;">Period</td>
-                <td style="padding:6px 8px;">{{ run.start_date|default:"—" }} – {{ run.end_date|default:"—" }}</td></tr>
-            {% if result_data.yield_fresh %}
-            <tr><td style="padding:6px 8px; color:#5a6f70;">Yield (fresh)</td>
-                <td style="padding:6px 8px;">{{ result_data.yield_fresh }} t/ha</td></tr>
-            {% endif %}
-            {% if result_data.total_et %}
-            <tr><td style="padding:6px 8px; color:#5a6f70;">Total ET</td>
-                <td style="padding:6px 8px;">{{ result_data.total_et }} mm</td></tr>
-            {% endif %}
-            {% if result_data.water_productivity %}
-            <tr><td style="padding:6px 8px; color:#5a6f70;">Water productivity</td>
-                <td style="padding:6px 8px;">{{ result_data.water_productivity }}</td></tr>
-            {% endif %}
-        </table>
-    </div>
-
-    <div class="card">
-        <h2 style="color: #095256; margin-bottom: 12px;">Full results</h2>
-        <pre style="background:#f4f7f6; padding:16px; border-radius:8px; overflow:auto; font-size:0.85rem; line-height:1.45;">{{ result_json }}</pre>
-    </div>
-</div>
-{% endblock %}
+{% extends 'et/base.html' %}
+
+{% block title %}AquaCrop run | AqualET{% endblock %}
+
+{% block content %}
+<div class="container">
+    <p style="margin-bottom: 12px;">
+        <a href="{% url 'et:dashboard' %}#recent-history" style="color: #087F8C;">← Back to dashboard</a>
+    </p>
+
+    <div class="page-header">
+        <h1>AquaCrop run details</h1>
+        <p class="subtitle">Saved {{ run.created_at|slice:":16" }}</p>
+    </div>
+
+    {% if display_warning %}
+    <div class="card" style="margin-bottom: 20px; border-left: 4px solid #c9a227; background: #fff8e6;">
+        <p style="margin: 0; color: #5a4a00;">{{ display_warning }}</p>
+    </div>
+    {% endif %}
+
+    <div class="card" style="margin-bottom: 20px;">
+        <h2 style="color: #095256; margin-bottom: 12px;">Summary</h2>
+        <table style="width:100%; max-width: 560px;">
+            <tr><td style="padding:6px 8px; color:#5a6f70;">Crop</td>
+                <td style="padding:6px 8px;">{{ run.crop_type|default:"—" }}</td></tr>
+            <tr><td style="padding:6px 8px; color:#5a6f70;">Mode</td>
+                <td style="padding:6px 8px;">{{ run.mode|default:"—" }}</td></tr>
+            <tr><td style="padding:6px 8px; color:#5a6f70;">Period</td>
+                <td style="padding:6px 8px;">{{ run.start_date|default:"—" }} – {{ run.end_date|default:"—" }}</td></tr>
+            {% if result_data.yield_fresh %}
+            <tr><td style="padding:6px 8px; color:#5a6f70;">Yield (fresh)</td>
+                <td style="padding:6px 8px;">{{ result_data.yield_fresh }} t/ha</td></tr>
+            {% endif %}
+            {% if result_data.total_et %}
+            <tr><td style="padding:6px 8px; color:#5a6f70;">Total ET</td>
+                <td style="padding:6px 8px;">{{ result_data.total_et }} mm</td></tr>
+            {% endif %}
+        </table>
+    </div>
+
+    {% if result_json %}
+    <div class="card">
+        <h2 style="color: #095256; margin-bottom: 12px;">Stored data</h2>
+        <pre style="background:#f4f7f6; padding:16px; border-radius:8px; overflow:auto; font-size:0.85rem; line-height:1.45;">{{ result_json }}</pre>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

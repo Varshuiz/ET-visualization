@@ -3,8 +3,58 @@
 
 {% block title %}Forecast and Water Plan | AqualET{% endblock %}
 
+{% block body_class %}forecast-page{% endblock %}
+
+{% block head_assets %}
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                "primary-container": "#2d6a6a",
+                "on-primary-container": "#abe8e7",
+                "surface-bright": "#f8faf9",
+                "on-surface": "#191c1c",
+                "on-surface-variant": "#3f4848",
+                "outline": "#707978",
+                "outline-variant": "#bfc8c8",
+                "surface-container": "#eceeed",
+                "surface-container-low": "#f2f4f3",
+                "surface-container-lowest": "#ffffff",
+                "surface-container-highest": "#e1e3e2",
+                "secondary": "#506261",
+                "primary": "#0c5252",
+                "background": "#f8faf9",
+                "inverse-surface": "#2e3131",
+            },
+            fontFamily: { sans: ["Inter", "sans-serif"] },
+        },
+    },
+};
+</script>
+{% endblock %}
+
 {% block extra_css %}
 <style>
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    body.forecast-page { font-family: 'Inter', sans-serif; background: #f8faf9; color: #191c1c; }
+    body.forecast-page .navbar { display: none !important; }
+    body.forecast-page > .container {
+        max-width: none;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+    body.forecast-page > .container > .info-box,
+    body.forecast-page > .container > .error-message { display: none; }
+    .period-selector .period-btn { border-radius: 9999px; }
+
     .forecast-card {
         background: white;
         border-radius: 12px;
@@ -442,60 +492,71 @@
         }
     }
 
+
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="page-header">
-        <h1>Environment Canada Forecast</h1>
-        <p class="subtitle">Weather outlook and irrigation planning for Alberta, British Columbia, Saskatchewan, and Manitoba (Environment Canada city forecasts)</p>
-    </div>
+<div class="flex min-h-screen bg-background">
+    {% include 'et/partials/stitch_sidebar.html' with sidebar_active=sidebar_active|default:'et_analysis' %}
 
-    {% if error_message %}
-    <div class="error-message">
-        {{ error_message }}
-    </div>
-    {% endif %}
+    <main class="ml-[260px] flex-1 min-h-screen">
+        <header class="bg-primary-container shadow-sm px-8 py-8">
+            <div class="max-w-7xl mx-auto flex items-start gap-4">
+                <div class="p-3 bg-white/10 rounded-xl" aria-hidden="true"></div>
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold text-white">
+                        {% if is_saved_run %}Saved forecast run{% else %}Environment Canada Forecast{% endif %}
+                    </h1>
+                    <p class="text-sm text-on-primary-container/90 mt-1 max-w-3xl">
+                        {% if is_saved_run %}
+                        {{ city_name }}{% if selected_province %}, {{ selected_province }}{% endif %} — saved {{ saved_run.created_at|slice:":16" }}
+                        {% else %}
+                        Weather outlook and irrigation planning for Alberta, British Columbia, Saskatchewan, and Manitoba (Environment Canada city forecasts)
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </header>
 
-    <!-- Period Selector -->
-    <div class="period-selector">
-        <label>Forecast Period</label>
-        <div class="period-buttons">
-            <button type="button" class="period-btn {% if selected_days == 3 %}selected{% endif %}" 
-                    onclick="selectPeriod(3, this)">
-                3 Days
-            </button>
-            <button type="button" class="period-btn {% if selected_days == 5 %}selected{% endif %}" 
-                    onclick="selectPeriod(5, this)">
-                5 Days
-            </button>
-            <button type="button" class="period-btn {% if selected_days == 7 %}selected{% endif %}" 
-                    onclick="selectPeriod(7, this)">
-                7 Days
-            </button>
-            <button type="button" class="period-btn {% if selected_days == 10 %}selected{% endif %}" 
-                    onclick="selectPeriod(10, this)">
-                10 Days
-            </button>
-            <button type="button" class="period-btn {% if selected_days == 14 %}selected{% endif %}" 
-                    onclick="selectPeriod(14, this)">
-                14 Days
-            </button>
-            <button type="button" class="period-btn {% if selected_days == 21 %}selected{% endif %}" 
-                    onclick="selectPeriod(21, this)">
-                21 Days
-            </button>
-            <button type="button" class="period-btn {% if selected_days == 30 %}selected{% endif %}" 
-                    onclick="selectPeriod(30, this)">
-                30 Days
-            </button>
-        </div>
-    </div>
+        <div class="px-8 py-8 max-w-7xl mx-auto space-y-6">
+            {% if is_saved_run %}
+            <div class="flex flex-wrap items-center gap-3 text-sm">
+                <a href="{% url 'et:dashboard' %}#recent-history" class="inline-flex items-center gap-1 text-primary font-semibold hover:underline no-underline">
+                    <span class="material-symbols-outlined text-base">arrow_back</span>
+                    Back to dashboard
+                </a>
+            </div>
+            {% endif %}
+            {% if error_message %}
+            <div class="error-message rounded-lg border border-red-200 bg-red-50 text-red-800 px-4 py-3">{{ error_message }}</div>
+            {% endif %}
 
+            <div class="{% if df_forecast %}hidden{% endif %} space-y-6">
+            <section class="bg-primary shadow-lg rounded-xl overflow-hidden relative">
+                <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
+                <div class="p-8 md:p-12 relative z-10 flex flex-col md:flex-row items-center gap-8">
+                    <div class="flex-1">
+                        <div class="inline-flex items-center gap-2 bg-white/10 text-white/90 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full mb-4">
+                            Official Weather Data
+                        </div>
+                        <h2 class="text-2xl md:text-3xl font-bold text-white mb-4">Weather outlook and irrigation planning</h2>
+                        <p class="text-white/80 text-base max-w-2xl">
+                            Alberta, British Columbia, Saskatchewan, and Manitoba (Environment Canada city forecasts) — comprehensive meteorological modeling for precise evapotranspiration calculations.
+                        </p>
+                    </div>
+                    <div class="hidden lg:block w-full max-w-xs shrink-0">
+                        <div class="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                            <img class="rounded-lg shadow-md w-full" alt="Meteorological data visualization" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTmKhz923Cf2onZzKNvdabQEtN1RdW6TKyE4VafIh9-R8g4f3r-p0Br0-glKZrp7Iq4jXeA-vpkGWV0mihgzqZ5BBSuC-GMDDBzVWwVGh5zRKnlwTBN-m9GGvRGeJIdZY_DF2gVoiLOo7XfnBf_8iFofcc-NtEzggs9YGfd_l88_un8nTs9Zl02048HE1XpWlHV-7ixCI__RUnG6OSYGLcWhD80Mw6Q9nPW4nnFxDYvg0ZWJlKeJTyfn1DlFADSMMkH8fD8Ti-w4o">
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="grid grid-cols-1 gap-6">
     <!-- City Selector with Dropdown -->
-    <div class="city-selector">
-        <h3 style="color: #095256; margin-bottom: 15px;">Select location (<span id="cityCountLabel">{{ available_cities|length }}</span> cities in <span id="provinceLabel">{{ selected_province }}</span>)</h3>
+            <section class="city-selector bg-surface-container-lowest rounded-xl shadow-sm border border-surface-container p-6">
+                <h3 class="text-lg font-semibold text-primary mb-4 flex items-center gap-2"><span class="material-symbols-outlined">map</span>Select location (<span id="cityCountLabel">{{ available_cities|length }}</span> cities in <span id="provinceLabel">{{ selected_province }}</span>)</h3>
         
         {{ cities_by_province|json_script:"forecast-cities-data" }}
         {{ default_city_by_province|json_script:"forecast-default-city-data" }}
@@ -565,291 +626,349 @@
                     <button type="submit" class="submit-btn-small" id="submitBtn">Get Forecast</button>
                 </div>
             </div>
+            {% if farm_prefill_note and not df_forecast %}
+            <p class="text-[11px] text-[#707978] mt-3">
+                Pre-filled from your farm profile. You can change these for this run.
+            </p>
+            {% endif %}
         </form>
-    </div>
+            </section>
 
-    {% if df_forecast %}
-    <!-- Summary -->
-    <div class="summary-box">
-        <h2>{{ total_precip|floatformat:1 }} mm</h2>
-        <p>Total projected precipitation for {{ city_name }}</p>
-        <p style="font-size: 0.9rem; opacity: 0.9;">
-            Planning horizon: next {{ df_forecast|length }} day(s)
-            {% if available_forecast_days %}
-            ({{ available_forecast_days }} day(s) available from Environment Canada)
-            {% endif %}
-        </p>
-    </div>
+    <!-- Period Selector -->
+            <section class="period-selector bg-surface-container-lowest rounded-xl shadow-sm border border-surface-container p-6">
+                <h3 class="text-lg font-semibold text-primary mb-4 flex items-center gap-2"><span class="material-symbols-outlined">calendar_today</span>Forecast Period</h3>
+                <label class="sr-only">Forecast Period</label>
+        <div class="period-buttons">
+            <button type="button" class="period-btn {% if selected_days == 3 %}selected{% endif %}" 
+                    onclick="selectPeriod(3, this)">
+                3 Days
+            </button>
+            <button type="button" class="period-btn {% if selected_days == 5 %}selected{% endif %}" 
+                    onclick="selectPeriod(5, this)">
+                5 Days
+            </button>
+            <button type="button" class="period-btn {% if selected_days == 7 %}selected{% endif %}" 
+                    onclick="selectPeriod(7, this)">
+                7 Days
+            </button>
+            <button type="button" class="period-btn {% if selected_days == 10 %}selected{% endif %}" 
+                    onclick="selectPeriod(10, this)">
+                10 Days
+            </button>
+            <button type="button" class="period-btn {% if selected_days == 14 %}selected{% endif %}" 
+                    onclick="selectPeriod(14, this)">
+                14 Days
+            </button>
+            <button type="button" class="period-btn {% if selected_days == 21 %}selected{% endif %}" 
+                    onclick="selectPeriod(21, this)">
+                21 Days
+            </button>
+            <button type="button" class="period-btn {% if selected_days == 30 %}selected{% endif %}" 
+                    onclick="selectPeriod(30, this)">
+                30 Days
+            </button>
+        </div>
+            </section>
+            </div>
 
-    <div class="recommendation-box">
-        <h3 style="color:#095256; margin:0 0 6px 0;">Water Use Recommendation</h3>
-        <p style="margin:0; color:#4b6466;">
-            Forecast-based planning guidance using estimated crop water demand.
-        </p>
-        <div class="recommendation-grid">
-            <div class="recommendation-item">
-                <strong>Estimated Crop Water Use</strong>
-                {{ estimated_et_total|floatformat:1 }} mm
-            </div>
-            <div class="recommendation-item">
-                <strong>Forecast Rainfall</strong>
-                {{ total_precip|floatformat:1 }} mm
-            </div>
-            <div class="recommendation-item">
-                <strong>Net Water Balance</strong>
-                {{ net_water_balance|floatformat:1 }} mm
-            </div>
-            <div class="recommendation-item">
-                <strong>Suggested Irrigation</strong>
-                {{ irrigation_needed|floatformat:1 }} mm ({{ recommendation_level }})
-                {% if show_extended_horizon_caveat and historical_confidence %}
-                <span style="display:block;margin-top:6px;font-size:0.82rem;color:#5b6f70;font-weight:500;">
-                    Historical analogue spread (same horizon, soil-adjusted curve envelope): about
-                    {{ historical_confidence.total_p10|floatformat:1 }}–{{ historical_confidence.total_p90|floatformat:1 }} mm
-                    (median {{ historical_confidence.total_p50|floatformat:1 }} mm). Your teal line is one deterministic run, not a confidence interval.
-                </span>
+            <div class="space-y-6">
+                {% if df_forecast %}
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <h2 class="text-xl font-semibold text-primary">Forecast Results</h2>
+                    <div class="flex flex-wrap gap-2">
+                        {% if is_saved_run %}
+                        <a href="{% url 'et:dashboard' %}#recent-history" class="inline-flex items-center justify-center no-underline text-primary font-semibold px-5 py-3 rounded-xl border border-outline-variant/60 bg-white hover:bg-surface-container-low">
+                            Back to dashboard
+                        </a>
+                        {% endif %}
+                        <a href="{% url 'et:env_canada_forecast' %}" class="submit-btn inline-flex items-center justify-center no-underline text-white font-bold px-6 py-3 rounded-xl shadow-lg" style="background: linear-gradient(135deg, #5AAA95, #3f8f7f);">
+                            {% if is_saved_run %}Run a new forecast{% else %}Show another forecast{% endif %}
+                        </a>
+                    </div>
+                </div>
+                <!-- Summary -->
+                <div class="summary-box">
+                                <h2>{{ total_precip|floatformat:1 }} mm</h2>
+                                <p>Total projected precipitation for {{ city_name }}</p>
+                                <p style="font-size: 0.9rem; opacity: 0.9;">
+                                                Planning horizon: next {{ df_forecast|length }} day(s)
+                                                {% if available_forecast_days %}
+                                                ({{ available_forecast_days }} day(s) available from Environment Canada)
+                                                {% endif %}
+                                </p>
+                </div>
+
+                <div class="recommendation-box">
+                                <h3 style="color:#095256; margin:0 0 6px 0;">Water Use Recommendation</h3>
+                                <p style="margin:0; color:#4b6466;">
+                                                Forecast-based planning guidance using estimated crop water demand.
+                                </p>
+                                <div class="recommendation-grid">
+                                                <div class="recommendation-item">
+                                                                <strong>Estimated Crop Water Use</strong>
+                                                                {{ estimated_et_total|floatformat:1 }} mm
+                                                </div>
+                                                <div class="recommendation-item">
+                                                                <strong>Forecast Rainfall</strong>
+                                                                {{ total_precip|floatformat:1 }} mm
+                                                </div>
+                                                <div class="recommendation-item">
+                                                                <strong>Net Water Balance</strong>
+                                                                {{ net_water_balance|floatformat:1 }} mm
+                                                </div>
+                                                <div class="recommendation-item">
+                                                                <strong>Suggested Irrigation</strong>
+                                                                {{ irrigation_needed|floatformat:1 }} mm ({{ recommendation_level }})
+                                                                {% if show_extended_horizon_caveat and historical_confidence %}
+                                                                <span style="display:block;margin-top:6px;font-size:0.82rem;color:#5b6f70;font-weight:500;">
+                                                                                Historical analogue spread (same horizon, soil-adjusted curve envelope): about
+                                                                                {{ historical_confidence.total_p10|floatformat:1 }}–{{ historical_confidence.total_p90|floatformat:1 }} mm
+                                                                                (median {{ historical_confidence.total_p50|floatformat:1 }} mm). Your teal line is one deterministic run, not a confidence interval.
+                                                                </span>
+                                                                {% endif %}
+                                                </div>
+                                                <div class="recommendation-item">
+                                                                <strong>Cumulative GDD (base 5C)</strong>
+                                                                {{ gdd_total|floatformat:1 }}
+                                                </div>
+                                                <div class="recommendation-item">
+                                                                <strong>Estimated Crop Stage</strong>
+                                                                {{ gdd_stage }}
+                                                </div>
+                                                <div class="recommendation-item">
+                                                                <strong>Selected Crop</strong>
+                                                                {{ crop_label }}
+                                                </div>
+                                                <div class="recommendation-item">
+                                                                <strong>Selected Soil</strong>
+                                                                {{ soil_label }} (factor {{ soil_factor|floatformat:2 }})
+                                                </div>
+                                </div>
+                                <div style="margin-top:10px; color:#5b6f70; font-size:0.9rem;">
+                                                <h4 style="margin:0 0 10px 0; color:#095256; font-size:1rem;">How the irrigation estimate is calculated</h4>
+                                                <p style="margin:0 0 10px 0;">
+                                                                The daily water need is calculated from forecast temperature, sunlight, humidity, and wind. The estimate accounts for your crop's growth stage — young crops and crops nearing harvest need less water than crops at peak growth. Your soil type adjusts the final number: sandy soils need more frequent watering, clay soils hold moisture longer and need less.
+                                                </p>
+                                                <p style="margin:0 0 10px 0;">
+                                                                Rain is subtracted from the daily need. If forecast rain covers the day's water demand, no irrigation is suggested for that day. There is no carry-over credit for extra rain beyond that day's need.
+                                                </p>
+                                                <p style="margin:0 0 10px 0;">
+                                                                The grey band in the chart is built from 5 years of historical weather data for your area, run through the same calculation, so you can see how this season compares to past years at the same time of year.
+                                                </p>
+                                                <p style="margin:0;">
+                                                                Use this as a planning guide alongside your own observations of field conditions.
+                                                </p>
+                                </div>
+                                {% if show_extended_horizon_caveat %}
+                                <p style="margin-top:12px; color:#5b6f70; font-size:0.9rem;">
+                                                <strong>Note:</strong> Forecasts beyond 7 days are less reliable. Weather models lose accuracy the further out they go. Treat week two and beyond as a general planning heads-up, not a precise watering schedule. When in doubt, rely on the grey band in the chart and the historical range shown under "Suggested irrigation" rather than the single millimetre figure.
+                                </p>
+                                {% endif %}
+                </div>
+
+                {% if rec_chart_url %}
+                <div class="card">
+                                <h3 style="margin-bottom:10px; color:#095256;">Irrigation Confidence Band</h3>
+                                <p style="margin-bottom:14px; color:#5a6f70; font-size:0.92rem;">
+                                                {% if historical_confidence %}
+                                                The <strong>grey band</strong> is the 10th–90th percentile range of <em>cumulative irrigation need</em> from historical weather analogues (same model, past years + nearby points). The <strong>dashed line</strong> is the historical <strong>median (P50)</strong>. The <strong>teal line</strong> is this forecast’s cumulative need through the same horizon.
+                                                {% else %}
+                                                Grey historical band is unavailable (e.g. archive data did not yield scenarios); the teal line shows this run’s cumulative irrigation need only.
+                                                {% endif %}
+                                </p>
+                                <img src="data:image/png;base64,{{ rec_chart_url|safe }}" alt="Irrigation recommendation confidence chart" style="width:100%; border-radius:8px; border:1px solid #d6e4e1;">
+                                {% if historical_confidence %}
+                                <p style="margin-top:10px; color:#5b6f70; font-size:0.86rem;">
+                                                End-of-horizon cumulative irrigation from historical analogues (P10–P90 / median):
+                                                {{ historical_confidence.total_p10|floatformat:1 }}–{{ historical_confidence.total_p90|floatformat:1 }} mm
+                                                (median {{ historical_confidence.total_p50|floatformat:1 }} mm).
+                                </p>
+                                <div style="margin-top:14px; padding:14px 16px; background:#f7faf9; border:1px solid #dbe7e4; border-radius:10px; color:#3d4f52;">
+                                                <h4 style="margin:0 0 10px 0; color:#095256; font-size:1rem;">Reading this chart</h4>
+                                                <ul style="margin:0; padding-left:1.15rem; font-size:0.88rem; line-height:1.55;">
+                                                                <li><strong>Grey band</strong> — Shows how much irrigation similar seasons in past years needed by each day. A <strong>narrow band</strong> means past years were consistent — you can plan with more confidence. A <strong>wide band</strong> means some years were much drier or wetter than others — treat the outlook as a rough guide, not a firm number.</li>
+                                                                <li><strong>Dashed line</strong> — What a typical past season looked like. If the teal line is tracking <strong>above</strong> it, this season is shaping up <strong>drier than normal</strong>. <strong>Below</strong> it, <strong>wetter than normal</strong>.</li>
+                                                                <li><strong>Teal line</strong> — Your current forecast. Running near the <strong>top of the grey band</strong> means prepare for <strong>more irrigation than usual</strong>. Near the <strong>bottom</strong>, you may need <strong>less than a typical year</strong>.</li>
+                                                                <li><strong>Beyond day 7</strong> — The forecast becomes less reliable. The wider the band, the more you should hold off on firm decisions until you are closer to the date.</li>
+                                                </ul>
+                                </div>
+
+                                {% endif %}
+                </div>
+                {% elif df_forecast %}
+                <div class="card" style="border:1px solid #e0e8e6;">
+                                <h3 style="margin-bottom:10px; color:#095256;">Irrigation chart</h3>
+                                <p style="color:#5a6f70; font-size:0.95rem;">
+                                                The irrigation figure could not be generated (for example, no cumulative irrigation points were computed from the forecast, or plotting failed on the server). The summary numbers above still reflect the model run when present.
+                                </p>
+                </div>
                 {% endif %}
+
+                {% if weekly_forecast %}
+                <div class="card" style="margin-bottom: 20px;">
+                                <h3 style="margin-bottom:10px; color:#095256;">4-Week Forecast Summary</h3>
+                                <p style="margin-bottom:14px; color:#5a6f70; font-size:0.92rem;">
+                                                30-day outlook grouped into weekly planning windows.
+                                </p>
+                                {% for week in weekly_forecast %}
+                                <div class="forecast-card">
+                                                <div class="forecast-period">{{ week.week_label }}</div>
+                                                <div class="forecast-date">
+                                                                {{ week.start_date|date:"M d, Y" }} - {{ week.end_date|date:"M d, Y" }} ({{ week.days_count }} day{{ week.days_count|pluralize }})
+                                                </div>
+                                                {% if week.week_index >= 1 %}
+                                                <p style="margin: 0 0 12px 0; font-size: 0.85rem; color: #8a5a00; background: #fff8e6; padding: 8px 10px; border-radius: 6px; border: 1px solid #f0e0b8;">
+                                                                <strong>Week 2+:</strong> these windows sit in the higher-uncertainty tail of the outlook; treat averages and precipitation as indicative, not operational precision.
+                                                </p>
+                                                {% endif %}
+                                                <div class="forecast-stats">
+                                                                <div class="stat-box">
+                                                                                <div class="stat-label">Avg High</div>
+                                                                                <div class="stat-value">
+                                                                                                {% if week.avg_high is not None %}{{ week.avg_high|floatformat:1 }}°C{% else %}--{% endif %}
+                                                                                </div>
+                                                                </div>
+                                                                <div class="stat-box">
+                                                                                <div class="stat-label">Avg Low</div>
+                                                                                <div class="stat-value">
+                                                                                                {% if week.avg_low is not None %}{{ week.avg_low|floatformat:1 }}°C{% else %}--{% endif %}
+                                                                                </div>
+                                                                </div>
+                                                                <div class="stat-box {% if week.total_precip_mm >= 25 %}precip-high{% elif week.total_precip_mm >= 10 %}precip-medium{% else %}precip-low{% endif %}">
+                                                                                <div class="stat-label">Total Precipitation</div>
+                                                                                <div class="stat-value">{{ week.total_precip_mm|floatformat:1 }} mm</div>
+                                                                </div>
+                                                </div>
+                                </div>
+                                {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Forecast Cards -->
+                <div>
+                                {% for forecast in df_forecast %}
+                                <div class="forecast-card">
+                                                <div class="forecast-period">{{ forecast.Period }}</div>
+                                                <div class="forecast-date">{{ forecast.Date|date:"l, F d, Y" }}</div>
+                                                
+                                                <div class="forecast-stats">
+                                                                <div class="stat-box">
+                                                                                <div class="stat-label">High</div>
+                                                                                <div class="stat-value">
+                                                                                                {% if forecast.Temp_High is not None %}
+                                                                                                                {{ forecast.Temp_High|floatformat:0 }}°C
+                                                                                                {% else %}
+                                                                                                                <span style="font-size: 0.85rem; color: #999;">Not Available</span>
+                                                                                                {% endif %}
+                                                                                </div>
+                                                                </div>
+                                                                
+                                                                <div class="stat-box">
+                                                                                <div class="stat-label">Low</div>
+                                                                                <div class="stat-value">
+                                                                                                {% if forecast.Temp_Low is not None %}
+                                                                                                                {{ forecast.Temp_Low|floatformat:0 }}°C
+                                                                                                {% else %}
+                                                                                                                <span style="font-size: 0.85rem; color: #999;">Not Available</span>
+                                                                                                {% endif %}
+                                                                                </div>
+                                                                </div>
+
+                                                                <div class="stat-box">
+                                                                                <div class="stat-label">Rel. humidity (MSC or Open-Meteo)</div>
+                                                                                <div class="stat-value">
+                                                                                                {% if forecast.RH_percent is not None %}
+                                                                                                                {{ forecast.RH_percent|floatformat:0 }}%
+                                                                                                {% else %}
+                                                                                                                <span style="font-size: 0.85rem; color: #999;">Not available</span>
+                                                                                                {% endif %}
+                                                                                </div>
+                                                                </div>
+
+                                                                <div class="stat-box">
+                                                                                <div class="stat-label">Solar (Rₛ for PM)</div>
+                                                                                <div class="stat-value">
+                                                                                                {% if forecast.Rs_mjm2 is not None %}
+                                                                                                                {{ forecast.Rs_mjm2|floatformat:1 }} MJ/m²
+                                                                                                {% else %}
+                                                                                                                <span style="font-size: 0.85rem; color: #999;">Temp. estimate</span>
+                                                                                                {% endif %}
+                                                                                </div>
+                                                                </div>
+
+                                                                <div class="stat-box">
+                                                                                <div class="stat-label">Wind (u₂ for PM)</div>
+                                                                                <div class="stat-value" style="font-size:1.05rem;">
+                                                                                                {% if forecast.u2_ms is not None %}
+                                                                                                                {{ forecast.u2_ms|floatformat:2 }} m/s
+                                                                                                                {% if forecast.Wind_kmh_max is not None %}
+                                                                                                                                <span style="display:block;font-size:0.78rem;color:#666;font-weight:500;">(~{{ forecast.Wind_kmh_max|floatformat:0 }} km/h max)</span>
+                                                                                                                {% endif %}
+                                                                                                {% else %}
+                                                                                                                <span style="font-size: 0.85rem; color: #999;">Not available</span>
+                                                                                                {% endif %}
+                                                                                </div>
+                                                                </div>
+                                                                
+                                                                <div class="stat-box {% if forecast.Precipitation_mm >= 10 %}precip-high{% elif forecast.Precipitation_mm >= 3 %}precip-medium{% else %}precip-low{% endif %}">
+                                                                                <div class="stat-label">Precipitation</div>
+                                                                                <div class="stat-value">{{ forecast.Precipitation_mm|floatformat:1 }} mm</div>
+                                                                </div>
+
+                                                                <div class="stat-box">
+                                                                                <div class="stat-label">Reference ET₀ (FAO-PM)</div>
+                                                                                <div class="stat-value" style="font-size:1.05rem;">
+                                                                                                {% if forecast.et0_mm is not None %}
+                                                                                                                {{ forecast.et0_mm|floatformat:2 }} mm/day
+                                                                                                {% else %}
+                                                                                                                <span style="font-size: 0.85rem; color: #999;">Not available</span>
+                                                                                                {% endif %}
+                                                                                </div>
+                                                                </div>
+
+                                                                <div class="stat-box">
+                                                                                <div class="stat-label">ET flux (latent heat)</div>
+                                                                                <div class="stat-value" style="font-size:1.05rem;">
+                                                                                                {% if forecast.et_flux_wm2 is not None %}
+                                                                                                                {{ forecast.et_flux_wm2|floatformat:1 }} W/m²
+                                                                                                {% else %}
+                                                                                                                <span style="font-size: 0.85rem; color: #999;">Not available</span>
+                                                                                                {% endif %}
+                                                                                </div>
+                                                                </div>
+
+                                                                <div class="stat-box">
+                                                                                <div class="stat-label">Crop-stage ET (estimate)</div>
+                                                                                <div class="stat-value" style="font-size:1.05rem;">
+                                                                                                {% if forecast.adjusted_et_mm is not None %}
+                                                                                                                {{ forecast.adjusted_et_mm|floatformat:2 }} mm/day
+                                                                                                {% else %}
+                                                                                                                <span style="font-size: 0.85rem; color: #999;">Not available</span>
+                                                                                                {% endif %}
+                                                                                </div>
+                                                                </div>
+                                                </div>
+                                                
+                                                {% if forecast.Forecast %}
+                                                <div class="forecast-text">
+                                                                {{ forecast.Forecast|safe }}
+                                                </div>
+                                                {% endif %}
+                                </div>
+                                {% endfor %}
+                </div>
+
+                <!-- Download Button -->
+                <div style="text-align: center; margin-top: 30px;">
+                                <button onclick="downloadForecastCSV()" class="submit-btn">
+                                                Download Forecast CSV
+                                </button>
+                </div>
+                {% endif %}
+
             </div>
-            <div class="recommendation-item">
-                <strong>Cumulative GDD (base 5C)</strong>
-                {{ gdd_total|floatformat:1 }}
-            </div>
-            <div class="recommendation-item">
-                <strong>Estimated Crop Stage</strong>
-                {{ gdd_stage }}
-            </div>
-            <div class="recommendation-item">
-                <strong>Selected Crop</strong>
-                {{ crop_label }}
-            </div>
-            <div class="recommendation-item">
-                <strong>Selected Soil</strong>
-                {{ soil_label }} (factor {{ soil_factor|floatformat:2 }})
-            </div>
-        </div>
-        <div style="margin-top:10px; color:#5b6f70; font-size:0.9rem;">
-            <h4 style="margin:0 0 10px 0; color:#095256; font-size:1rem;">How the irrigation estimate is calculated</h4>
-            <p style="margin:0 0 10px 0;">
-                The daily water need is calculated from forecast temperature, sunlight, humidity, and wind. The estimate accounts for your crop's growth stage — young crops and crops nearing harvest need less water than crops at peak growth. Your soil type adjusts the final number: sandy soils need more frequent watering, clay soils hold moisture longer and need less.
-            </p>
-            <p style="margin:0 0 10px 0;">
-                Rain is subtracted from the daily need. If forecast rain covers the day's water demand, no irrigation is suggested for that day. There is no carry-over credit for extra rain beyond that day's need.
-            </p>
-            <p style="margin:0 0 10px 0;">
-                The grey band in the chart is built from 5 years of historical weather data for your area, run through the same calculation, so you can see how this season compares to past years at the same time of year.
-            </p>
-            <p style="margin:0;">
-                Use this as a planning guide alongside your own observations of field conditions.
-            </p>
-        </div>
-        {% if show_extended_horizon_caveat %}
-        <p style="margin-top:12px; color:#5b6f70; font-size:0.9rem;">
-            <strong>Note:</strong> Forecasts beyond 7 days are less reliable. Weather models lose accuracy the further out they go. Treat week two and beyond as a general planning heads-up, not a precise watering schedule. When in doubt, rely on the grey band in the chart and the historical range shown under "Suggested irrigation" rather than the single millimetre figure.
-        </p>
-        {% endif %}
-    </div>
 
-    {% if rec_chart_url %}
-    <div class="card">
-        <h3 style="margin-bottom:10px; color:#095256;">Irrigation Confidence Band</h3>
-        <p style="margin-bottom:14px; color:#5a6f70; font-size:0.92rem;">
-            {% if historical_confidence %}
-            The <strong>grey band</strong> is the 10th–90th percentile range of <em>cumulative irrigation need</em> from historical weather analogues (same model, past years + nearby points). The <strong>dashed line</strong> is the historical <strong>median (P50)</strong>. The <strong>teal line</strong> is this forecast’s cumulative need through the same horizon.
-            {% else %}
-            Grey historical band is unavailable (e.g. archive data did not yield scenarios); the teal line shows this run’s cumulative irrigation need only.
-            {% endif %}
-        </p>
-        <img src="data:image/png;base64,{{ rec_chart_url|safe }}" alt="Irrigation recommendation confidence chart" style="width:100%; border-radius:8px; border:1px solid #d6e4e1;">
-        {% if historical_confidence %}
-        <p style="margin-top:10px; color:#5b6f70; font-size:0.86rem;">
-            End-of-horizon cumulative irrigation from historical analogues (P10–P90 / median):
-            {{ historical_confidence.total_p10|floatformat:1 }}–{{ historical_confidence.total_p90|floatformat:1 }} mm
-            (median {{ historical_confidence.total_p50|floatformat:1 }} mm).
-        </p>
-        <div style="margin-top:14px; padding:14px 16px; background:#f7faf9; border:1px solid #dbe7e4; border-radius:10px; color:#3d4f52;">
-            <h4 style="margin:0 0 10px 0; color:#095256; font-size:1rem;">Reading this chart</h4>
-            <ul style="margin:0; padding-left:1.15rem; font-size:0.88rem; line-height:1.55;">
-                <li><strong>Grey band</strong> — Shows how much irrigation similar seasons in past years needed by each day. A <strong>narrow band</strong> means past years were consistent — you can plan with more confidence. A <strong>wide band</strong> means some years were much drier or wetter than others — treat the outlook as a rough guide, not a firm number.</li>
-                <li><strong>Dashed line</strong> — What a typical past season looked like. If the teal line is tracking <strong>above</strong> it, this season is shaping up <strong>drier than normal</strong>. <strong>Below</strong> it, <strong>wetter than normal</strong>.</li>
-                <li><strong>Teal line</strong> — Your current forecast. Running near the <strong>top of the grey band</strong> means prepare for <strong>more irrigation than usual</strong>. Near the <strong>bottom</strong>, you may need <strong>less than a typical year</strong>.</li>
-                <li><strong>Beyond day 7</strong> — The forecast becomes less reliable. The wider the band, the more you should hold off on firm decisions until you are closer to the date.</li>
-            </ul>
-        </div>
-
-        {% endif %}
-    </div>
-    {% elif df_forecast %}
-    <div class="card" style="border:1px solid #e0e8e6;">
-        <h3 style="margin-bottom:10px; color:#095256;">Irrigation chart</h3>
-        <p style="color:#5a6f70; font-size:0.95rem;">
-            The irrigation figure could not be generated (for example, no cumulative irrigation points were computed from the forecast, or plotting failed on the server). The summary numbers above still reflect the model run when present.
-        </p>
-    </div>
-    {% endif %}
-
-    {% if weekly_forecast %}
-    <div class="card" style="margin-bottom: 20px;">
-        <h3 style="margin-bottom:10px; color:#095256;">4-Week Forecast Summary</h3>
-        <p style="margin-bottom:14px; color:#5a6f70; font-size:0.92rem;">
-            30-day outlook grouped into weekly planning windows.
-        </p>
-        {% for week in weekly_forecast %}
-        <div class="forecast-card">
-            <div class="forecast-period">{{ week.week_label }}</div>
-            <div class="forecast-date">
-                {{ week.start_date|date:"M d, Y" }} - {{ week.end_date|date:"M d, Y" }} ({{ week.days_count }} day{{ week.days_count|pluralize }})
-            </div>
-            {% if week.week_index >= 1 %}
-            <p style="margin: 0 0 12px 0; font-size: 0.85rem; color: #8a5a00; background: #fff8e6; padding: 8px 10px; border-radius: 6px; border: 1px solid #f0e0b8;">
-                <strong>Week 2+:</strong> these windows sit in the higher-uncertainty tail of the outlook; treat averages and precipitation as indicative, not operational precision.
-            </p>
-            {% endif %}
-            <div class="forecast-stats">
-                <div class="stat-box">
-                    <div class="stat-label">Avg High</div>
-                    <div class="stat-value">
-                        {% if week.avg_high is not None %}{{ week.avg_high|floatformat:1 }}°C{% else %}--{% endif %}
-                    </div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Avg Low</div>
-                    <div class="stat-value">
-                        {% if week.avg_low is not None %}{{ week.avg_low|floatformat:1 }}°C{% else %}--{% endif %}
-                    </div>
-                </div>
-                <div class="stat-box {% if week.total_precip_mm >= 25 %}precip-high{% elif week.total_precip_mm >= 10 %}precip-medium{% else %}precip-low{% endif %}">
-                    <div class="stat-label">Total Precipitation</div>
-                    <div class="stat-value">{{ week.total_precip_mm|floatformat:1 }} mm</div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    <!-- Forecast Cards -->
-    <div>
-        {% for forecast in df_forecast %}
-        <div class="forecast-card">
-            <div class="forecast-period">{{ forecast.Period }}</div>
-            <div class="forecast-date">{{ forecast.Date|date:"l, F d, Y" }}</div>
-            
-            <div class="forecast-stats">
-                <div class="stat-box">
-                    <div class="stat-label">High</div>
-                    <div class="stat-value">
-                        {% if forecast.Temp_High is not None %}
-                            {{ forecast.Temp_High|floatformat:0 }}°C
-                        {% else %}
-                            <span style="font-size: 0.85rem; color: #999;">Not Available</span>
-                        {% endif %}
-                    </div>
-                </div>
-                
-                <div class="stat-box">
-                    <div class="stat-label">Low</div>
-                    <div class="stat-value">
-                        {% if forecast.Temp_Low is not None %}
-                            {{ forecast.Temp_Low|floatformat:0 }}°C
-                        {% else %}
-                            <span style="font-size: 0.85rem; color: #999;">Not Available</span>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="stat-box">
-                    <div class="stat-label">Rel. humidity (MSC or Open-Meteo)</div>
-                    <div class="stat-value">
-                        {% if forecast.RH_percent is not None %}
-                            {{ forecast.RH_percent|floatformat:0 }}%
-                        {% else %}
-                            <span style="font-size: 0.85rem; color: #999;">Not available</span>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="stat-box">
-                    <div class="stat-label">Solar (Rₛ for PM)</div>
-                    <div class="stat-value">
-                        {% if forecast.Rs_mjm2 is not None %}
-                            {{ forecast.Rs_mjm2|floatformat:1 }} MJ/m²
-                        {% else %}
-                            <span style="font-size: 0.85rem; color: #999;">Temp. estimate</span>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="stat-box">
-                    <div class="stat-label">Wind (u₂ for PM)</div>
-                    <div class="stat-value" style="font-size:1.05rem;">
-                        {% if forecast.u2_ms is not None %}
-                            {{ forecast.u2_ms|floatformat:2 }} m/s
-                            {% if forecast.Wind_kmh_max is not None %}
-                                <span style="display:block;font-size:0.78rem;color:#666;font-weight:500;">(~{{ forecast.Wind_kmh_max|floatformat:0 }} km/h max)</span>
-                            {% endif %}
-                        {% else %}
-                            <span style="font-size: 0.85rem; color: #999;">Not available</span>
-                        {% endif %}
-                    </div>
-                </div>
-                
-                <div class="stat-box {% if forecast.Precipitation_mm >= 10 %}precip-high{% elif forecast.Precipitation_mm >= 3 %}precip-medium{% else %}precip-low{% endif %}">
-                    <div class="stat-label">Precipitation</div>
-                    <div class="stat-value">{{ forecast.Precipitation_mm|floatformat:1 }} mm</div>
-                </div>
-
-                <div class="stat-box">
-                    <div class="stat-label">Reference ET₀ (FAO-PM)</div>
-                    <div class="stat-value" style="font-size:1.05rem;">
-                        {% if forecast.et0_mm is not None %}
-                            {{ forecast.et0_mm|floatformat:2 }} mm/day
-                        {% else %}
-                            <span style="font-size: 0.85rem; color: #999;">Not available</span>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="stat-box">
-                    <div class="stat-label">ET flux (latent heat)</div>
-                    <div class="stat-value" style="font-size:1.05rem;">
-                        {% if forecast.et_flux_wm2 is not None %}
-                            {{ forecast.et_flux_wm2|floatformat:1 }} W/m²
-                        {% else %}
-                            <span style="font-size: 0.85rem; color: #999;">Not available</span>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="stat-box">
-                    <div class="stat-label">Crop-stage ET (estimate)</div>
-                    <div class="stat-value" style="font-size:1.05rem;">
-                        {% if forecast.adjusted_et_mm is not None %}
-                            {{ forecast.adjusted_et_mm|floatformat:2 }} mm/day
-                        {% else %}
-                            <span style="font-size: 0.85rem; color: #999;">Not available</span>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            
-            {% if forecast.Forecast %}
-            <div class="forecast-text">
-                {{ forecast.Forecast|safe }}
-            </div>
-            {% endif %}
-        </div>
-        {% endfor %}
-    </div>
-
-    <!-- Download Button -->
-    <div style="text-align: center; margin-top: 30px;">
-        <button onclick="downloadForecastCSV()" class="submit-btn">
-            Download Forecast CSV
-        </button>
-    </div>
-    {% endif %}
-
-    <div class="recommendation-box">
+            <section class="recommendation-box bg-surface-container-low rounded-xl p-6 border border-surface-container-highest">
         <h2 style="color: #095256; margin-bottom: 16px;">ET Method Reference</h2>
         <p style="color: #333; line-height: 1.8; margin-bottom: 12px;">
             Allen, R.G., Pereira, L.S., Raes, D., Smith, M. (1998). Crop evapotranspiration:
@@ -869,8 +988,10 @@
             For full data sources, credits and references see the
             <a href="{% url 'et:method_info' %}#references-data-sources">Method Guide</a>.
         </p>
-    </div>
+            </section>
 
+        </div>
+    </main>
 </div>
 {% endblock %}
 

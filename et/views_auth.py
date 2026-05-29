@@ -96,7 +96,6 @@ def login_view(request):
                     refresh_token=getattr(session, "refresh_token", None),
                 )
                 upsert_profile(user_id=str(user.id), email=email)
-                messages.success(request, "Signed in successfully.")
                 return redirect(_safe_next(request))
         except Exception as exc:
             logger.warning("Supabase sign_in failed: %s", exc)

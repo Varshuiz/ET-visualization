@@ -2,56 +2,102 @@
 
 {% block title %}ET calculation | AqualET{% endblock %}
 
+{% block body_class %}et-results-page{% endblock %}
+
+{% block head_assets %}
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                "primary-container": "#2d6a6a",
+                "on-primary-container": "#abe8e7",
+                "primary": "#0c5252",
+                "background": "#f8faf9",
+            },
+            fontFamily: { sans: ["Inter", "sans-serif"] },
+        },
+    },
+};
+</script>
+<style>
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    body.et-results-page { font-family: 'Inter', sans-serif; background: #f8faf9; color: #191c1c; }
+    body.et-results-page .navbar { display: none !important; }
+    body.et-results-page > .container {
+        max-width: none;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+</style>
+{% endblock %}
+
 {% block extra_css %}
 {% include 'et/partials/et_comparison_styles.html' %}
 {% endblock %}
 
 {% block content %}
-<div class="container">
-    <p style="margin-bottom: 12px;">
-        <a href="{% url 'et:dashboard' %}" style="color: #087F8C; font-weight: 600;">← Back to Dashboard</a>
-    </p>
+<div class="flex min-h-screen">
+    {% include 'et/partials/stitch_sidebar.html' with sidebar_active='history' %}
 
-    <div class="page-header">
-        <h1>ET calculation details</h1>
-        {% if acis_location %}
-        <p class="subtitle">{{ acis_location.description }}</p>
-        <p style="color: #fff; font-size: 0.9rem; opacity: 0.9;">
-            Data period: {{ acis_location.start_date }} to {{ acis_location.end_date }}
-        </p>
-        {% endif %}
-        <p style="color: #fff; font-size: 0.9rem; opacity: 0.85;">Saved {{ run.created_at|slice:":16" }}</p>
-    </div>
+    <main class="ml-[260px] flex-1 flex flex-col min-h-screen">
+        <header class="w-full min-h-[160px] flex flex-col justify-end relative overflow-hidden shadow-sm p-8" style="background-color: #2D6A6A;">
+            <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
+            <div class="relative z-10 w-full">
+                <a href="{% url 'et:dashboard' %}" class="inline-flex items-center gap-1 text-[#c2e4da] hover:text-white text-sm font-semibold mb-4 no-underline">
+                    <span class="material-symbols-outlined text-sm">arrow_back</span>
+                    Back to Dashboard
+                </a>
+                <h2 class="text-3xl font-bold text-white mb-2">ET calculation details</h2>
+                {% if acis_location %}
+                <p class="text-[#abe8e7]/90 text-base">{{ acis_location.description }}</p>
+                <p class="text-[#abe8e7]/75 text-sm mt-1">
+                    Data period: {{ acis_location.start_date }} to {{ acis_location.end_date }}
+                </p>
+                {% endif %}
+                <p class="text-[#abe8e7]/70 text-sm mt-2">Saved {{ run.created_at|slice:":16" }}</p>
+            </div>
+        </header>
 
-    <div class="card" style="margin-bottom: 24px;">
-        <h2 style="color: #095256; margin-bottom: 12px;">Summary</h2>
-        <table style="width:100%; max-width: 640px;">
-            <tr>
-                <td style="padding:6px 8px; color:#5a6f70; width:140px;">Location</td>
-                <td style="padding:6px 8px;">{{ run.city|default:"—" }}{% if run.city and run.province %}, {% endif %}{{ run.province|default:"" }}</td>
-            </tr>
-            <tr>
-                <td style="padding:6px 8px; color:#5a6f70;">Methods</td>
-                <td style="padding:6px 8px;">{{ run.et_method|default:"—" }}</td>
-            </tr>
-            <tr>
-                <td style="padding:6px 8px; color:#5a6f70;">Date range</td>
-                <td style="padding:6px 8px;">{{ run.date_range_start|default:"—" }} – {{ run.date_range_end|default:"—" }}</td>
-            </tr>
-            <tr>
-                <td style="padding:6px 8px; color:#5a6f70;">Units</td>
-                <td style="padding:6px 8px;">{{ unit_info.daily_label }}</td>
-            </tr>
-        </table>
-    </div>
+        <div class="p-8 max-w-[1600px] w-full flex-1">
+            <div class="bg-white p-6 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-[#bfc8c8]/30 mb-8">
+                <h2 class="text-lg font-semibold text-[#191c1c] mb-4">Summary</h2>
+                <table class="w-full max-w-xl text-sm">
+                    <tr>
+                        <td class="py-2 pr-4 text-[#707978] w-36">Location</td>
+                        <td class="py-2 text-[#191c1c]">{{ run.city|default:"—" }}{% if run.city and run.province %}, {% endif %}{{ run.province|default:"" }}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 pr-4 text-[#707978]">Methods</td>
+                        <td class="py-2 text-[#191c1c]">{{ run.et_method|default:"—" }}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 pr-4 text-[#707978]">Date range</td>
+                        <td class="py-2 text-[#191c1c]">{{ run.date_range_start|default:"—" }} – {{ run.date_range_end|default:"—" }}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 pr-4 text-[#707978]">Units</td>
+                        <td class="py-2 text-[#191c1c]">{{ unit_info.daily_label }}</td>
+                    </tr>
+                </table>
+            </div>
 
-    {% if plot_warning %}
-    <div class="message" style="margin-bottom: 20px; background: #eef8f5; color: #24544c; border: 1px solid #cfe9e2; border-radius: 10px; padding: 14px 16px;">
-        {{ plot_warning }}
-    </div>
-    {% endif %}
+            {% if plot_warning %}
+            <div class="message mb-4 px-4 py-3 rounded-lg bg-[#eef8f5] text-[#24544c] border border-[#cfe9e2]">
+                {{ plot_warning }}
+            </div>
+            {% endif %}
 
-    {% include 'et/partials/et_comparison_results.html' %}
+            {% include 'et/partials/et_comparison_results.html' %}
+        </div>
+    </main>
 </div>
 {% endblock %}
 

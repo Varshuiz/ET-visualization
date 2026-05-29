@@ -2,259 +2,324 @@
 
 {% block title %}ET Method Guide | AqualET{% endblock %}
 
+{% block body_class %}method-info-page{% endblock %}
+
+{% block head_assets %}
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                "primary-container": "#2d6a6a",
+                "on-primary-container": "#abe8e7",
+                "on-surface": "#191c1c",
+                "on-surface-variant": "#3f4848",
+                "outline": "#707978",
+                "outline-variant": "#bfc8c8",
+                "surface-container-low": "#f2f4f3",
+                "surface-container-lowest": "#ffffff",
+                "primary": "#0c5252",
+                "background": "#f8faf9",
+            },
+            fontFamily: { sans: ["Inter", "sans-serif"] },
+        },
+    },
+};
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    body.method-info-page { font-family: 'Inter', sans-serif; background: #f8faf9; color: #191c1c; }
+    body.method-info-page .navbar { display: none !important; }
+    body.method-info-page > .container {
+        max-width: none;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+    body.method-info-page > .container > .info-box,
+    body.method-info-page > .container > .error-message { display: none; }
+    body.method-info-page a { color: #0c5252; }
+    body.method-info-page a:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header fade-in">
-    <h1>ET Method Guide</h1>
-    <p>Choose the right evapotranspiration method based on your available weather data</p>
-</div>
+<div class="flex min-h-screen bg-background">
+    {% include 'et/partials/stitch_sidebar.html' with sidebar_active='et_analysis' %}
 
-<div class="card fade-in">
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 30px;">
+    <main class="ml-[260px] flex-1 flex flex-col min-h-screen">
+        <header class="w-full min-h-[180px] flex flex-col justify-end relative overflow-hidden shadow-sm p-8" style="background-color: #2D6A6A;">
+            <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
+            <div class="relative z-10 max-w-4xl">
+                <span class="text-xs font-bold tracking-widest uppercase text-[#c2e4da]/80">ET Analysis</span>
+                <h1 class="text-3xl md:text-4xl font-bold text-white mt-2 mb-2">ET Method Guide</h1>
+                <p class="text-[#abe8e7]/90 text-base">Choose the right evapotranspiration method based on your available weather data</p>
+            </div>
+        </header>
 
-        <!-- Priestley-Taylor -->
-        <div style="border: 2px solid var(--asparagus); border-radius: 15px; padding: 25px;">
-            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-                <div style="width: 50px; height: 50px; background: var(--asparagus); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
-                    <i class="fas fa-leaf"></i>
+        <div class="p-8 max-w-6xl w-full mx-auto flex-1 space-y-6">
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <!-- Priestley-Taylor -->
+                <div class="bg-surface-container-lowest rounded-xl border-2 border-[#77a34f]/40 p-6 shadow-[0px_4px_12px_rgba(0,0,0,0.05)]">
+                    <div class="flex items-center gap-4 mb-5">
+                        <div class="w-12 h-12 rounded-full bg-[#77a34f] flex items-center justify-center text-white shrink-0">
+                            <span class="material-symbols-outlined">wb_sunny</span>
+                        </div>
+                        <h2 class="text-xl font-semibold text-on-surface m-0">Priestley-Taylor</h2>
+                    </div>
+                    <p class="text-sm text-on-surface-variant leading-relaxed mb-4">
+                        A simplified energy balance method based on the assumption that under humid conditions,
+                        ET can be estimated using an empirical coefficient (α = 1.26) applied to equilibrium ET.
+                    </p>
+                    <h4 class="text-sm font-bold text-[#77a34f] uppercase tracking-wider mb-2">When to Use</h4>
+                    <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 mb-4 leading-relaxed">
+                        <li>Simple data requirements</li>
+                        <li>Good accuracy in humid regions</li>
+                        <li>Computationally efficient</li>
+                        <li>Widely used in research</li>
+                    </ul>
+                    <h4 class="text-sm font-bold text-[#77a34f] uppercase tracking-wider mb-2">Watch-outs</h4>
+                    <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 mb-4 leading-relaxed">
+                        <li>Less accurate in arid regions</li>
+                        <li>Does not account for wind effects</li>
+                        <li>Assumes minimal advection</li>
+                    </ul>
+                    <h4 class="text-sm font-bold text-[#77a34f] uppercase tracking-wider mb-2">Required Data</h4>
+                    <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 mb-4 leading-relaxed">
+                        <li>Average air temperature (°C)</li>
+                        <li>Solar radiation (MJ/m²/day)</li>
+                    </ul>
+                    <div class="mt-4 p-3 bg-[#f1f8e9] rounded-lg">
+                        <code class="text-[#77a34f] text-xs font-mono">ET₀ = α × (Δ/(Δ+γ)) × (Rn/λ), with daily G ≈ 0</code>
+                    </div>
                 </div>
-                <h2 style="color: var(--midnight-green); margin: 0;">Priestley-Taylor</h2>
-            </div>
-            <p style="margin-bottom: 15px; line-height: 1.6; color: var(--midnight-green);">
-                A simplified energy balance method based on the assumption that under humid conditions,
-                ET can be estimated using an empirical coefficient (α = 1.26) applied to equilibrium ET.
-            </p>
-            <h4 style="color: var(--asparagus); margin-bottom: 8px;">When to Use</h4>
-            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
-                <li>Simple data requirements</li>
-                <li>Good accuracy in humid regions</li>
-                <li>Computationally efficient</li>
-                <li>Widely used in research</li>
-            </ul>
-            <h4 style="color: var(--asparagus); margin-bottom: 8px;">Watch-outs</h4>
-            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
-                <li>Less accurate in arid regions</li>
-                <li>Does not account for wind effects</li>
-                <li>Assumes minimal advection</li>
-            </ul>
-            <h4 style="color: var(--asparagus); margin-bottom: 8px;">Required Data</h4>
-            <ul style="padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
-                <li>Average air temperature (°C)</li>
-                <li>Solar radiation (MJ/m²/day)</li>
-            </ul>
-            <div style="margin-top: 15px; padding: 12px; background: #f1f8e9; border-radius: 8px;">
-                <code style="color: var(--asparagus); font-size: 0.9rem;">ET₀ = α × (Δ/(Δ+γ)) × (Rn/λ), with daily G ≈ 0</code>
-            </div>
-        </div>
 
-        <!-- Penman-Monteith -->
-        <div style="border: 2px solid var(--teal); border-radius: 15px; padding: 25px;">
-            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-                <div style="width: 50px; height: 50px; background: var(--teal); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
-                    <i class="fas fa-wind"></i>
+                <!-- Penman-Monteith -->
+                <div class="bg-surface-container-lowest rounded-xl border-2 border-primary/40 p-6 shadow-[0px_4px_12px_rgba(0,0,0,0.05)]">
+                    <div class="flex items-center gap-4 mb-5">
+                        <div class="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shrink-0">
+                            <span class="material-symbols-outlined">air</span>
+                        </div>
+                        <h2 class="text-xl font-semibold text-on-surface m-0">Penman-Monteith</h2>
+                    </div>
+                    <p class="text-sm text-on-surface-variant leading-relaxed mb-4">
+                        The FAO-56 international standard. Combines energy balance and aerodynamic terms
+                        to provide the most accurate ET₀ estimates for all climatic conditions.
+                    </p>
+                    <h4 class="text-sm font-bold text-primary uppercase tracking-wider mb-2">When to Use</h4>
+                    <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 mb-4 leading-relaxed">
+                        <li>Highest accuracy — international standard</li>
+                        <li>Valid across all climate types</li>
+                        <li>Accounts for wind and humidity</li>
+                        <li>FAO-56 endorsed method</li>
+                    </ul>
+                    <h4 class="text-sm font-bold text-primary uppercase tracking-wider mb-2">Watch-outs</h4>
+                    <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 mb-4 leading-relaxed">
+                        <li>Requires the most input variables</li>
+                        <li>Wind speed measurement needed</li>
+                        <li>Sensitive to data quality</li>
+                    </ul>
+                    <h4 class="text-sm font-bold text-primary uppercase tracking-wider mb-2">Required Data</h4>
+                    <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 mb-4 leading-relaxed">
+                        <li>Tmax, Tmin (°C)</li>
+                        <li>Relative humidity (%)</li>
+                        <li>Wind speed at 2m (m/s)</li>
+                        <li>Solar radiation (MJ/m²/day)</li>
+                    </ul>
+                    <div class="mt-4 p-3 bg-[#e6f7f7] rounded-lg overflow-x-auto">
+                        <code class="text-primary text-xs font-mono whitespace-nowrap">ET₀ = [0.408Δ(Rn-G) + γ(900/(T+273))u₂(es-ea)] / [Δ + γ(1+0.34u₂)]</code>
+                    </div>
                 </div>
-                <h2 style="color: var(--midnight-green); margin: 0;">Penman-Monteith</h2>
-            </div>
-            <p style="margin-bottom: 15px; line-height: 1.6; color: var(--midnight-green);">
-                The FAO-56 international standard. Combines energy balance and aerodynamic terms
-                to provide the most accurate ET₀ estimates for all climatic conditions.
-            </p>
-            <h4 style="color: var(--teal); margin-bottom: 8px;">When to Use</h4>
-            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
-                <li>Highest accuracy — international standard</li>
-                <li>Valid across all climate types</li>
-                <li>Accounts for wind and humidity</li>
-                <li>FAO-56 endorsed method</li>
-            </ul>
-            <h4 style="color: var(--teal); margin-bottom: 8px;">Watch-outs</h4>
-            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
-                <li>Requires the most input variables</li>
-                <li>Wind speed measurement needed</li>
-                <li>Sensitive to data quality</li>
-            </ul>
-            <h4 style="color: var(--teal); margin-bottom: 8px;">Required Data</h4>
-            <ul style="padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
-                <li>Tmax, Tmin (°C)</li>
-                <li>Relative humidity (%)</li>
-                <li>Wind speed at 2m (m/s)</li>
-                <li>Solar radiation (MJ/m²/day)</li>
-            </ul>
-            <div style="margin-top: 15px; padding: 12px; background: #e6f7f7; border-radius: 8px;">
-                <code style="color: var(--teal); font-size: 0.8rem;">ET₀ = [0.408Δ(Rn-G) + γ(900/(T+273))u₂(es-ea)] / [Δ + γ(1+0.34u₂)]</code>
-            </div>
-        </div>
 
-        <!-- Hargreaves-Samani -->
-        <div style="border: 2px solid #5AAA95; border-radius: 15px; padding: 25px;">
-            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-                <div style="width: 50px; height: 50px; background: #5AAA95; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
-                    <i class="fas fa-thermometer-half"></i>
+                <!-- Hargreaves-Samani -->
+                <div class="bg-surface-container-lowest rounded-xl border-2 border-[#5AAA95]/40 p-6 shadow-[0px_4px_12px_rgba(0,0,0,0.05)]">
+                    <div class="flex items-center gap-4 mb-5">
+                        <div class="w-12 h-12 rounded-full bg-[#5AAA95] flex items-center justify-center text-white shrink-0">
+                            <span class="material-symbols-outlined">thermostat</span>
+                        </div>
+                        <h2 class="text-xl font-semibold text-on-surface m-0">Hargreaves-Samani</h2>
+                    </div>
+                    <p class="text-sm text-on-surface-variant leading-relaxed mb-4">
+                        The simplest ET estimation approach requiring only Tmax and Tmin.
+                        Extraterrestrial radiation Ra is calculated internally from latitude and day of year.
+                    </p>
+                    <h4 class="text-sm font-bold text-[#5AAA95] uppercase tracking-wider mb-2">When to Use</h4>
+                    <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 mb-4 leading-relaxed">
+                        <li>Only temperature data needed</li>
+                        <li>Ideal for remote or historical data</li>
+                        <li>Globally validated</li>
+                        <li>Reliable long-term trend analysis</li>
+                    </ul>
+                    <h4 class="text-sm font-bold text-[#5AAA95] uppercase tracking-wider mb-2">Watch-outs</h4>
+                    <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 mb-4 leading-relaxed">
+                        <li>Lower accuracy vs. PM in arid areas</li>
+                        <li>Ignores humidity and wind effects</li>
+                        <li>May overestimate in coastal regions</li>
+                    </ul>
+                    <h4 class="text-sm font-bold text-[#5AAA95] uppercase tracking-wider mb-2">Required Data</h4>
+                    <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 mb-4 leading-relaxed">
+                        <li>Maximum temperature (°C)</li>
+                        <li>Minimum temperature (°C)</li>
+                    </ul>
+                    <div class="mt-4 p-3 bg-[#e0f2f1] rounded-lg">
+                        <code class="text-[#5AAA95] text-xs font-mono">ET₀ = 0.0023 × (Ra/λ) × (Tmax-Tmin)^0.5 × (Tavg+17.8)</code>
+                    </div>
                 </div>
-                <h2 style="color: var(--midnight-green); margin: 0;">Hargreaves-Samani</h2>
-            </div>
-            <p style="margin-bottom: 15px; line-height: 1.6; color: var(--midnight-green);">
-                The simplest ET estimation approach requiring only Tmax and Tmin.
-                Extraterrestrial radiation Ra is calculated internally from latitude and day of year.
-            </p>
-            <h4 style="color: #5AAA95; margin-bottom: 8px;">When to Use</h4>
-            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
-                <li>Only temperature data needed</li>
-                <li>Ideal for remote or historical data</li>
-                <li>Globally validated</li>
-                <li>Reliable long-term trend analysis</li>
-            </ul>
-            <h4 style="color: #5AAA95; margin-bottom: 8px;">Watch-outs</h4>
-            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
-                <li>Lower accuracy vs. PM in arid areas</li>
-                <li>Ignores humidity and wind effects</li>
-                <li>May overestimate in coastal regions</li>
-            </ul>
-            <h4 style="color: #5AAA95; margin-bottom: 8px;">Required Data</h4>
-            <ul style="padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
-                <li>Maximum temperature (°C)</li>
-                <li>Minimum temperature (°C)</li>
-            </ul>
-            <div style="margin-top: 15px; padding: 12px; background: #e0f2f1; border-radius: 8px;">
-                <code style="color: #5AAA95; font-size: 0.9rem;">ET₀ = 0.0023 × (Ra/λ) × (Tmax-Tmin)^0.5 × (Tavg+17.8)</code>
-            </div>
-        </div>
 
-        <!-- Maulé -->
-        <div style="border: 2px solid #BB9F06; border-radius: 15px; padding: 25px;">
-            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-                <div style="width: 50px; height: 50px; background: #BB9F06; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
-                    <i class="fas fa-seedling"></i>
+                <!-- Maulé -->
+                <div class="bg-surface-container-lowest rounded-xl border-2 border-[#BB9F06]/40 p-6 shadow-[0px_4px_12px_rgba(0,0,0,0.05)]">
+                    <div class="flex items-center gap-4 mb-5">
+                        <div class="w-12 h-12 rounded-full bg-[#BB9F06] flex items-center justify-center text-white shrink-0">
+                            <span class="material-symbols-outlined">agriculture</span>
+                        </div>
+                        <h2 class="text-xl font-semibold text-on-surface m-0">Maulé</h2>
+                    </div>
+                    <p class="text-sm text-on-surface-variant leading-relaxed mb-4">
+                        A regionally calibrated method designed for prairie and semi-arid conditions.
+                        Uses an empirical coefficient tuned for the Canadian Prairies and similar climates.
+                    </p>
+                    <h4 class="text-sm font-bold text-[#BB9F06] uppercase tracking-wider mb-2">When to Use</h4>
+                    <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 mb-4 leading-relaxed">
+                        <li>Calibrated for Prairie conditions</li>
+                        <li>Minimal data requirements</li>
+                        <li>Optional humidity correction</li>
+                        <li>Good performance in semi-arid climates</li>
+                    </ul>
+                    <h4 class="text-sm font-bold text-[#BB9F06] uppercase tracking-wider mb-2">Watch-outs</h4>
+                    <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 mb-4 leading-relaxed">
+                        <li>Region-specific — less tested globally</li>
+                        <li>Less accurate outside Prairie climates</li>
+                        <li>Empirical coefficient may need recalibration</li>
+                    </ul>
+                    <h4 class="text-sm font-bold text-[#BB9F06] uppercase tracking-wider mb-2">Required Data</h4>
+                    <ul class="text-sm text-on-surface-variant space-y-1 list-disc pl-5 mb-4 leading-relaxed">
+                        <li>Tmax, Tmin (°C)</li>
+                        <li>Solar radiation (MJ/m²/day)</li>
+                        <li><em>Optional:</em> Relative humidity (%)</li>
+                    </ul>
+                    <div class="mt-4 p-3 bg-[#fff8e1] rounded-lg">
+                        <code class="text-[#BB9F06] text-xs font-mono">ET₀ = k × (Tavg+a) × Rs × fRH × fΔT</code>
+                    </div>
                 </div>
-                <h2 style="color: var(--midnight-green); margin: 0;">Maulé</h2>
+
             </div>
-            <p style="margin-bottom: 15px; line-height: 1.6; color: var(--midnight-green);">
-                A regionally calibrated method designed for prairie and semi-arid conditions.
-                Uses an empirical coefficient tuned for the Canadian Prairies and similar climates.
-            </p>
-            <h4 style="color: #BB9F06; margin-bottom: 8px;">When to Use</h4>
-            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
-                <li>Calibrated for Prairie conditions</li>
-                <li>Minimal data requirements</li>
-                <li>Optional humidity correction</li>
-                <li>Good performance in semi-arid climates</li>
-            </ul>
-            <h4 style="color: #BB9F06; margin-bottom: 8px;">Watch-outs</h4>
-            <ul style="margin-bottom: 15px; padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
-                <li>Region-specific — less tested globally</li>
-                <li>Less accurate outside Prairie climates</li>
-                <li>Empirical coefficient may need recalibration</li>
-            </ul>
-            <h4 style="color: #BB9F06; margin-bottom: 8px;">Required Data</h4>
-            <ul style="padding-left: 20px; color: var(--midnight-green); line-height: 1.6;">
-                <li>Tmax, Tmin (°C)</li>
-                <li>Solar radiation (MJ/m²/day)</li>
-                <li><em>Optional:</em> Relative humidity (%)</li>
-            </ul>
-            <div style="margin-top: 15px; padding: 12px; background: #fff8e1; border-radius: 8px;">
-                <code style="color: #BB9F06; font-size: 0.9rem;">ET₀ = k × (Tavg+a) × Rs × fRH × fΔT</code>
+
+            <!-- Comparison Table -->
+            <section class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-6 md:p-8">
+                <h2 class="text-xl font-semibold text-primary mb-5 flex items-center gap-2">
+                    <span class="material-symbols-outlined">table_chart</span>
+                    Method Comparison Summary
+                </h2>
+                <div class="overflow-x-auto rounded-xl border border-outline-variant/30">
+                    <table class="w-full border-collapse text-sm min-w-[640px]">
+                        <thead>
+                            <tr class="bg-primary-container text-white">
+                                <th class="p-4 text-left font-semibold">Method</th>
+                                <th class="p-4 text-center font-semibold">Temp</th>
+                                <th class="p-4 text-center font-semibold">Radiation</th>
+                                <th class="p-4 text-center font-semibold">Humidity</th>
+                                <th class="p-4 text-center font-semibold">Wind</th>
+                                <th class="p-4 text-center font-semibold">Accuracy</th>
+                                <th class="p-4 text-left font-semibold">Best For</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="bg-[#77a34f]/5 border-b border-outline-variant/20">
+                                <td class="p-3 pl-4 font-semibold text-[#77a34f]">Priestley-Taylor</td>
+                                <td class="p-3 text-center text-on-surface-variant">Yes</td>
+                                <td class="p-3 text-center text-on-surface-variant">Yes</td>
+                                <td class="p-3 text-center text-on-surface-variant">No</td>
+                                <td class="p-3 text-center text-on-surface-variant">No</td>
+                                <td class="p-3 text-center text-on-surface-variant">⭐⭐⭐</td>
+                                <td class="p-3 text-on-surface-variant">Humid regions, research</td>
+                            </tr>
+                            <tr class="bg-primary/5 border-b border-outline-variant/20">
+                                <td class="p-3 pl-4 font-semibold text-primary">Penman-Monteith</td>
+                                <td class="p-3 text-center text-on-surface-variant">Yes</td>
+                                <td class="p-3 text-center text-on-surface-variant">Yes</td>
+                                <td class="p-3 text-center text-on-surface-variant">Yes</td>
+                                <td class="p-3 text-center text-on-surface-variant">Yes</td>
+                                <td class="p-3 text-center text-on-surface-variant">⭐⭐⭐⭐⭐</td>
+                                <td class="p-3 text-on-surface-variant">All climates, standard practice</td>
+                            </tr>
+                            <tr class="bg-[#5AAA95]/5 border-b border-outline-variant/20">
+                                <td class="p-3 pl-4 font-semibold text-[#5AAA95]">Hargreaves-Samani</td>
+                                <td class="p-3 text-center text-on-surface-variant">Yes</td>
+                                <td class="p-3 text-center text-on-surface-variant">No</td>
+                                <td class="p-3 text-center text-on-surface-variant">No</td>
+                                <td class="p-3 text-center text-on-surface-variant">No</td>
+                                <td class="p-3 text-center text-on-surface-variant">⭐⭐⭐</td>
+                                <td class="p-3 text-on-surface-variant">Remote areas, historical data</td>
+                            </tr>
+                            <tr class="bg-[#BB9F06]/5">
+                                <td class="p-3 pl-4 font-semibold text-[#BB9F06]">Maulé</td>
+                                <td class="p-3 text-center text-on-surface-variant">Yes</td>
+                                <td class="p-3 text-center text-on-surface-variant">Yes</td>
+                                <td class="p-3 text-center text-on-surface-variant">Optional</td>
+                                <td class="p-3 text-center text-on-surface-variant">No</td>
+                                <td class="p-3 text-center text-on-surface-variant">⭐⭐⭐⭐</td>
+                                <td class="p-3 text-on-surface-variant">Canadian Prairies, semi-arid</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="references-data-sources" class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 border-l-4 border-l-primary p-6 md:p-8 shadow-[0px_4px_12px_rgba(0,0,0,0.05)] scroll-mt-8">
+                <h2 class="text-xl font-semibold text-primary mb-3">References &amp; Data Sources</h2>
+                <p class="text-sm text-on-surface-variant leading-relaxed mb-5">
+                    This section centralizes method references, model credits, and shared weather/climate data sources used across calculator pages.
+                </p>
+
+                <h3 class="text-base font-semibold text-primary mb-3">ET Methods</h3>
+                <ul class="text-sm text-on-surface-variant space-y-2 list-disc pl-5 leading-relaxed mb-5">
+                    <li>Allen, R.G., Pereira, L.S., Raes, D., Smith, M. (1998). Crop evapotranspiration: Guidelines for computing crop water requirements. FAO Irrigation and Drainage Paper 56. <a href="https://www.fao.org/3/x0490e/x0490e00.htm" target="_blank" rel="noopener noreferrer">https://www.fao.org/3/x0490e/x0490e00.htm</a></li>
+                    <li>Priestley, C.H.B. and Taylor, R.J. (1972). On the assessment of surface heat flux and evaporation using large-scale parameters. Monthly Weather Review, 100, 81-92. <a href="https://doi.org/10.1175/1520-0493(1972)100&lt;0081:OTAOSH&gt;2.3.CO;2" target="_blank" rel="noopener noreferrer">https://doi.org/10.1175/1520-0493(1972)100&lt;0081:OTAOSH&gt;2.3.CO;2</a></li>
+                    <li>Hargreaves, G.H. and Samani, Z.A. (1985). Reference crop evapotranspiration from temperature. Applied Engineering in Agriculture, 1(2), 96-99. <a href="https://doi.org/10.13031/2013.26773" target="_blank" rel="noopener noreferrer">https://doi.org/10.13031/2013.26773</a></li>
+                    <li>Maule, C.P., Helwig, N., Crowe, A. (2006). Calibrating the Hargreaves equation for evapotranspiration estimation in the Canadian Prairies. Canadian Water Resources Journal, 31(4), 237-250. <a href="https://doi.org/10.4296/cwrj3104237" target="_blank" rel="noopener noreferrer">https://doi.org/10.4296/cwrj3104237</a></li>
+                </ul>
+
+                <h3 class="text-base font-semibold text-primary mb-3">AquaCrop Model</h3>
+                <ul class="text-sm text-on-surface-variant space-y-2 list-disc pl-5 leading-relaxed mb-5">
+                    <li>AquaCrop model developed by Dirk Raes, Pasquale Steduto, Theodore C. Hsiao, and Elias Fereres (FAO, 2009).</li>
+                    <li>Steduto, P., Hsiao, T.C., Fereres, E., Raes, D. (2012). Crop yield response to water. FAO Irrigation and Drainage Paper 66. <a href="https://www.fao.org/3/i2800e/i2800e.pdf" target="_blank" rel="noopener noreferrer">https://www.fao.org/3/i2800e/i2800e.pdf</a></li>
+                    <li>Hsiao, T.C., Heng, L., Steduto, P., Rojas-Lara, B., Raes, D., Fereres, E. (2009). AquaCrop parameterization and testing for maize. Agronomy Journal, 101(3), 448-459. <a href="https://doi.org/10.2134/agronj2008.0218s" target="_blank" rel="noopener noreferrer">https://doi.org/10.2134/agronj2008.0218s</a></li>
+                    <li>AquaCrop Python package: <a href="https://github.com/aquacropos/aquacrop" target="_blank" rel="noopener noreferrer">https://github.com/aquacropos/aquacrop</a></li>
+                    <li>FAO AquaCrop model: <a href="https://www.fao.org/aquacrop" target="_blank" rel="noopener noreferrer">https://www.fao.org/aquacrop</a></li>
+                </ul>
+
+                <h3 class="text-base font-semibold text-primary mb-3">Weather &amp; Climate Data Sources</h3>
+                <ul class="text-sm text-on-surface-variant space-y-2 list-disc pl-5 leading-relaxed">
+                    <li>Open-Meteo archive and forecast APIs: <a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer">https://open-meteo.com</a></li>
+                    <li>Environment and Climate Change Canada (ECCC) / MSC Datamart: <a href="https://dd.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://dd.weather.gc.ca</a></li>
+                    <li>ECCC climate API endpoints: <a href="https://api.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://api.weather.gc.ca</a></li>
+                    <li>ECCC weather portal: <a href="https://weather.gc.ca" target="_blank" rel="noopener noreferrer">https://weather.gc.ca</a></li>
+                </ul>
+            </section>
+
+            <div class="flex flex-wrap justify-center gap-4 py-4">
+                <a href="{% url 'et:comparison' %}" class="inline-flex items-center gap-2 bg-primary text-white font-semibold px-6 py-3 rounded-xl shadow-md hover:bg-primary-container transition-colors no-underline">
+                    <span class="material-symbols-outlined">calculate</span>
+                    Compare All Methods
+                </a>
+                <a href="{% url 'et:help' %}" class="inline-flex items-center gap-2 bg-[#5AAA95] text-white font-semibold px-6 py-3 rounded-xl shadow-md hover:opacity-90 transition-opacity no-underline">
+                    <span class="material-symbols-outlined">help</span>
+                    Help Guide
+                </a>
             </div>
+
         </div>
-
-    </div>
-
-    <!-- Comparison Table -->
-    <div style="margin-top: 40px;">
-        <h2 style="color: var(--midnight-green); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-            Method Comparison Summary
-        </h2>
-        <div style="overflow-x: auto;">
-            <table style="width:100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px var(--shadow);">
-                <thead>
-                    <tr style="background: linear-gradient(135deg, var(--teal), var(--midnight-green)); color: white;">
-                        <th style="padding: 15px; text-align: left;">Method</th>
-                        <th style="padding: 15px; text-align: center;">Temp</th>
-                        <th style="padding: 15px; text-align: center;">Radiation</th>
-                        <th style="padding: 15px; text-align: center;">Humidity</th>
-                        <th style="padding: 15px; text-align: center;">Wind</th>
-                        <th style="padding: 15px; text-align: center;">Accuracy</th>
-                        <th style="padding: 15px; text-align: left;">Best For</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr style="background: rgba(119,163,79,0.05);">
-                        <td style="padding: 12px 15px; font-weight: 600; color: var(--asparagus);">Priestley-Taylor</td>
-                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
-                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
-                        <td style="padding: 12px 15px; text-align: center;">No</td>
-                        <td style="padding: 12px 15px; text-align: center;">No</td>
-                        <td style="padding: 12px 15px; text-align: center;">⭐⭐⭐</td>
-                        <td style="padding: 12px 15px;">Humid regions, research</td>
-                    </tr>
-                    <tr style="background: rgba(8,127,140,0.05);">
-                        <td style="padding: 12px 15px; font-weight: 600; color: var(--teal);">Penman-Monteith</td>
-                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
-                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
-                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
-                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
-                        <td style="padding: 12px 15px; text-align: center;">⭐⭐⭐⭐⭐</td>
-                        <td style="padding: 12px 15px;">All climates, standard practice</td>
-                    </tr>
-                    <tr style="background: rgba(90,170,149,0.05);">
-                        <td style="padding: 12px 15px; font-weight: 600; color: #5AAA95;">Hargreaves-Samani</td>
-                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
-                        <td style="padding: 12px 15px; text-align: center;">No</td>
-                        <td style="padding: 12px 15px; text-align: center;">No</td>
-                        <td style="padding: 12px 15px; text-align: center;">No</td>
-                        <td style="padding: 12px 15px; text-align: center;">⭐⭐⭐</td>
-                        <td style="padding: 12px 15px;">Remote areas, historical data</td>
-                    </tr>
-                    <tr style="background: rgba(187,159,6,0.05);">
-                        <td style="padding: 12px 15px; font-weight: 600; color: #BB9F06;">Maulé</td>
-                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
-                        <td style="padding: 12px 15px; text-align: center;">Yes</td>
-                        <td style="padding: 12px 15px; text-align: center;">Optional</td>
-                        <td style="padding: 12px 15px; text-align: center;">No</td>
-                        <td style="padding: 12px 15px; text-align: center;">⭐⭐⭐⭐</td>
-                        <td style="padding: 12px 15px;">Canadian Prairies, semi-arid</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div id="references-data-sources" style="margin-top: 38px; padding: 24px; background: #f8fffe; border: 1px solid #d8ece8; border-left: 4px solid var(--teal); border-radius: 12px;">
-        <h2 style="color: var(--midnight-green); margin-bottom: 14px;">References &amp; Data Sources</h2>
-        <p style="color: var(--midnight-green); margin-bottom: 14px; line-height: 1.7;">
-            This section centralizes method references, model credits, and shared weather/climate data sources used across calculator pages.
-        </p>
-
-        <h3 style="color: var(--teal); margin-bottom: 10px;">ET Methods</h3>
-        <ul style="color: var(--midnight-green); line-height: 1.8; padding-left: 20px; margin-bottom: 14px;">
-            <li>Allen, R.G., Pereira, L.S., Raes, D., Smith, M. (1998). Crop evapotranspiration: Guidelines for computing crop water requirements. FAO Irrigation and Drainage Paper 56. <a href="https://www.fao.org/3/x0490e/x0490e00.htm" target="_blank" rel="noopener noreferrer">https://www.fao.org/3/x0490e/x0490e00.htm</a></li>
-            <li>Priestley, C.H.B. and Taylor, R.J. (1972). On the assessment of surface heat flux and evaporation using large-scale parameters. Monthly Weather Review, 100, 81-92. <a href="https://doi.org/10.1175/1520-0493(1972)100&lt;0081:OTAOSH&gt;2.3.CO;2" target="_blank" rel="noopener noreferrer">https://doi.org/10.1175/1520-0493(1972)100&lt;0081:OTAOSH&gt;2.3.CO;2</a></li>
-            <li>Hargreaves, G.H. and Samani, Z.A. (1985). Reference crop evapotranspiration from temperature. Applied Engineering in Agriculture, 1(2), 96-99. <a href="https://doi.org/10.13031/2013.26773" target="_blank" rel="noopener noreferrer">https://doi.org/10.13031/2013.26773</a></li>
-            <li>Maule, C.P., Helwig, N., Crowe, A. (2006). Calibrating the Hargreaves equation for evapotranspiration estimation in the Canadian Prairies. Canadian Water Resources Journal, 31(4), 237-250. <a href="https://doi.org/10.4296/cwrj3104237" target="_blank" rel="noopener noreferrer">https://doi.org/10.4296/cwrj3104237</a></li>
-        </ul>
-
-        <h3 style="color: var(--teal); margin-bottom: 10px;">AquaCrop Model</h3>
-        <ul style="color: var(--midnight-green); line-height: 1.8; padding-left: 20px; margin-bottom: 14px;">
-            <li>AquaCrop model developed by Dirk Raes, Pasquale Steduto, Theodore C. Hsiao, and Elias Fereres (FAO, 2009).</li>
-            <li>Steduto, P., Hsiao, T.C., Fereres, E., Raes, D. (2012). Crop yield response to water. FAO Irrigation and Drainage Paper 66. <a href="https://www.fao.org/3/i2800e/i2800e.pdf" target="_blank" rel="noopener noreferrer">https://www.fao.org/3/i2800e/i2800e.pdf</a></li>
-            <li>Hsiao, T.C., Heng, L., Steduto, P., Rojas-Lara, B., Raes, D., Fereres, E. (2009). AquaCrop parameterization and testing for maize. Agronomy Journal, 101(3), 448-459. <a href="https://doi.org/10.2134/agronj2008.0218s" target="_blank" rel="noopener noreferrer">https://doi.org/10.2134/agronj2008.0218s</a></li>
-            <li>AquaCrop Python package: <a href="https://github.com/aquacropos/aquacrop" target="_blank" rel="noopener noreferrer">https://github.com/aquacropos/aquacrop</a></li>
-            <li>FAO AquaCrop model: <a href="https://www.fao.org/aquacrop" target="_blank" rel="noopener noreferrer">https://www.fao.org/aquacrop</a></li>
-        </ul>
-
-        <h3 style="color: var(--teal); margin-bottom: 10px;">Weather &amp; Climate Data Sources</h3>
-        <ul style="color: var(--midnight-green); line-height: 1.8; padding-left: 20px;">
-            <li>Open-Meteo archive and forecast APIs: <a href="https://open-meteo.com" target="_blank" rel="noopener noreferrer">https://open-meteo.com</a></li>
-            <li>Environment and Climate Change Canada (ECCC) / MSC Datamart: <a href="https://dd.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://dd.weather.gc.ca</a></li>
-            <li>ECCC climate API endpoints: <a href="https://api.weather.gc.ca" target="_blank" rel="noopener noreferrer">https://api.weather.gc.ca</a></li>
-            <li>ECCC weather portal: <a href="https://weather.gc.ca" target="_blank" rel="noopener noreferrer">https://weather.gc.ca</a></li>
-        </ul>
-    </div>
-
-    <div style="text-align: center; margin-top: 40px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
-        <a href="{% url 'et:comparison' %}" style="background: linear-gradient(135deg, var(--teal), var(--midnight-green)); color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 5px 15px rgba(8,127,140,0.3);">
-            <i class="fas fa-calculator"></i> Compare All Methods
-        </a>
-        <a href="{% url 'et:help' %}" style="background: linear-gradient(135deg, var(--zomp), var(--asparagus)); color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 5px 15px rgba(90,170,149,0.3);">
-            <i class="fas fa-question-circle"></i> Help Guide
-        </a>
-    </div>
+    </main>
 </div>
 {% endblock %}

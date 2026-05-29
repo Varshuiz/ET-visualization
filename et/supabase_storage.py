@@ -377,7 +377,7 @@ def compact_aquacrop_result_data(results: dict, extra: dict | None = None) -> di
     if results.get("water_balance_chart"):
         payload["water_balance_chart"] = results["water_balance_chart"]
     if extra:
-        payload["context"] = extra
+        payload["context"] = _json_safe(extra)
     return _json_safe(payload)
 
 

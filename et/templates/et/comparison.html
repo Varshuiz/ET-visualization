@@ -2,45 +2,129 @@
 
 {% block title %}ET Results | AqualET{% endblock %}
 
+{% block body_class %}et-results-page{% endblock %}
+
+{% block head_assets %}
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                "primary-container": "#2d6a6a",
+                "on-primary-container": "#abe8e7",
+                "surface-bright": "#f8faf9",
+                "on-surface": "#191c1c",
+                "on-surface-variant": "#3f4848",
+                "outline": "#707978",
+                "outline-variant": "#bfc8c8",
+                "surface-container": "#eceeed",
+                "surface-container-low": "#f2f4f3",
+                "surface-container-lowest": "#ffffff",
+                "secondary-container": "#d0e3e3",
+                "tertiary": "#314f48",
+                "primary": "#0c5252",
+                "background": "#f8faf9",
+            },
+            fontFamily: { sans: ["Inter", "sans-serif"] },
+        },
+    },
+};
+</script>
+<style>
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    body.et-results-page { font-family: 'Inter', sans-serif; background: #f8faf9; color: #191c1c; }
+    body.et-results-page .navbar { display: none !important; }
+    body.et-results-page > .container {
+        max-width: none;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+    body.et-results-page > .container > .info-box,
+    body.et-results-page > .container > .error-message { display: none; }
+    /* Unit toggle on light background (hero uses white labels in base.css) */
+    body.et-results-page .et-results-toolbar .unit-toggle-section .unit-label {
+        color: #3f4848;
+    }
+    body.et-results-page .et-results-toolbar .unit-toggle-section .unit-label.active {
+        color: #0c5252;
+        font-weight: 700;
+    }
+</style>
+{% endblock %}
+
 {% block extra_css %}
 {% include 'et/partials/et_comparison_styles.html' %}
 {% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="page-header">
-        <h1>ET Results</h1>
-        {% if acis_location %}
-        <p class="subtitle">Comparing ET calculation methods for {{ acis_location.description }}</p>
-        <p style="color: #fff; font-size: 0.9rem; opacity: 0.9;">
-            Data period: {{ acis_location.start_date }} to {{ acis_location.end_date }}
-        </p>
-        {% endif %}
-    </div>
+<div class="flex min-h-screen">
+    {% include 'et/partials/stitch_sidebar.html' with sidebar_active='et_analysis' %}
 
-    <div class="unit-toggle-section">
-        <span class="unit-label {% if selected_unit == 'mm' %}active{% endif %}">mm</span>
-        <label class="toggle-switch">
-            <input type="checkbox" id="unitToggle" {% if selected_unit == 'inches' %}checked{% endif %}>
-            <span class="slider"></span>
-        </label>
-        <span class="unit-label {% if selected_unit == 'inches' %}active{% endif %}">inches</span>
-        <button id="toggleLoadingBtn" class="toggle-loading-btn" type="button" disabled>Loading...</button>
-    </div>
+    <main class="ml-[260px] flex-1 flex flex-col min-h-screen">
+        <header class="w-full min-h-[200px] flex flex-col justify-end relative overflow-hidden shadow-sm p-8" style="background-color: #2D6A6A;">
+            <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
+            <div class="relative z-10 max-w-4xl">
+                <div class="flex items-center gap-2 text-white mb-2">
+                    <span class="material-symbols-outlined">insights</span>
+                    <span class="text-xs font-bold tracking-widest uppercase">ET Results</span>
+                </div>
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-2">ET Results</h2>
+                {% if acis_location %}
+                <p class="text-[#abe8e7]/90 text-base mb-1">Comparing ET calculation methods for {{ acis_location.description }}</p>
+                <p class="text-[#abe8e7]/75 text-sm">
+                    Data period: {{ acis_location.start_date }} to {{ acis_location.end_date }}
+                </p>
+                {% else %}
+                <p class="text-[#abe8e7]/80 text-base">Compare calculated ET methods and export your results.</p>
+                {% endif %}
+            </div>
+        </header>
 
-    {% if error_message %}
-    <div class="message error" style="margin-top: 20px; background: #fdecea; color: #7a1f1f; border: 1px solid #f5c2c7; border-radius: 10px; padding: 14px 16px;">
-        <strong>Could not generate ET comparison:</strong> {{ error_message }}
-    </div>
-    {% endif %}
+        <div class="et-results-toolbar bg-white border-b border-[#eceeed] px-8 py-4 shadow-sm">
+            <div class="unit-toggle-section flex flex-wrap items-center gap-4 max-w-[1600px]">
+                <span class="unit-label {% if selected_unit == 'mm' %}active{% endif %}">mm</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="unitToggle" {% if selected_unit == 'inches' %}checked{% endif %}>
+                    <span class="slider"></span>
+                </label>
+                <span class="unit-label {% if selected_unit == 'inches' %}active{% endif %}">inches</span>
+                <button id="toggleLoadingBtn" class="toggle-loading-btn" type="button" disabled>Loading...</button>
+            </div>
+        </div>
 
-    {% if plot_warning %}
-    <div class="message" style="margin-top: 20px; background: #eef8f5; color: #24544c; border: 1px solid #cfe9e2; border-radius: 10px; padding: 14px 16px;">
-        <strong>Visualization mode:</strong> {{ plot_warning }}
-    </div>
-    {% endif %}
+        <div class="p-8 max-w-[1600px] w-full flex-1">
+            {% if messages %}
+            <div class="mb-4">
+                {% for message in messages %}
+                <div class="mb-2 px-4 py-3 rounded-lg text-sm {% if message.tags == 'error' %}bg-red-50 text-red-800 border border-red-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
 
-    {% include 'et/partials/et_comparison_results.html' %}
+            {% if error_message %}
+            <div class="message error mb-4 px-4 py-3 rounded-lg bg-red-50 text-red-900 border border-red-200">
+                <strong>Could not generate ET comparison:</strong> {{ error_message }}
+            </div>
+            {% endif %}
+
+            {% if plot_warning %}
+            <div class="message mb-4 px-4 py-3 rounded-lg bg-[#eef8f5] text-[#24544c] border border-[#cfe9e2]">
+                <strong>Visualization mode:</strong> {{ plot_warning }}
+            </div>
+            {% endif %}
+
+            {% include 'et/partials/et_comparison_results.html' %}
+        </div>
+    </main>
 </div>
 {% endblock %}
 

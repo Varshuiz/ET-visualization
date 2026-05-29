@@ -173,6 +173,8 @@ from .forecast_recommendations import (
     safe_temp_convert,
 )
 from .stations import ALBERTA_STATIONS_COORDS, find_nearest_alberta_station
+from .auth_supabase import get_current_user_id
+from .supabase_storage import get_farm_for_user
 
 
 
@@ -1444,6 +1446,74 @@ def _acis_popular_location_suggestions(province_display):
     return sorted(all_cities_for_province(province_display))[:40]
 
 
+def _farm_defaults_for_request(request) -> dict:
+    """Best-effort farm defaults for logged-in users."""
+    try:
+        user_id = get_current_user_id(request)
+        if not user_id:
+            return {}
+        farm = get_farm_for_user(user_id)
+        if not farm:
+            return {}
+        return {
+            "province": (farm.get("province") or "").strip(),
+            "city": (farm.get("city") or "").strip(),
+            "crop_type": (farm.get("crop_type") or "").strip(),
+            "irrigation_type": (farm.get("irrigation_type") or "").strip(),
+        }
+    except Exception:
+        return {}
+
+
+def _match_forecast_crop_value(raw_crop: str) -> str | None:
+    if not raw_crop:
+        return None
+    normalized = raw_crop.strip().lower().replace("-", " ").replace("_", " ")
+    if "wheat" in normalized:
+        return "wheat"
+    if "canola" in normalized:
+        return "canola"
+    if "barley" in normalized:
+        return "barley"
+    if "pulse" in normalized:
+        return "pulse"
+    compact = normalized.replace(" ", "_")
+    return compact if compact in CROP_GDD_PROFILES else None
+
+
+def _match_aquacrop_crop(raw_crop: str, available_crops: list[str]) -> str:
+    if not raw_crop:
+        return ""
+    lowered = raw_crop.strip().lower()
+    for crop in available_crops:
+        if lowered == crop.lower():
+            return crop
+    if "wheat" in lowered:
+        for crop in available_crops:
+            if "wheat" in crop.lower():
+                return crop
+    if "canola" in lowered:
+        for crop in available_crops:
+            if "canola" in crop.lower():
+                return crop
+    if "maize" in lowered or "corn" in lowered:
+        for crop in available_crops:
+            if "maize" in crop.lower() or "corn" in crop.lower():
+                return crop
+    return ""
+
+
+def _map_irrigation_to_aquacrop(raw_irrigation: str) -> str:
+    text = (raw_irrigation or "").strip().lower()
+    if not text:
+        return "full"
+    if "rain" in text:
+        return "rainfed"
+    if "deficit" in text:
+        return "deficit"
+    return "full"
+
+
 def _validate_acis_coordinates(latitude, longitude, province_display):
     bounds = ACIS_PROVINCE_GEO_BOUNDS.get(
         province_display, ACIS_PROVINCE_GEO_BOUNDS["Alberta"]
@@ -1477,11 +1547,18 @@ def acis_data_view(request):
     
     unit_info = get_unit_info(selected_unit)
 
-    selected_province = "Alberta"
+    farm_defaults = _farm_defaults_for_request(request)
+    selected_province = (
+        farm_defaults.get("province")
+        if farm_defaults.get("province") in ACIS_PROVINCE_GEO_BOUNDS
+        else "Alberta"
+    )
+    selected_place_name = farm_defaults.get("city", "")
     if request.method == "POST":
         raw_prov = request.POST.get("province", "Alberta").strip()
         if raw_prov in ACIS_PROVINCE_GEO_BOUNDS:
             selected_province = raw_prov
+        selected_place_name = request.POST.get("place_name", "").strip()
 
     if request.method == 'POST':
         try:
@@ -1795,6 +1872,8 @@ def acis_data_view(request):
         'popular_locations': _acis_popular_location_suggestions(selected_province),
         'popular_locations_by_province': popular_locations_by_province,
         'selected_province': selected_province,
+        'selected_place_name': selected_place_name,
+        'farm_prefill_note': bool(farm_defaults),
         'province_options': province_options,
         'acis_map_default_center': ACIS_MAP_DEFAULT_CENTER,
         'scraping': scraping
@@ -2637,10 +2716,13 @@ def env_canada_forecast_view(request):
 
     error_message = None
     df_forecast = None
+    farm_defaults = _farm_defaults_for_request(request)
     province_display = "Alberta"
-    city_name = FORECAST_DEFAULT_CITY[province_display]
+    if farm_defaults.get("province") in FORECAST_ECC_BY_DISPLAY:
+        province_display = farm_defaults.get("province")
+    city_name = farm_defaults.get("city") or FORECAST_DEFAULT_CITY[province_display]
     selected_days = 7  # Default
-    crop_type = "wheat"
+    crop_type = _match_forecast_crop_value(farm_defaults.get("crop_type", "")) or "wheat"
     soil_type = "loam"
     crop_options = [
         {"value": key, "label": key.replace("_", " ").title()}
@@ -2661,6 +2743,8 @@ def env_canada_forecast_view(request):
 
     cities_by_region = cities_by_province[province_display]
     all_cities = cities_in_province(province_display)
+    if city_name not in all_cities:
+        city_name = FORECAST_DEFAULT_CITY[province_display]
 
     province_options = [{"value": k, "label": k} for k in FORECAST_ECC_BY_DISPLAY]
 
@@ -2683,6 +2767,7 @@ def env_canada_forecast_view(request):
             "soil_options": soil_options,
             "available_cities": all_cities,
             "cities_by_region": cities_by_region,
+            "farm_prefill_note": bool(farm_defaults),
         }
         if extra:
             ctx.update(extra)
@@ -2849,6 +2934,14 @@ def env_canada_forecast_view(request):
                     "recommendation_level": recommendation_level,
                     "crop_type": crop_type,
                     "soil_type": soil_type,
+                    "crop_label": crop_label,
+                    "soil_label": soil_label,
+                    "soil_factor": soil_factor,
+                    "gdd_total": cumulative_gdd,
+                    "gdd_stage": current_stage_label,
+                    "historical_confidence": historical_confidence,
+                    "rec_chart_url": rec_chart_url,
+                    "show_extended_horizon_caveat": selected_days > 7,
                 },
             )
 
@@ -2870,17 +2963,23 @@ def aquacrop_simulation(request):
     View for AquaCrop crop growth simulation
     """
 
-    default_city = ""
+    farm_defaults = _farm_defaults_for_request(request)
+    default_city = farm_defaults.get("city", "").strip()
     available_cities = sorted(ALBERTA_LOCATIONS.keys())
+    if default_city not in available_cities:
+        default_city = ""
+    available_crops = list(AquaCropSimulator.AVAILABLE_CROPS.keys())
+    prefilled_crop = _match_aquacrop_crop(farm_defaults.get("crop_type", ""), available_crops)
+    prefilled_irrigation = _map_irrigation_to_aquacrop(farm_defaults.get("irrigation_type", ""))
 
     context = {
-        "crops": list(AquaCropSimulator.AVAILABLE_CROPS.keys()),
+        "crops": available_crops,
         "soil_types": list(AquaCropSimulator.SOIL_TYPES.keys()),
         "available_cities": available_cities,
         "selected_city": default_city,
-        "selected_crop": "",
+        "selected_crop": prefilled_crop,
         "selected_soil": "",
-        "selected_irrigation": "full",
+        "selected_irrigation": prefilled_irrigation,
         "timestep": "",
         "start_date": f"{pd.Timestamp.now().year}/05/01",
         "end_date": f"{pd.Timestamp.now().year}/09/30",
@@ -2898,6 +2997,7 @@ def aquacrop_simulation(request):
             ("full", "Full Irrigation (80% SMT)"),
             ("deficit", "Deficit Irrigation (60% SMT)"),
         ],
+        "farm_prefill_note": bool(farm_defaults),
     }
 
     def _maturity_warning(crop_name: str, end_date_str: str):
@@ -3196,7 +3296,13 @@ def aquacrop_simulation(request):
                     "soil": soil,
                     "irrigation": irrigation,
                     "city": city_name,
+                    "timestep": context.get("timestep"),
                     "historical_results_rows": historical_results_rows,
+                    "weekly_yield_projection": weekly_yield_projection,
+                    "resampled_chart": context.get("resampled_chart"),
+                    "resampled_data": context.get("resampled_data"),
+                    "multi_year_mode": multi_year_mode,
+                    "forecast_mode_caveat": forecast_mode_caveat,
                 },
             )
 

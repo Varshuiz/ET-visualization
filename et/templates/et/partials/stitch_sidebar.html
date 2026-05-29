@@ -1,0 +1,46 @@
+{% load static %}
+<aside class="w-[260px] min-h-screen flex flex-col justify-between fixed left-0 top-0 z-50 shadow-md" style="background-color: #0D170D;">
+    <div class="flex flex-col p-4 gap-2 w-full">
+        <div class="mb-6 px-2 flex items-center gap-3 py-4">
+            <div class="w-10 h-10 rounded-lg overflow-hidden" style="background-color: transparent;">
+                <img src="{% static 'et/img/logo.png' %}" alt="AqualET logo" class="w-full h-full object-cover">
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-[#f8faf9] leading-none">AqualET</h1>
+                <p class="text-xs text-[#adcdc4]/70">Agricultural Intelligence</p>
+            </div>
+        </div>
+        <nav class="flex flex-col gap-1">
+            <a class="flex items-center gap-3 p-3 rounded-lg transition-colors {% if sidebar_active == 'dashboard' %}font-bold bg-[#48675f] text-[#c2e4da]{% else %}text-[#adcdc4]/70 hover:text-white hover:bg-white/10{% endif %}" href="{% url 'et:dashboard' %}">
+                <span class="material-symbols-outlined">dashboard</span>
+                <span class="text-sm font-medium">Dashboard</span>
+            </a>
+            <a class="flex items-center gap-3 p-3 rounded-lg transition-colors {% if sidebar_active == 'et_analysis' %}font-bold bg-[#48675f] text-[#c2e4da]{% else %}text-[#adcdc4]/70 hover:text-white hover:bg-white/10{% endif %}" href="{% url 'et:acis_fetch' %}">
+                <span class="material-symbols-outlined">analytics</span>
+                <span class="text-sm font-medium">ET Analysis</span>
+            </a>
+            <a class="flex items-center gap-3 p-3 rounded-lg transition-colors {% if sidebar_active == 'simulations' %}font-bold bg-[#48675f] text-[#c2e4da]{% else %}text-[#adcdc4]/70 hover:text-white hover:bg-white/10{% endif %}" href="{% url 'et:dashboard' %}#simulation-planning">
+                <span class="material-symbols-outlined">science</span>
+                <span class="text-sm font-medium">Simulations</span>
+            </a>
+            <a class="flex items-center gap-3 p-3 rounded-lg transition-colors {% if sidebar_active == 'history' %}font-bold bg-[#48675f] text-[#c2e4da]{% else %}text-[#adcdc4]/70 hover:text-white hover:bg-white/10{% endif %}" href="{% url 'et:dashboard' %}#recent-history">
+                <span class="material-symbols-outlined">history</span>
+                <span class="text-sm font-medium">History</span>
+            </a>
+            <a class="flex items-center gap-3 p-3 rounded-lg transition-colors {% if sidebar_active == 'farm' %}font-bold bg-[#48675f] text-[#c2e4da]{% else %}text-[#adcdc4]/70 hover:text-white hover:bg-white/10{% endif %}" href="{% url 'et:farm_profile' %}">
+                <span class="material-symbols-outlined">agriculture</span>
+                <span class="text-sm font-medium">Farm Profile</span>
+            </a>
+        </nav>
+    </div>
+    <div class="p-4 border-t border-white/10 flex flex-col gap-3">
+        <a href="{% url 'et:logout' %}" class="flex items-center gap-2 text-[#adcdc4]/70 hover:text-white text-sm transition-colors">
+            <span class="material-symbols-outlined text-sm">logout</span>
+            Sign out
+        </a>
+        <div class="flex items-center gap-2 p-3 text-[#adcdc4]/60 text-xs font-bold tracking-widest uppercase bg-white/5 rounded-lg">
+            <span class="material-symbols-outlined text-sm">location_on</span>
+            WESTERN CANADA REGION
+        </div>
+    </div>
+</aside>

@@ -1,0 +1,39 @@
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.querySelector('input[type="file"]');
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            const info = document.getElementById('fileInfo');
+            const nameEl = document.getElementById('fileName');
+            if (this.files.length > 0 && info && nameEl) {
+                nameEl.textContent = this.files[0].name;
+                info.style.display = 'block';
+            }
+        });
+    }
+    const unitToggle = document.getElementById('unitToggle');
+    if (unitToggle && !unitToggle.closest('.index-unit-toggle')) {
+        unitToggle.addEventListener('change', function() {
+            const newUnit = this.checked ? 'inches' : 'mm';
+            const url = new URL(window.location);
+            url.searchParams.set('unit', newUnit);
+            window.location.href = url.toString();
+        });
+    }
+    const uploadForm = document.getElementById('uploadForm');
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', function() {
+            const btn = document.getElementById('submitBtn');
+            const loading = document.getElementById('loading');
+            if (btn) btn.disabled = true;
+            if (loading) loading.style.display = 'block';
+        });
+    }
+    const resultsSection = document.querySelector('.results-section');
+    if (resultsSection) {
+        setTimeout(function() {
+            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 400);
+    }
+});
+</script>

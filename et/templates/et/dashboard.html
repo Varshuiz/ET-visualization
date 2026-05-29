@@ -1,4 +1,5 @@
 {% extends 'et/base.html' %}
+{% load static %}
 
 {% block title %}{% if possessive_name %}{{ possessive_name }} Dashboard{% else %}Dashboard{% endif %} | AqualET{% endblock %}
 
@@ -37,8 +38,7 @@ tailwind.config = {
         vertical-align: middle;
     }
     body.dashboard-page { font-family: 'Inter', sans-serif; background: #f8faf9; color: #191c1c; }
-    body.dashboard-page .navbar,
-    body.dashboard-page .global-attribution { display: none !important; }
+    body.dashboard-page .navbar { display: none !important; }
     body.dashboard-page > .container {
         max-width: none;
         width: 100%;
@@ -47,6 +47,40 @@ tailwind.config = {
     }
     body.dashboard-page > .container > .info-box,
     body.dashboard-page > .container > .error-message { display: none; }
+    html:has(body.dashboard-page) { scroll-behavior: smooth; }
+    .dashboard-scroll-section {
+        scroll-margin-top: 1.5rem;
+        border-radius: 0.75rem;
+    }
+    .dashboard-scroll-section.section-flash {
+        animation: dashboardSectionFlash 1.5s ease-out;
+    }
+    @keyframes dashboardSectionFlash {
+        0% {
+            box-shadow: 0 0 0 1px rgba(45, 106, 106, 0.65), 0 0 24px rgba(45, 106, 106, 0.22);
+        }
+        55% {
+            box-shadow: 0 0 0 1px rgba(45, 106, 106, 0.35), 0 0 14px rgba(45, 106, 106, 0.1);
+        }
+        100% {
+            box-shadow: none;
+        }
+    }
+    .dashboard-sidebar-nav-link {
+        transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    .dashboard-sidebar-nav-link.dashboard-nav-active {
+        font-weight: 700;
+        background-color: rgba(45, 106, 106, 0.2);
+        color: #c2e4da;
+    }
+    .dashboard-sidebar-nav-link.dashboard-nav-inactive {
+        color: rgba(173, 205, 196, 0.7);
+    }
+    .dashboard-sidebar-nav-link.dashboard-nav-inactive:hover {
+        color: #fff;
+        background-color: rgba(255, 255, 255, 0.1);
+    }
 </style>
 {% endblock %}
 
@@ -56,27 +90,32 @@ tailwind.config = {
     <aside class="w-[260px] min-h-screen flex flex-col justify-between fixed left-0 top-0 z-50 p-4 shadow-md" style="background-color: #0D170D;">
         <div class="flex flex-col gap-6">
             <div class="flex items-center gap-3 px-2 py-4">
-                <span class="material-symbols-outlined text-[#f8faf9] text-[28px]">agriculture</span>
-                <span class="text-xl font-bold text-[#f8faf9]">AqualET</span>
+                <div class="w-10 h-10 rounded-lg overflow-hidden shrink-0">
+                    <img src="{% static 'et/img/logo.png' %}" alt="AqualET logo" class="w-full h-full object-cover">
+                </div>
+                <div>
+                    <span class="text-xl font-bold text-[#f8faf9] leading-none block">AqualET</span>
+                    <span class="text-xs text-[#adcdc4]/70">Agricultural Intelligence</span>
+                </div>
             </div>
-            <nav class="flex flex-col gap-1">
-                <a class="flex items-center gap-3 p-3 rounded-lg font-bold transition-all bg-[#2d6a6a]/20 text-[#c2e4da]" href="{% url 'et:dashboard' %}">
+            <nav class="flex flex-col gap-1" id="dashboardSidebarNav">
+                <a class="dashboard-sidebar-nav-link dashboard-nav-active flex items-center gap-3 p-3 rounded-lg" href="{% url 'et:dashboard' %}" data-dashboard-nav="dashboard">
                     <span class="material-symbols-outlined">dashboard</span>
                     <span class="text-sm font-medium">Dashboard</span>
                 </a>
-                <a class="flex items-center gap-3 p-3 rounded-lg transition-colors text-[#adcdc4]/70 hover:text-white hover:bg-white/10" href="#et-analysis-tools">
+                <a class="dashboard-sidebar-nav-link dashboard-nav-inactive flex items-center gap-3 p-3 rounded-lg" href="#et-analysis-tools" data-dashboard-nav="et-analysis">
                     <span class="material-symbols-outlined">analytics</span>
                     <span class="text-sm font-medium">ET Analysis</span>
                 </a>
-                <a class="flex items-center gap-3 p-3 rounded-lg transition-colors text-[#adcdc4]/70 hover:text-white hover:bg-white/10" href="#simulation-planning">
+                <a class="dashboard-sidebar-nav-link dashboard-nav-inactive flex items-center gap-3 p-3 rounded-lg" href="#simulation-planning" data-dashboard-nav="simulations">
                     <span class="material-symbols-outlined">science</span>
                     <span class="text-sm font-medium">Simulations</span>
                 </a>
-                <a class="flex items-center gap-3 p-3 rounded-lg transition-colors text-[#adcdc4]/70 hover:text-white hover:bg-white/10" href="#recent-history">
+                <a class="dashboard-sidebar-nav-link dashboard-nav-inactive flex items-center gap-3 p-3 rounded-lg" href="#recent-history" data-dashboard-nav="history">
                     <span class="material-symbols-outlined">history</span>
                     <span class="text-sm font-medium">History</span>
                 </a>
-                <a class="flex items-center gap-3 p-3 rounded-lg transition-colors text-[#adcdc4]/70 hover:text-white hover:bg-white/10" href="{% url 'et:farm_profile' %}">
+                <a class="dashboard-sidebar-nav-link dashboard-nav-inactive flex items-center gap-3 p-3 rounded-lg" href="{% url 'et:farm_profile' %}">
                     <span class="material-symbols-outlined">agriculture</span>
                     <span class="text-sm font-medium">Farm Profile</span>
                 </a>
@@ -112,8 +151,7 @@ tailwind.config = {
                 <div class="flex flex-col gap-2">
                     <div class="flex items-center gap-2 flex-wrap">
                         {% if first_name %}
-                        <span class="text-3xl md:text-4xl font-bold text-white">Welcome back, {{ first_name }}</span>
-                        <span class="material-symbols-outlined text-3xl text-yellow-400">waving_hand</span>
+                        <span class="text-3xl md:text-4xl font-bold text-white">Welcome back, {{ first_name }}!</span>
                         {% else %}
                         <span class="text-3xl md:text-4xl font-bold text-white">Farmer dashboard</span>
                         {% endif %}
@@ -143,7 +181,7 @@ tailwind.config = {
             <!-- Left column -->
             <div class="col-span-12 lg:col-span-8 flex flex-col gap-8">
                 <!-- ET Analysis Tools -->
-                <section id="et-analysis-tools">
+                <section id="et-analysis-tools" class="dashboard-scroll-section">
                     <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
                         <h2 class="text-xs font-bold tracking-widest uppercase text-[#707978]">ET Analysis</h2>
                         <a class="text-[#0c5252] text-sm font-medium hover:underline flex items-center gap-1" href="{% url 'et:method_info' %}">
@@ -161,17 +199,6 @@ tailwind.config = {
                             </div>
                             <h3 class="text-lg font-semibold mb-2 text-[#191c1c]">ET Setup</h3>
                             <p class="text-sm text-[#3f4848] mb-4">Choose location, date range, and ET methods for your field.</p>
-                            <span class="text-[#0c5252] font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">Open <span class="material-symbols-outlined text-sm">arrow_right_alt</span></span>
-                        </a>
-                        <a href="{% url 'et:comparison_with_acis' %}" class="bg-white p-5 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0px_8px_24px_rgba(0,0,0,0.08)] transition-all group block no-underline text-inherit">
-                            <div class="flex justify-between items-start mb-6">
-                                <div class="w-10 h-10 rounded-lg bg-[#eceeed] flex items-center justify-center text-[#0c5252]">
-                                    <span class="material-symbols-outlined">insert_chart</span>
-                                </div>
-                                <span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold tracking-tighter uppercase">READY</span>
-                            </div>
-                            <h3 class="text-lg font-semibold mb-2 text-[#191c1c]">ET Results</h3>
-                            <p class="text-sm text-[#3f4848] mb-4">Compare calculated ET with ACIS and export your results.</p>
                             <span class="text-[#0c5252] font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">Open <span class="material-symbols-outlined text-sm">arrow_right_alt</span></span>
                         </a>
                         <a href="{% url 'et:priestley_taylor' %}" class="bg-white p-5 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0px_8px_24px_rgba(0,0,0,0.08)] transition-all group block no-underline text-inherit">
@@ -236,7 +263,7 @@ tailwind.config = {
                 </section>
 
                 <!-- Recent history -->
-                <div id="recent-history" class="flex flex-col gap-8">
+                <div id="recent-history" class="dashboard-scroll-section flex flex-col gap-8">
                     <section>
                         <h2 class="text-xs font-bold tracking-widest uppercase text-[#707978] mb-4">Recent ET calculations</h2>
                         <div class="bg-white rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
@@ -374,7 +401,7 @@ tailwind.config = {
                     </div>
                 </section>
 
-                <section id="simulation-planning">
+                <section id="simulation-planning" class="dashboard-scroll-section">
                     <h2 class="text-xs font-bold tracking-widest uppercase text-[#707978] mb-4">Simulation &amp; Planning</h2>
                     <div class="flex flex-col gap-4">
                         <a href="{% url 'et:env_canada_forecast' %}" class="block no-underline text-white p-6 rounded-xl shadow-lg relative overflow-hidden group" style="background-color: #2D6A6A;">
@@ -448,6 +475,110 @@ tailwind.config = {
             }
         });
     });
+})();
+
+(function () {
+    var SECTIONS = [
+        { id: 'et-analysis-tools', nav: 'et-analysis' },
+        { id: 'simulation-planning', nav: 'simulations' },
+        { id: 'recent-history', nav: 'history' },
+    ];
+    var visibility = new Map();
+    var navLinks = document.querySelectorAll('[data-dashboard-nav]');
+
+    function setActiveNav(navId) {
+        navLinks.forEach(function (link) {
+            var active = link.getAttribute('data-dashboard-nav') === navId;
+            link.classList.toggle('dashboard-nav-active', active);
+            link.classList.toggle('dashboard-nav-inactive', !active);
+        });
+    }
+
+    function flashSection(section) {
+        if (!section) return;
+        section.classList.remove('section-flash');
+        void section.offsetWidth;
+        section.classList.add('section-flash');
+        window.setTimeout(function () {
+            section.classList.remove('section-flash');
+        }, 1500);
+    }
+
+    function scrollToSection(section, flash) {
+        if (!section) return;
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (flash) flashSection(section);
+    }
+
+    navLinks.forEach(function (link) {
+        link.addEventListener('click', function (e) {
+            var navId = link.getAttribute('data-dashboard-nav');
+            if (navId === 'dashboard') {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                setActiveNav('dashboard');
+                if (history.replaceState) history.replaceState(null, '', '{% url "et:dashboard" %}');
+                return;
+            }
+            var href = link.getAttribute('href') || '';
+            if (href.charAt(0) !== '#') return;
+            var section = document.getElementById(href.slice(1));
+            if (!section) return;
+            e.preventDefault();
+            scrollToSection(section, true);
+            setActiveNav(navId);
+            if (history.replaceState) history.replaceState(null, '', href);
+        });
+    });
+
+    var observed = SECTIONS.map(function (cfg) {
+        return document.getElementById(cfg.id);
+    }).filter(Boolean);
+
+    if (observed.length && 'IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(
+            function (entries) {
+                entries.forEach(function (entry) {
+                    visibility.set(entry.target.id, entry.intersectionRatio);
+                });
+                var bestId = null;
+                var bestRatio = 0;
+                visibility.forEach(function (ratio, id) {
+                    if (ratio > bestRatio) {
+                        bestRatio = ratio;
+                        bestId = id;
+                    }
+                });
+                if (bestRatio >= 0.12) {
+                    var match = SECTIONS.find(function (c) { return c.id === bestId; });
+                    if (match) setActiveNav(match.nav);
+                } else if (window.scrollY < 120) {
+                    setActiveNav('dashboard');
+                }
+            },
+            {
+                root: null,
+                rootMargin: '-15% 0px -50% 0px',
+                threshold: [0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.75, 1],
+            }
+        );
+        observed.forEach(function (el) { observer.observe(el); });
+    }
+
+    window.addEventListener('scroll', function () {
+        if (window.scrollY < 80) setActiveNav('dashboard');
+    }, { passive: true });
+
+    if (location.hash) {
+        var target = document.getElementById(location.hash.slice(1));
+        if (target) {
+            window.setTimeout(function () {
+                scrollToSection(target, true);
+                var match = SECTIONS.find(function (c) { return c.id === target.id; });
+                if (match) setActiveNav(match.nav);
+            }, 100);
+        }
+    }
 })();
 </script>
 {% endblock %}

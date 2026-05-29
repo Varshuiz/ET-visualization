@@ -3,618 +3,548 @@
 
 {% block title %}AquaCrop Crop Simulation | AqualET{% endblock %}
 
+{% block body_class %}aquacrop-page{% endblock %}
+
+{% block head_assets %}
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                "primary-container": "#2d6a6a",
+                "on-primary-container": "#abe8e7",
+                "surface-bright": "#f8faf9",
+                "on-surface": "#191c1c",
+                "on-surface-variant": "#3f4848",
+                "outline": "#707978",
+                "outline-variant": "#bfc8c8",
+                "surface-container": "#eceeed",
+                "surface-container-low": "#f2f4f3",
+                "surface-container-lowest": "#ffffff",
+                "surface-container-highest": "#e1e3e2",
+                "surface-variant": "#e1e3e2",
+                "tertiary": "#314f48",
+                "tertiary-container": "#48675f",
+                "on-tertiary-container": "#c2e4da",
+                "primary": "#0c5252",
+                "background": "#f8faf9",
+                "inverse-surface": "#2e3131",
+            },
+            fontFamily: { sans: ["Inter", "sans-serif"] },
+        },
+    },
+};
+</script>
+{% endblock %}
+
 {% block extra_css %}
 <style>
-    .simulation-form {
-        background: white;
-        padding: 30px;
-        border-radius: 12px;
-        box-shadow: 0 3px 10px rgba(9, 82, 86, 0.1);
-        margin-bottom: 30px;
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
     }
-
+    body.aquacrop-page { font-family: 'Inter', sans-serif; background: #f8faf9; color: #191c1c; }
+    body.aquacrop-page .navbar { display: none !important; }
+    body.aquacrop-page > .container {
+        max-width: none;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+    body.aquacrop-page > .container > .info-box,
+    body.aquacrop-page > .container > .error-message { display: none; }
+    .file-upload-area input[type="file"] { display: none; }
     .form-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
-        gap: 20px;
-        margin-bottom: 20px;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+        gap: 1rem;
     }
-
-    .form-group {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .form-group label {
-        font-weight: 600;
-        color: #095256;
-        margin-bottom: 8px;
-        font-size: 0.95rem;
-    }
-
-    .form-group select,
-    .form-group input[type="text"],
-    .form-group input[type="date"],
-    .form-group input[type="file"] {
-        padding: 12px 15px;
-        border: 2px solid #e0f2f1;
-        border-radius: 8px;
-        font-size: 1rem;
-        transition: all 0.3s ease;
-    }
-
-    .form-group select:focus,
-    .form-group input:focus {
-        outline: none;
-        border-color: #087F8C;
-        box-shadow: 0 0 0 3px rgba(8, 127, 140, 0.1);
-    }
-
-    .file-upload-area {
-        border: 2px dashed #087F8C;
-        border-radius: 8px;
-        padding: 30px;
-        text-align: center;
-        background: #f8fffe;
-        cursor: pointer;
-        transition: all 0.3s ease;
-    }
-
-    .file-upload-area:hover {
-        background: #e0f2f1;
-        transform: scale(1.02);
-    }
-
-    .file-upload-area input[type="file"] {
+    #panelSingleYear.form-grid,
+    #panelHistYears.form-grid {
         display: none;
     }
-
-    .results-summary {
+    #panelSingleYear.form-grid[style*="grid"],
+    #panelHistYears.form-grid[style*="grid"] {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
-        gap: 20px;
-        margin-bottom: 30px;
     }
-
-    .result-card {
-        background: linear-gradient(135deg, #087F8C, #5AAA95);
-        color: white;
-        padding: 25px;
-        border-radius: 12px;
-        text-align: center;
-        box-shadow: 0 3px 10px rgba(8, 127, 140, 0.3);
-        transition: transform 0.3s ease;
-    }
-
-    .result-card:hover {
-        transform: translateY(-5px);
-    }
-
-    .result-card h3 {
-        margin: 0 0 10px 0;
-        font-size: 2rem;
-        font-weight: 700;
-    }
-
-    .result-card p {
-        margin: 0;
-        font-size: 0.9rem;
-        opacity: 0.9;
-    }
-
-    .result-card.secondary {
-        background: linear-gradient(135deg, #5AAA95, #86A873);
-    }
-
-    .chart-container {
-        background: white;
-        padding: 25px;
-        border-radius: 12px;
-        box-shadow: 0 3px 10px rgba(9, 82, 86, 0.1);
-        margin-bottom: 30px;
-    }
-
-    .chart-container h3 {
-        color: #095256;
-        margin-bottom: 20px;
-        font-size: 1.3rem;
-    }
-
-    .info-box {
-        background: linear-gradient(135deg, #e0f2f1, #f1f8f7);
-        padding: 20px;
-        border-left: 4px solid #087F8C;
-        border-radius: 8px;
-        margin-bottom: 20px;
-    }
-
-    .info-box h4 {
-        color: #087F8C;
-        margin: 0 0 10px 0;
-    }
-
-    .info-box ul {
-        margin: 10px 0;
-        padding-left: 20px;
-    }
-
-    .info-box li {
-        margin: 5px 0;
-        color: #333;
-    }
-
-    .warning-box {
-        background: #fff7ed;
-        border-left: 4px solid #f59e0b;
-        color: #7c2d12;
-        padding: 12px 14px;
-        border-radius: 8px;
-        margin: 12px 0 18px;
-        font-size: 0.95rem;
-    }
-
-    canvas {
-        max-width: 100%;
-        height: 400px !important;
-    }
-
+    canvas { max-width: 100%; height: 400px !important; }
     @media (max-width: 768px) {
-        .simulation-form {
-            padding: 18px 14px;
-        }
-
-        .form-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .results-summary {
-            grid-template-columns: 1fr;
-        }
-
-        .result-card h3 {
-            font-size: 1.5rem;
-        }
-
-        .chart-container {
-            padding: 16px 12px;
-        }
-
-        canvas {
-            height: 260px !important;
-        }
+        canvas { height: 260px !important; }
     }
 </style>
 {% endblock %}
-
 {% block content %}
-<div class="container">
-    <div class="page-header">
-        <h1>AquaCrop Crop Simulation</h1>
-        <p class="subtitle">Simulate crop growth, water use, and yield predictions</p>
-    </div>
+<div class="flex min-h-screen bg-background">
+    {% include 'et/partials/stitch_sidebar.html' with sidebar_active=sidebar_active|default:'simulations' %}
 
-    {% if error_message %}
-    <div class="error-message">
-        {{ error_message }}
-    </div>
-    {% endif %}
-    {% if warning_messages %}
-        {% for warning in warning_messages %}
-        <div class="warning-box">{{ warning }}</div>
-        {% endfor %}
-    {% endif %}
-    {% if temperature_source_summary %}
-    <div class="info-box" style="margin-top: 0;">
-        <h4 style="margin-bottom: 6px;">Temperature Source Coverage</h4>
-        <p style="margin: 0;">
-            ECCC: {{ temperature_source_summary.eccc_days|default:0 }} day(s),
-            Open-Meteo archive: {{ temperature_source_summary.openmeteo_gapfill_days|default:0 }} day(s),
-            Missing: {{ temperature_source_summary.remaining_missing_days|default:0 }} day(s).
-        </p>
-    </div>
-    {% endif %}
-
-    <!-- Information Box -->
-    <div class="info-box">
-        <h4>About AquaCrop</h4>
-        <p>AquaCrop is FAO's crop water productivity model that simulates yield response to water. It helps farmers and researchers:</p>
-        <ul>
-            <li>Predict crop yields under different water conditions</li>
-            <li>Optimize irrigation schedules to save water</li>
-            <li>Compare rainfed vs irrigated production</li>
-            <li>Understand crop water stress and its impact on yield</li>
-        </ul>
-    </div>
-
-    <!-- Simulation Form -->
-    <div class="simulation-form">
-        <h3 style="color: #095256; margin-bottom: 20px;">Simulation Parameters</h3>
-        
-        <form method="post" enctype="multipart/form-data" id="simulationForm" data-loading-text="Running crop simulation...">
-            {% csrf_token %}
-            <div id="maturityWarning" class="warning-box" {% if not maturity_warning %}style="display: none;"{% endif %}>{{ maturity_warning|default:'' }}</div>
-
-            <div class="form-group" style="grid-column: 1 / -1;">
-                <label>Simulation mode</label>
-                <div class="mode-tabs" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px;">
-                    <label class="mode-tab" style="cursor: pointer; padding: 8px 12px; border-radius: 8px; border: 2px solid #e0f2f1; background: {% if sim_mode == 'single_year' %}#e0f2f1{% else %}#fff{% endif %};">
-                        <input type="radio" name="sim_mode" value="single_year" {% if sim_mode == 'single_year' %}checked{% endif %} style="margin-right: 6px;">
-                        Simulation year
-                    </label>
-                    <label class="mode-tab" style="cursor: pointer; padding: 8px 12px; border-radius: 8px; border: 2px solid #e0f2f1; background: {% if sim_mode == 'historical_range' %}#e0f2f1{% else %}#fff{% endif %};">
-                        <input type="radio" name="sim_mode" value="historical_range" {% if sim_mode == 'historical_range' %}checked{% endif %} style="margin-right: 6px;">
-                        Historical range
-                    </label>
-                    <label class="mode-tab" style="cursor: pointer; padding: 8px 12px; border-radius: 8px; border: 2px solid #e0f2f1; background: {% if sim_mode == 'forecast' %}#e0f2f1{% else %}#fff{% endif %};">
-                        <input type="radio" name="sim_mode" value="forecast" {% if sim_mode == 'forecast' %}checked{% endif %} style="margin-right: 6px;">
-                        Forecast (Open-Meteo)
-                    </label>
+    <main class="ml-[260px] flex-1 min-h-screen">
+        <header class="bg-primary-container shadow-sm px-8 py-8">
+            <div class="max-w-7xl mx-auto flex flex-col gap-1">
+                <div class="flex items-center gap-3">
+                    <h1 class="text-2xl md:text-3xl font-bold text-white">
+                        {% if is_saved_run %}Saved AquaCrop run{% else %}AquaCrop Crop Simulation{% endif %}
+                    </h1>
                 </div>
-                <p style="margin: 0; font-size: 0.85rem; color: #666;">
-                    <strong>Simulation year</strong> uses May&nbsp;1–Sep&nbsp;30 for the year you enter.
-                    <strong>Historical range</strong> uses ECCC-backed weather: either a custom date range or multiple May–Sep seasons by calendar year.
-                    <strong>Forecast</strong> uses Open-Meteo daily forecast drivers (short horizon, typically up to ~16 days).
+                <p class="text-xs font-bold uppercase tracking-wider text-on-primary-container/80 ml-1">
+                    {% if is_saved_run %}
+                    {{ selected_crop|default:"Crop" }} — {{ start_date|default:"" }}{% if end_date %} to {{ end_date }}{% endif %} — saved {{ saved_run.created_at|slice:":16" }}
+                    {% else %}
+                    Simulate crop growth, water use, and yield predictions
+                    {% endif %}
                 </p>
             </div>
+        </header>
 
-            <div id="panelSingleYear" class="form-grid" style="display: none; margin-bottom: 12px;">
-                <div class="form-group">
-                    <label>Simulation year</label>
-                    <input type="number" name="simulation_year" min="1980" max="2100" step="1"
-                           value="{{ simulation_year|default:'' }}"
-                           placeholder="e.g. 2023">
-                </div>
+        <div class="px-8 py-8 max-w-7xl mx-auto space-y-6">
+            {% if is_saved_run %}
+            <div class="flex flex-wrap items-center gap-3 text-sm">
+                <a href="{% url 'et:dashboard' %}#recent-history" class="inline-flex items-center gap-1 text-primary font-semibold hover:underline no-underline">
+                    <span class="material-symbols-outlined text-base">arrow_back</span>
+                    Back to dashboard
+                </a>
             </div>
-
-            <div id="panelHistoricalSub" style="display: none; margin-bottom: 12px;">
-                <div class="form-group" style="margin-bottom: 12px;">
-                    <label>Historical range type</label>
-                    <div style="display: flex; flex-wrap: wrap; gap: 14px;">
-                        <label><input type="radio" name="historical_range_type" value="custom" {% if historical_range_type != 'years' %}checked{% endif %}> Custom start / end dates</label>
-                        <label><input type="radio" name="historical_range_type" value="years" {% if historical_range_type == 'years' %}checked{% endif %}> Year to year (May–Sep each year)</label>
-                    </div>
-                </div>
-                <div id="panelHistYears" class="form-grid" style="display: none;">
-                    <div class="form-group">
-                        <label>Start year</label>
-                        <input type="number" name="hist_year_start" min="1980" max="2100" step="1" value="{{ hist_year_start|default:'' }}" placeholder="e.g. 2018">
-                    </div>
-                    <div class="form-group">
-                        <label>End year</label>
-                        <input type="number" name="hist_year_end" min="1980" max="2100" step="1" value="{{ hist_year_end|default:'' }}" placeholder="e.g. 2022">
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>Select Crop</label>
-                    <select name="crop" id="crop" required>
-                        <option value="" {% if not selected_crop %}selected{% endif %} disabled>Select crop</option>
-                        {% for crop in crops %}
-                        <option value="{{ crop }}" {% if selected_crop == crop %}selected{% endif %}>
-                            {{ crop }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Analysis Timestep</label>
-                    <select name="timestep" id="timestep" required>
-                        <option value="" {% if not timestep %}selected{% endif %} disabled>Select timestep</option>
-                        <option value="weekly" {% if timestep == 'weekly' %}selected{% endif %}>Weekly (7-day)</option>
-                        <option value="biweekly" {% if timestep == 'biweekly' %}selected{% endif %}>Biweekly (14-day)</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>Soil Type</label>
-                    <select name="soil" id="soil" required>
-                        <option value="" {% if not selected_soil %}selected{% endif %} disabled>Select soil type</option>
-                        {% for soil in soil_types %}
-                        <option value="{{ soil }}" {% if selected_soil == soil %}selected{% endif %}>
-                            {{ soil }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>City (ECCC Weather Source)</label>
-                    <select name="city_name" id="city_name" required>
-                        <option value="" {% if not selected_city %}selected{% endif %} disabled>Select city</option>
-                        {% for city in available_cities %}
-                        <option value="{{ city }}" {% if selected_city == city %}selected{% endif %}>
-                            {{ city }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Irrigation Strategy</label>
-                    <select name="irrigation" id="irrigation">
-                        {% for value, label in irrigation_methods %}
-                        <option value="{{ value }}" {% if selected_irrigation == value %}selected{% endif %}>
-                            {{ label }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <div class="form-group" id="panelCustomDates">
-                    <label>Start Date</label>
-                    <input type="text" name="start_date" id="start_date_input" value="{{ start_date|default:'' }}" 
-                           placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}" required>
-                </div>
-                
-                <div class="form-group" id="panelCustomDatesEnd">
-                    <label>End Date</label>
-                    <input type="text" name="end_date" id="end_date_input" value="{{ end_date|default:'' }}" 
-                           placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}" required>
-                </div>
-            </div>
-            
-            <!-- Weather Data Upload -->
-            <div class="form-group" style="margin-top: 20px;">
-                <label>Weather Data (Optional)</label>
-                <div class="file-upload-area" onclick="document.getElementById('weather_file').click()">
-                    <p style="margin: 0; color: #087F8C; font-size: 1.1rem;">
-                        Click to upload weather data (CSV or Excel)
-                    </p>
-                    <p style="margin: 10px 0 0 0; color: #666; font-size: 0.9rem;">
-                        Required columns: Date, MinTemp, MaxTemp, Precipitation, ReferenceET
-                    </p>
-                    <input type="file" name="weather_file" id="weather_file" accept=".csv,.xlsx,.xls">
-                </div>
-                <p style="margin-top: 10px; color: #666; font-size: 0.85rem;">
-                    If no file is uploaded, weather is fetched from ECCC for the selected city and date range.
+            {% endif %}
+            {% if error_message %}
+            <div class="error-message rounded-lg border border-red-200 bg-red-50 text-red-800 px-4 py-3">{{ error_message }}</div>
+            {% endif %}
+            {% if warning_messages %}
+                {% for warning in warning_messages %}
+                <div class="warning-box rounded-lg border-l-4 border-amber-500 bg-amber-50 text-amber-900 px-4 py-3 text-sm">{{ warning }}</div>
+                {% endfor %}
+            {% endif %}
+            {% if temperature_source_summary %}
+            <div class="bg-surface-container-low border-l-4 border-primary rounded-xl p-4">
+                <h4 class="text-primary font-semibold mb-1">Temperature Source Coverage</h4>
+                <p class="text-sm text-on-surface-variant m-0">
+                    ECCC: {{ temperature_source_summary.eccc_days|default:0 }} day(s),
+                    Open-Meteo archive: {{ temperature_source_summary.openmeteo_gapfill_days|default:0 }} day(s),
+                    Missing: {{ temperature_source_summary.remaining_missing_days|default:0 }} day(s).
                 </p>
             </div>
-            
-            <button type="submit" class="submit-btn" style="margin-top: 20px;">
-                Run Simulation
-            </button>
-        </form>
-    </div>
-
-    {% if has_results %}
-    <!-- Results Summary -->
-    <h2 style="color: #095256; margin-bottom: 20px;">Simulation Results</h2>
-    {% if results.partial_results %}
-    <div class="warning-box">{{ results.result_note }}</div>
-    {% endif %}
-    
-    {% if forecast_mode_caveat %}
-    <div class="warning-box">{{ forecast_mode_caveat }}</div>
-    {% endif %}
-
-    <div class="results-summary">
-        <div class="result-card">
-            {% if results.partial_results and results.yield_fresh == 0 %}
-            <h3>&mdash;</h3>
-            <p>tonnes/ha</p>
-            {% else %}
-            <h3>{{ results.yield_fresh|floatformat:1 }}</h3>
-            <p>tonnes/ha</p>
             {% endif %}
-            <p style="margin-top: 5px; font-weight: 600;">Fresh Yield</p>
-            {% if results.partial_results and results.yield_fresh == 0 %}
-            <p style="margin-top: 4px; font-size: 0.78rem; opacity: 0.95;">Requires full season to maturity</p>
+
+            {% if not has_results %}
+            <div class="grid grid-cols-12 gap-6">
+                <section class="col-span-12 lg:col-span-4 flex flex-col gap-6">
+                    <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border-l-4 border-primary">
+                        <h3 class="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary">info</span>
+                            About AquaCrop
+                        </h3>
+                        <p class="text-sm text-on-surface-variant mb-6 leading-relaxed">
+                            AquaCrop is FAO's crop water productivity model that simulates yield response to water. It helps farmers and researchers:
+                        </p>
+                        <ul class="space-y-3 text-sm text-on-surface">
+                            <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>Predict crop yields under different water conditions</li>
+                            <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>Optimize irrigation schedules to save water</li>
+                            <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>Compare rainfed vs irrigated production</li>
+                            <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>Understand crop water stress and its impact on yield</li>
+                        </ul>
+                    </div>
+                    <div class="relative h-64 rounded-xl overflow-hidden hidden lg:block">
+                        <img class="w-full h-full object-cover" alt="Agricultural field with irrigation" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBpYGvrITXOaosndtg6x8NnU7ozyIkloMaKTVAltbhBj3-vcrEClb-60c-DVIQ83lMHfMjm3GAChcrlldqq4abIvoJ8_mHFUrmMiEoEJMfXLhX6SVoAV7QimuOyb4omiwGbFNKjdSQnYu3yn1d7tDJA__na0p10ohUfafjLuQHEYpC0WMJCElO7lg7ZuMlS_78MBbzeDmtZ_wwwLSjlhmxRFekKzccgFikSEvJ1fMSFQ-XYCDihhMl-BCxPLMeK1Toak35TTdIFDAc">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-6">
+                            <p class="text-white font-semibold">Precision Water Management</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="col-span-12 lg:col-span-8 bg-surface-container-lowest p-6 rounded-xl shadow-sm simulation-form">
+                    <h3 class="text-lg font-semibold text-on-surface mb-6 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">settings_input_component</span>
+                        Simulation Parameters
+                    </h3>
+
+                    <form method="post" enctype="multipart/form-data" id="simulationForm" data-loading-text="Running crop simulation..." class="space-y-6">
+                        {% csrf_token %}
+                        <div id="maturityWarning" class="warning-box rounded-lg border-l-4 border-amber-500 bg-amber-50 text-amber-900 px-4 py-3 text-sm" {% if not maturity_warning %}style="display: none;"{% endif %}>{{ maturity_warning|default:'' }}</div>
+
+                        <div class="space-y-3">
+                            <label class="text-xs font-bold uppercase tracking-wider text-outline">Simulation mode</label>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <label class="mode-tab flex items-center p-4 border border-outline-variant rounded-lg cursor-pointer hover:bg-surface-container transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                                    <input type="radio" name="sim_mode" value="single_year" class="w-4 h-4 text-primary border-outline-variant focus:ring-primary" {% if sim_mode == 'single_year' %}checked{% endif %}>
+                                    <span class="ml-3 text-sm">Simulation year</span>
+                                </label>
+                                <label class="mode-tab flex items-center p-4 border border-outline-variant rounded-lg cursor-pointer hover:bg-surface-container transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                                    <input type="radio" name="sim_mode" value="historical_range" class="w-4 h-4 text-primary border-outline-variant focus:ring-primary" {% if sim_mode == 'historical_range' %}checked{% endif %}>
+                                    <span class="ml-3 text-sm">Historical range</span>
+                                </label>
+                                <label class="mode-tab flex items-center p-4 border border-outline-variant rounded-lg cursor-pointer hover:bg-surface-container transition-all has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                                    <input type="radio" name="sim_mode" value="forecast" class="w-4 h-4 text-primary border-outline-variant focus:ring-primary" {% if sim_mode == 'forecast' %}checked{% endif %}>
+                                    <span class="ml-3 text-sm">Forecast (Open-Meteo)</span>
+                                </label>
+                            </div>
+                            <p class="text-xs text-on-surface-variant/80 leading-relaxed">
+                                <strong>Simulation year</strong> uses May&nbsp;1–Sep&nbsp;30 for the year you enter.
+                                <strong>Historical range</strong> uses ECCC-backed weather: either a custom date range or multiple May–Sep seasons by calendar year.
+                                <strong>Forecast</strong> uses Open-Meteo daily forecast drivers (short horizon, typically up to ~16 days).
+                            </p>
+                        </div>
+
+                        <div id="panelSingleYear" class="form-grid" style="display: none; margin-bottom: 12px;">
+                            <div class="form-group space-y-2">
+                                <label class="text-xs font-bold uppercase tracking-wider text-outline">Simulation year</label>
+                                <input type="number" name="simulation_year" min="1980" max="2100" step="1"
+                                       class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary"
+                                       value="{{ simulation_year|default:'' }}"
+                                       placeholder="e.g. 2023">
+                            </div>
+                        </div>
+
+                        <div id="panelHistoricalSub" style="display: none; margin-bottom: 12px;" class="space-y-3 pt-4 border-t border-surface-variant">
+                            <div class="form-group space-y-3">
+                                <label class="text-xs font-bold uppercase tracking-wider text-outline">Historical range type</label>
+                                <div class="flex flex-wrap gap-6">
+                                    <label class="flex items-center gap-2 cursor-pointer text-sm">
+                                        <input type="radio" name="historical_range_type" value="custom" class="w-4 h-4 text-primary border-outline-variant focus:ring-primary" {% if historical_range_type != 'years' %}checked{% endif %}>
+                                        Custom start / end dates
+                                    </label>
+                                    <label class="flex items-center gap-2 cursor-pointer text-sm">
+                                        <input type="radio" name="historical_range_type" value="years" class="w-4 h-4 text-primary border-outline-variant focus:ring-primary" {% if historical_range_type == 'years' %}checked{% endif %}>
+                                        Year to year (May–Sep each year)
+                                    </label>
+                                </div>
+                            </div>
+                            <div id="panelHistYears" class="form-grid" style="display: none;">
+                                <div class="form-group space-y-2">
+                                    <label class="text-xs font-bold uppercase tracking-wider text-outline">Start year</label>
+                                    <input type="number" name="hist_year_start" min="1980" max="2100" step="1"
+                                           class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary"
+                                           value="{{ hist_year_start|default:'' }}" placeholder="e.g. 2018">
+                                </div>
+                                <div class="form-group space-y-2">
+                                    <label class="text-xs font-bold uppercase tracking-wider text-outline">End year</label>
+                                    <input type="number" name="hist_year_end" min="1980" max="2100" step="1"
+                                           class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary"
+                                           value="{{ hist_year_end|default:'' }}" placeholder="e.g. 2022">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="form-group space-y-2">
+                                <label class="text-xs font-bold uppercase tracking-wider text-outline">Select Crop</label>
+                                <select name="crop" id="crop" required class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                                    <option value="" {% if not selected_crop %}selected{% endif %} disabled>Select crop</option>
+                                    {% for crop in crops %}
+                                    <option value="{{ crop }}" {% if selected_crop == crop %}selected{% endif %}>{{ crop }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group space-y-2">
+                                <label class="text-xs font-bold uppercase tracking-wider text-outline">Analysis Timestep</label>
+                                <select name="timestep" id="timestep" required class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                                    <option value="" {% if not timestep %}selected{% endif %} disabled>Select timestep</option>
+                                    <option value="weekly" {% if timestep == 'weekly' %}selected{% endif %}>Weekly (7-day)</option>
+                                    <option value="biweekly" {% if timestep == 'biweekly' %}selected{% endif %}>Biweekly (14-day)</option>
+                                </select>
+                            </div>
+                            <div class="form-group space-y-2">
+                                <label class="text-xs font-bold uppercase tracking-wider text-outline">Soil Type</label>
+                                <select name="soil" id="soil" required class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                                    <option value="" {% if not selected_soil %}selected{% endif %} disabled>Select soil type</option>
+                                    {% for soil in soil_types %}
+                                    <option value="{{ soil }}" {% if selected_soil == soil %}selected{% endif %}>{{ soil }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group space-y-2">
+                                <label class="text-xs font-bold uppercase tracking-wider text-outline">City (ECCC Weather Source)</label>
+                                <select name="city_name" id="city_name" required class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                                    <option value="" {% if not selected_city %}selected{% endif %} disabled>Select city</option>
+                                    {% for city in available_cities %}
+                                    <option value="{{ city }}" {% if selected_city == city %}selected{% endif %}>{{ city }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group space-y-2">
+                                <label class="text-xs font-bold uppercase tracking-wider text-outline">Irrigation Strategy</label>
+                                <select name="irrigation" id="irrigation" class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                                    {% for value, label in irrigation_methods %}
+                                    <option value="{{ value }}" {% if selected_irrigation == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group space-y-2" id="panelCustomDates">
+                                <label class="text-xs font-bold uppercase tracking-wider text-outline">Start Date</label>
+                                <input type="text" name="start_date" id="start_date_input" value="{{ start_date|default:'' }}"
+                                       placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}" required
+                                       class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                            </div>
+                            <div class="form-group space-y-2" id="panelCustomDatesEnd">
+                                <label class="text-xs font-bold uppercase tracking-wider text-outline">End Date</label>
+                                <input type="text" name="end_date" id="end_date_input" value="{{ end_date|default:'' }}"
+                                       placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}" required
+                                       class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                            </div>
+                        </div>
+                        {% if farm_prefill_note and not has_results %}
+                        <p class="text-[11px] text-[#707978]">
+                            Pre-filled from your farm profile. You can change these for this run.
+                        </p>
+                        {% endif %}
+
+                        <div class="form-group space-y-3">
+                            <label class="text-xs font-bold uppercase tracking-wider text-outline">Weather Data (Optional)</label>
+                            <div class="file-upload-area border-2 border-dashed border-outline-variant rounded-xl p-8 flex flex-col items-center justify-center bg-surface-container-low hover:bg-surface-variant/20 transition-all cursor-pointer" onclick="document.getElementById('weather_file').click()">
+                                <span class="material-symbols-outlined text-[40px] text-primary mb-3">cloud_upload</span>
+                                <p class="text-base font-semibold text-on-surface text-center mb-1">Click to upload weather data (CSV or Excel)</p>
+                                <p class="text-xs text-on-surface-variant text-center">Required columns: Date, MinTemp, MaxTemp, Precipitation, ReferenceET</p>
+                                <input type="file" name="weather_file" id="weather_file" accept=".csv,.xlsx,.xls">
+                            </div>
+                            <p class="text-xs text-on-surface-variant/70">If no file is uploaded, weather is fetched from ECCC for the selected city and date range.</p>
+                        </div>
+
+                        <div class="flex justify-end">
+                            <button type="submit" class="submit-btn bg-primary hover:bg-primary-container text-white font-bold px-8 py-3 rounded-lg flex items-center gap-2 transition-all shadow-lg">
+                                <span class="material-symbols-outlined">rocket_launch</span>
+                                Run Simulation
+                            </button>
+                        </div>
+                    </form>
+                </section>
+            </div>
             {% endif %}
-        </div>
-        
-        <div class="result-card">
-            <h3>{{ results.biomass|floatformat:1 }}</h3>
-            <p>tonnes/ha</p>
-            <p style="margin-top: 5px; font-weight: 600;">Total Biomass</p>
-        </div>
 
-        <div class="result-card">
-            {% if results.partial_results and yield_tha == 0 %}
-            <h3>&mdash;</h3>
-            <p>t/ha</p>
-            {% else %}
-            <h3>{{ yield_tha|floatformat:2 }}</h3>
-            <p>t/ha</p>
+            {% if has_results %}
+            <div class="space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <h2 class="text-xl font-semibold text-primary">Simulation Results</h2>
+                    <div class="flex flex-wrap gap-2">
+                        {% if is_saved_run %}
+                        <a href="{% url 'et:dashboard' %}#recent-history" class="inline-flex items-center justify-center no-underline text-primary font-semibold px-5 py-3 rounded-xl border border-outline-variant/60 bg-white hover:bg-surface-container-low">
+                            Back to dashboard
+                        </a>
+                        {% endif %}
+                        <a href="{% url 'et:aquacrop_simulation' %}" class="submit-btn inline-flex items-center justify-center no-underline text-white font-bold px-6 py-3 rounded-xl shadow-lg" style="background: linear-gradient(135deg, #5AAA95, #3f8f7f);">
+                            Run a new simulation
+                        </a>
+                    </div>
+                </div>
+                {% if results.partial_results %}
+                <div class="warning-box rounded-lg border-l-4 border-amber-500 bg-amber-50 text-amber-900 px-4 py-3 text-sm">{{ results.result_note }}</div>
+                {% endif %}
+                {% if forecast_mode_caveat %}
+                <div class="warning-box rounded-lg border-l-4 border-amber-500 bg-amber-50 text-amber-900 px-4 py-3 text-sm">{{ forecast_mode_caveat }}</div>
+                {% endif %}
+
+                <div class="results-summary grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div class="result-card rounded-xl p-5 text-center text-white shadow-md" style="background: linear-gradient(135deg, #087F8C, #5AAA95);">
+                        {% if results.partial_results and results.yield_fresh == 0 %}
+                        <h3 class="text-2xl font-bold m-0">&mdash;</h3>
+                        <p class="text-sm m-0 opacity-90">tonnes/ha</p>
+                        {% else %}
+                        <h3 class="text-2xl font-bold m-0">{{ results.yield_fresh|floatformat:1 }}</h3>
+                        <p class="text-sm m-0 opacity-90">tonnes/ha</p>
+                        {% endif %}
+                        <p class="mt-2 text-sm font-semibold">Fresh Yield</p>
+                        {% if results.partial_results and results.yield_fresh == 0 %}
+                        <p class="mt-1 text-xs opacity-95">Requires full season to maturity</p>
+                        {% endif %}
+                    </div>
+                    <div class="result-card rounded-xl p-5 text-center text-white shadow-md" style="background: linear-gradient(135deg, #087F8C, #5AAA95);">
+                        <h3 class="text-2xl font-bold m-0">{{ results.biomass|floatformat:1 }}</h3>
+                        <p class="text-sm m-0 opacity-90">tonnes/ha</p>
+                        <p class="mt-2 text-sm font-semibold">Total Biomass</p>
+                    </div>
+                    <div class="result-card rounded-xl p-5 text-center text-white shadow-md" style="background: linear-gradient(135deg, #087F8C, #5AAA95);">
+                        {% if results.partial_results and yield_tha == 0 %}
+                        <h3 class="text-2xl font-bold m-0">&mdash;</h3>
+                        <p class="text-sm m-0 opacity-90">t/ha</p>
+                        {% else %}
+                        <h3 class="text-2xl font-bold m-0">{{ yield_tha|floatformat:2 }}</h3>
+                        <p class="text-sm m-0 opacity-90">t/ha</p>
+                        {% endif %}
+                        <p class="mt-2 text-sm font-semibold">Marketable Yield</p>
+                        {% if results.partial_results and yield_tha == 0 %}
+                        <p class="mt-1 text-xs opacity-95">Requires full season to maturity</p>
+                        {% endif %}
+                    </div>
+                    <div class="result-card secondary rounded-xl p-5 text-center text-white shadow-md" style="background: linear-gradient(135deg, #5AAA95, #86A873);">
+                        <h3 class="text-2xl font-bold m-0">{{ results.total_et|floatformat:0 }}</h3>
+                        <p class="text-sm m-0 opacity-90">mm</p>
+                        <p class="mt-2 text-sm font-semibold">Total Water Use (ET)</p>
+                    </div>
+                    {% if results.yield_fresh > 0 %}
+                    <div class="result-card secondary rounded-xl p-5 text-center text-white shadow-md" style="background: linear-gradient(135deg, #5AAA95, #86A873);">
+                        {% if results.partial_results and results.water_productivity == 0 %}
+                        <h3 class="text-2xl font-bold m-0">&mdash;</h3>
+                        <p class="text-sm m-0 opacity-90">kg/m³</p>
+                        {% else %}
+                        <h3 class="text-2xl font-bold m-0">{{ results.water_productivity|floatformat:2 }}</h3>
+                        <p class="text-sm m-0 opacity-90">kg/m³</p>
+                        {% endif %}
+                        <p class="mt-2 text-sm font-semibold">Water Productivity</p>
+                        {% if results.partial_results and results.water_productivity == 0 %}
+                        <p class="mt-1 text-xs opacity-95">Requires full season to maturity</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    <div class="result-card secondary rounded-xl p-5 text-center text-white shadow-md" style="background: linear-gradient(135deg, #5AAA95, #86A873);">
+                        <h3 class="text-2xl font-bold m-0">{{ results.total_irrigation|floatformat:0 }}</h3>
+                        <p class="text-sm m-0 opacity-90">mm</p>
+                        <p class="mt-2 text-sm font-semibold">Total Irrigation</p>
+                    </div>
+                    <div class="result-card rounded-xl p-5 text-center text-white shadow-md" style="background: linear-gradient(135deg, #087F8C, #5AAA95);">
+                        <h3 class="text-2xl font-bold m-0">{{ results.canopy_cover_max|floatformat:0 }}%</h3>
+                        <p class="text-sm m-0 opacity-90">maximum</p>
+                        <p class="mt-2 text-sm font-semibold">Canopy Cover</p>
+                    </div>
+                </div>
+
+                <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+                    <h3 class="text-lg font-semibold text-primary mb-4">Crop Growth Over Time</h3>
+                    <canvas id="growthChart"></canvas>
+                </div>
+
+                {% if resampled_chart %}
+                <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+                    <h3 class="text-lg font-semibold text-primary mb-4">{% if timestep == 'weekly' %}Weekly{% else %}Biweekly{% endif %} Growth Summary</h3>
+                    <img src="data:image/png;base64,{{ resampled_chart }}" alt="Aggregated growth chart" class="max-w-full rounded-lg">
+                </div>
+                {% endif %}
+
+                {% if resampled_data %}
+                <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm overflow-x-auto">
+                    <h3 class="text-lg font-semibold text-primary mb-4">{% if timestep == 'weekly' %}Weekly{% else %}Biweekly{% endif %} Data Table</h3>
+                    <table class="w-full border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-primary-container text-white">
+                                <th class="p-3 text-left">Period</th>
+                                <th class="p-3 text-left">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in resampled_data %}
+                            <tr class="border-b border-surface-variant">
+                                <td class="p-3">{{ row.Period }}</td>
+                                <td class="p-3">{{ row.value|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                {% if historical_results_rows %}
+                <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm overflow-x-auto">
+                    <h3 class="text-lg font-semibold text-primary mb-2">Historical yield &amp; ET (AquaCrop)</h3>
+                    <p class="text-sm text-on-surface-variant mb-4">
+                        Values correspond to the mode you selected (custom dates, single simulation year, May–Sep by calendar year, or forecast window).
+                        {% if multi_year_mode %}Each row is one growing season (May&nbsp;1–Sep&nbsp;30).{% endif %}
+                    </p>
+                    <table class="w-full border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-primary-container text-white">
+                                <th class="p-3 text-left">Period</th>
+                                <th class="p-3 text-right">Fresh yield (t/ha)</th>
+                                <th class="p-3 text-right">Total ET (mm)</th>
+                                <th class="p-3 text-left">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in historical_results_rows %}
+                            <tr class="border-b border-surface-variant">
+                                <td class="p-3">{{ row.label }}{% if row.start_date %}<br><span class="text-xs text-on-surface-variant">{{ row.start_date }} – {{ row.end_date }}</span>{% endif %}</td>
+                                <td class="p-3 text-right">{% if row.error %}&mdash;{% else %}{{ row.yield_fresh|floatformat:2 }}{% endif %}</td>
+                                <td class="p-3 text-right">{% if row.error %}&mdash;{% else %}{{ row.total_et|floatformat:1 }}{% endif %}</td>
+                                <td class="p-3">{% if row.error %}<span class="text-amber-700">{{ row.error }}</span>{% elif row.partial_results %}Partial season{% else %}&nbsp;{% endif %}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                {% if weekly_yield_projection %}
+                <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm overflow-x-auto">
+                    <h3 class="text-lg font-semibold text-primary mb-2">Weekly yield projection (biomass × harvest index)</h3>
+                    <p class="text-sm text-on-surface-variant mb-4">
+                        Indicative trajectory from simulated peak weekly biomass; not a substitute for field-calibrated forecasts.
+                    </p>
+                    <table class="w-full border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-primary-container text-white">
+                                <th class="p-3 text-left">Week after planting</th>
+                                <th class="p-3 text-right">Potential marketable yield (t/ha)</th>
+                                <th class="p-3 text-right">Peak biomass (t/ha)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in weekly_yield_projection %}
+                            <tr class="border-b border-surface-variant">
+                                <td class="p-3">{{ row.period_label }}</td>
+                                <td class="p-3 text-right">{{ row.yield_tha|floatformat:3 }}</td>
+                                <td class="p-3 text-right">{{ row.biomass_peak_tha|floatformat:3 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+                    <h3 class="text-lg font-semibold text-primary mb-2">Water balance — actual ET (transpiration + evaporation)</h3>
+                    <p class="text-sm text-on-surface-variant mb-3">
+                        X-axis: weeks after planting. Toggle cumulative vs weekly totals (mm per week).
+                    </p>
+                    <div class="mb-4 flex flex-wrap gap-4 items-center text-sm">
+                        <span class="font-semibold text-primary">ET view:</span>
+                        <label class="cursor-pointer"><input type="radio" name="wb_et_view" value="cumulative" checked id="wbCumulative" class="mr-1"> Cumulative actual ET</label>
+                        <label class="cursor-pointer"><input type="radio" name="wb_et_view" value="weekly" id="wbWeekly" class="mr-1"> Weekly actual ET</label>
+                    </div>
+                    <canvas id="waterBalanceChart"></canvas>
+                </div>
+
+                <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+                    <h3 class="text-lg font-semibold text-primary mb-2">Weekly water fluxes (ET, precipitation, irrigation)</h3>
+                    <p class="text-sm text-on-surface-variant mb-3">
+                        Weekly sums (mm/week) after planting: actual ET (T<sub>r</sub>+E<sub>s</sub>), rain (model influx), and irrigation applied.
+                    </p>
+                    <canvas id="weeklyWaterChart"></canvas>
+                </div>
+
+                <div class="text-center">
+                    <button type="button" onclick="downloadResults()" class="submit-btn bg-primary hover:bg-primary-container text-white font-bold px-8 py-3 rounded-lg inline-flex items-center gap-2 shadow-lg">
+                        Download Results as CSV
+                    </button>
+                </div>
+            </div>
             {% endif %}
-            <p style="margin-top: 5px; font-weight: 600;">Marketable Yield</p>
-            {% if results.partial_results and yield_tha == 0 %}
-            <p style="margin-top: 4px; font-size: 0.78rem; opacity: 0.95;">Requires full season to maturity</p>
-            {% endif %}
+
+            <footer class="bg-surface-container-highest/30 p-6 rounded-xl border border-surface-variant chart-container">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-outline mb-4 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-base">menu_book</span>
+                    Model Credit
+                </h4>
+                <p class="text-sm text-on-surface-variant border-l-2 border-primary/30 pl-4 mb-4">
+                    AquaCrop model developed by Dirk Raes, Pasquale Steduto, Theodore C. Hsiao, and Elias Fereres (FAO, 2009).
+                </p>
+                <p class="text-sm text-on-surface-variant mb-3">
+                    Steduto, P., Hsiao, T.C., Fereres, E., Raes, D. (2012). Crop yield response
+                    to water. FAO Irrigation and Drainage Paper 66. Food and Agriculture Organization
+                    of the United Nations, Rome.
+                    <a href="https://www.fao.org/3/i2800e/i2800e.pdf" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">https://www.fao.org/3/i2800e/i2800e.pdf</a>
+                </p>
+                <p class="text-sm text-on-surface-variant mb-4">
+                    Hsiao, T.C., Heng, L., Steduto, P., Rojas-Lara, B., Raes, D., Fereres, E. (2009).
+                    AquaCrop - The FAO crop model to simulate yield response to water: III.
+                    Parameterization and testing for maize. Agronomy Journal, 101(3), 448-459.
+                    <a href="https://doi.org/10.2134/agronj2008.0218s" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">https://doi.org/10.2134/agronj2008.0218s</a>
+                </p>
+                <p class="text-sm text-on-surface-variant">
+                    For full data sources, credits and references see the
+                    <a href="{% url 'et:method_info' %}#references-data-sources" class="text-primary hover:underline">Method Guide</a>.
+                </p>
+            </footer>
         </div>
-        
-        <div class="result-card secondary">
-            <h3>{{ results.total_et|floatformat:0 }}</h3>
-            <p>mm</p>
-            <p style="margin-top: 5px; font-weight: 600;">Total Water Use (ET)</p>
-        </div>
-        
-        {% if results.yield_fresh > 0 %}
-        <div class="result-card secondary">
-            {% if results.partial_results and results.water_productivity == 0 %}
-            <h3>&mdash;</h3>
-            <p>kg/m³</p>
-            {% else %}
-            <h3>{{ results.water_productivity|floatformat:2 }}</h3>
-            <p>kg/m³</p>
-            {% endif %}
-            <p style="margin-top: 5px; font-weight: 600;">Water Productivity</p>
-            {% if results.partial_results and results.water_productivity == 0 %}
-            <p style="margin-top: 4px; font-size: 0.78rem; opacity: 0.95;">Requires full season to maturity</p>
-            {% endif %}
-        </div>
-        {% endif %}
-        
-        <div class="result-card secondary">
-            <h3>{{ results.total_irrigation|floatformat:0 }}</h3>
-            <p>mm</p>
-            <p style="margin-top: 5px; font-weight: 600;">Total Irrigation</p>
-        </div>
-        
-        <div class="result-card">
-            <h3>{{ results.canopy_cover_max|floatformat:0 }}%</h3>
-            <p>maximum</p>
-            <p style="margin-top: 5px; font-weight: 600;">Canopy Cover</p>
-        </div>
-    </div>
-
-    <!-- Growth Chart -->
-    <div class="chart-container">
-        <h3>Crop Growth Over Time</h3>
-        <canvas id="growthChart"></canvas>
-    </div>
-
-    {% if resampled_chart %}
-<div class="chart-container">
-    <h3>{% if timestep == 'weekly' %}Weekly{% else %}Biweekly{% endif %} Growth Summary</h3>
-    <img src="data:image/png;base64,{{ resampled_chart }}" 
-         alt="Aggregated growth chart" style="max-width:100%; border-radius:8px;">
-</div>
-{% endif %}
-
-{% if resampled_data %}
-<div class="chart-container">
-    <h3>{% if timestep == 'weekly' %}Weekly{% else %}Biweekly{% endif %} Data Table</h3>
-    <table style="width:100%; border-collapse:collapse;">
-        <thead>
-            <tr style="background:#087F8C; color:white;">
-                <th style="padding:10px; text-align:left;">Period</th>
-                <th style="padding:10px; text-align:left;">Value</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in resampled_data %}
-            <tr style="border-bottom:1px solid #e0f2f1;">
-                <td style="padding:10px;">{{ row.Period }}</td>
-                <td style="padding:10px;">{{ row.value|floatformat:2 }}</td>            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
-
-{% if historical_results_rows %}
-<div class="chart-container">
-    <h3>Historical yield &amp; ET (AquaCrop)</h3>
-    <p style="color:#5a6f70; font-size:0.92rem; margin-bottom:12px;">
-        Values correspond to the mode you selected (custom dates, single simulation year, May–Sep by calendar year, or forecast window).
-        {% if multi_year_mode %}Each row is one growing season (May&nbsp;1–Sep&nbsp;30).{% endif %}
-    </p>
-    <table style="width:100%; border-collapse:collapse;">
-        <thead>
-            <tr style="background:#087F8C; color:white;">
-                <th style="padding:10px; text-align:left;">Period</th>
-                <th style="padding:10px; text-align:right;">Fresh yield (t/ha)</th>
-                <th style="padding:10px; text-align:right;">Total ET (mm)</th>
-                <th style="padding:10px; text-align:left;">Notes</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in historical_results_rows %}
-            <tr style="border-bottom:1px solid #e0f2f1;">
-                <td style="padding:10px;">{{ row.label }}{% if row.start_date %}<br><span style="font-size:0.82rem;color:#666;">{{ row.start_date }} – {{ row.end_date }}</span>{% endif %}</td>
-                <td style="padding:10px; text-align:right;">
-                    {% if row.error %}&mdash;{% else %}{{ row.yield_fresh|floatformat:2 }}{% endif %}
-                </td>
-                <td style="padding:10px; text-align:right;">
-                    {% if row.error %}&mdash;{% else %}{{ row.total_et|floatformat:1 }}{% endif %}
-                </td>
-                <td style="padding:10px;">
-                    {% if row.error %}<span style="color:#b45309;">{{ row.error }}</span>
-                    {% elif row.partial_results %}Partial season
-                    {% else %}&nbsp;{% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
-
-{% if weekly_yield_projection %}
-<div class="chart-container">
-    <h3>Weekly yield projection (biomass × harvest index)</h3>
-    <p style="color:#5a6f70; font-size:0.9rem; margin-bottom:12px;">
-        Indicative trajectory from simulated peak weekly biomass; not a substitute for field-calibrated forecasts.
-    </p>
-    <table style="width:100%; border-collapse:collapse;">
-        <thead>
-            <tr style="background:#087F8C; color:white;">
-                <th style="padding:10px; text-align:left;">Week after planting</th>
-                <th style="padding:10px; text-align:right;">Potential marketable yield (t/ha)</th>
-                <th style="padding:10px; text-align:right;">Peak biomass (t/ha)</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in weekly_yield_projection %}
-            <tr style="border-bottom:1px solid #e0f2f1;">
-                <td style="padding:10px;">{{ row.period_label }}</td>
-                <td style="padding:10px; text-align:right;">{{ row.yield_tha|floatformat:3 }}</td>
-                <td style="padding:10px; text-align:right;">{{ row.biomass_peak_tha|floatformat:3 }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
-
-    <!-- Water Balance: cumulative / weekly actual ET vs weeks after planting -->
-    <div class="chart-container">
-        <h3>Water balance — actual ET (transpiration + evaporation)</h3>
-        <p style="color:#5a6f70; font-size:0.9rem; margin-bottom:10px;">
-            X-axis: weeks after planting. Toggle cumulative vs weekly totals (mm per week).
-        </p>
-        <div style="margin-bottom:12px; display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
-            <span style="font-weight:600; color:#095256;">ET view:</span>
-            <label style="cursor:pointer;"><input type="radio" name="wb_et_view" value="cumulative" checked id="wbCumulative"> Cumulative actual ET</label>
-            <label style="cursor:pointer;"><input type="radio" name="wb_et_view" value="weekly" id="wbWeekly"> Weekly actual ET</label>
-        </div>
-        <canvas id="waterBalanceChart"></canvas>
-    </div>
-
-    <div class="chart-container">
-        <h3>Weekly water fluxes (ET, precipitation, irrigation)</h3>
-        <p style="color:#5a6f70; font-size:0.9rem; margin-bottom:10px;">
-            Weekly sums (mm/week) after planting: actual ET (T<sub>r</sub>+E<sub>s</sub>), rain (model influx), and irrigation applied.
-        </p>
-        <canvas id="weeklyWaterChart"></canvas>
-    </div>
-
-    <!-- Download Button -->
-    <div style="text-align: center; margin-top: 30px;">
-        <button onclick="downloadResults()" class="submit-btn">
-            Download Results as CSV
-        </button>
-    </div>
-    {% endif %}
-
-    <div class="chart-container">
-        <h3>Model Credit</h3>
-        <p style="color: #333; line-height: 1.8; margin-bottom: 12px;">
-            AquaCrop model developed by Dirk Raes, Pasquale Steduto, Theodore C. Hsiao, and Elias Fereres (FAO, 2009).
-        </p>
-        <p style="color: #333; line-height: 1.8; margin-bottom: 12px;">
-            Steduto, P., Hsiao, T.C., Fereres, E., Raes, D. (2012). Crop yield response
-            to water. FAO Irrigation and Drainage Paper 66. Food and Agriculture Organization
-            of the United Nations, Rome.
-            <a href="https://www.fao.org/3/i2800e/i2800e.pdf" target="_blank" rel="noopener noreferrer">https://www.fao.org/3/i2800e/i2800e.pdf</a>
-        </p>
-        <p style="color: #333; line-height: 1.8; margin-bottom: 18px;">
-            Hsiao, T.C., Heng, L., Steduto, P., Rojas-Lara, B., Raes, D., Fereres, E. (2009).
-            AquaCrop - The FAO crop model to simulate yield response to water: III.
-            Parameterization and testing for maize. Agronomy Journal, 101(3), 448-459.
-            <a href="https://doi.org/10.2134/agronj2008.0218s" target="_blank" rel="noopener noreferrer">https://doi.org/10.2134/agronj2008.0218s</a>
-        </p>
-
-        <p style="color: #333; line-height: 1.8; margin-top: 8px;">
-            For full data sources, credits and references see the
-            <a href="{% url 'et:method_info' %}#references-data-sources">Method Guide</a>.
-        </p>
-    </div>
+    </main>
 </div>
 {% endblock %}
-
 {% block extra_js %}
 <!-- Chart.js for visualizations -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>

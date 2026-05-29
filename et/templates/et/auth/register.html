@@ -1,55 +1,159 @@
 {% extends 'et/base.html' %}
+{% load static %}
 
 {% block title %}Register | AqualET{% endblock %}
 
-{% block content %}
-<div class="container" style="max-width: 480px; margin: 40px auto;">
-    <div class="card">
-        <h1 style="color: #095256; margin-bottom: 8px;">Create account</h1>
-        <p style="color: #666; margin-bottom: 24px;">Register as a farmer to save calculations and manage your farm profile.</p>
+{% block body_class %}auth-page{% endblock %}
 
-        {% if messages %}
-        {% for message in messages %}
-        <div class="{% if message.tags == 'error' %}error-message{% else %}info-box{% endif %}" style="margin-bottom: 16px;">
-            {{ message }}
-        </div>
-        {% endfor %}
-        {% endif %}
+{% block head_assets %}
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                "background": "#f8faf9",
+                "surface": "#f8faf9",
+                "primary-container": "#2d6a6a",
+                "primary": "#0c5252",
+                "on-primary": "#ffffff",
+                "on-primary-container": "#abe8e7",
+                "on-surface": "#191c1c",
+                "on-surface-variant": "#3f4848",
+                "surface-container-low": "#f2f4f3",
+                "surface-container-lowest": "#ffffff",
+                "outline": "#707978",
+                "outline-variant": "#bfc8c8",
+            },
+            fontFamily: { sans: ["Inter", "sans-serif"] },
+        },
+    },
+};
+</script>
+{% endblock %}
 
-        <form method="post" action="{% url 'et:register' %}">
-            {% csrf_token %}
-            <div class="form-group" style="margin-bottom: 16px;">
-                <label for="id_full_name">Full name <span style="color:#e74c3c;">*</span></label>
-                {{ form.full_name }}
-                {% if form.full_name.errors %}
-                <div class="error-message" style="margin-top:6px;">{{ form.full_name.errors }}</div>
-                {% endif %}
-            </div>
-            <div class="form-group" style="margin-bottom: 16px;">
-                <label for="id_email">Email</label>
-                {{ form.email }}
-            </div>
-            <div class="form-group" style="margin-bottom: 16px;">
-                <label for="id_password">Password</label>
-                {{ form.password }}
-            </div>
-            <div class="form-group" style="margin-bottom: 20px;">
-                <label for="id_password_confirm">Confirm password</label>
-                {{ form.password_confirm }}
-            </div>
-            {% if form.non_field_errors %}
-            <div class="error-message" style="margin-bottom: 12px;">{{ form.non_field_errors }}</div>
-            {% endif %}
-            <button type="submit" class="submit-btn" style="width: 100%;">Register</button>
-        </form>
-        <p style="margin-top: 20px; text-align: center; color: #666;">
-            Already have an account? <a href="{% url 'et:login' %}">Sign in</a>
-        </p>
-    </div>
-</div>
+{% block extra_css %}
 <style>
-    #id_full_name, #id_email, #id_password, #id_password_confirm {
-        width: 100%; padding: 12px; border: 2px solid #e0f2f1; border-radius: 8px;
+    body.auth-page {
+        font-family: 'Inter', sans-serif;
+        background: #f8faf9;
+        color: #191c1c;
+    }
+    body.auth-page .navbar {
+        display: none !important;
+    }
+    body.auth-page > .container {
+        max-width: none;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+    #id_full_name,
+    #id_email,
+    #id_password,
+    #id_password_confirm {
+        width: 100%;
+        padding: 0.8rem 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid #bfc8c8;
+        font-size: 0.95rem;
+        box-sizing: border-box;
+        background-color: #ffffff;
+    }
+    #id_full_name:focus,
+    #id_email:focus,
+    #id_password:focus,
+    #id_password_confirm:focus {
+        outline: none;
+        border-color: #0c5252;
+        box-shadow: 0 0 0 2px rgba(12, 82, 82, 0.15);
     }
 </style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-background flex items-center justify-center px-4 py-10">
+    <div class="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-16 items-center">
+        <div class="flex flex-col items-center md:items-start text-center md:text-left space-y-5 order-1 md:order-none">
+            <div class="flex flex-col items-center md:items-start gap-5">
+                <img
+                    src="{% static 'et/img/logo.png' %}"
+                    alt="AqualET logo"
+                    class="w-28 h-28 md:w-32 md:h-32 rounded-2xl shadow-lg ring-4 ring-white"
+                >
+                <div>
+                    <h1 class="text-5xl md:text-6xl lg:text-7xl font-bold text-primary leading-none tracking-tight">
+                        AqualET
+                    </h1>
+                    <p class="text-sm md:text-base font-medium text-on-surface-variant mt-3 tracking-wide">
+                        Agricultural Intelligence
+                    </p>
+                </div>
+            </div>
+            <p class="text-base md:text-lg text-on-surface-variant max-w-md leading-relaxed">
+                Create an account to save ET calculations, AquaCrop runs, and Environment Canada forecasts to your farm profile.
+            </p>
+        </div>
+
+        <div class="bg-surface-container-lowest rounded-2xl shadow-xl border border-outline-variant/40 p-8 order-2 md:order-none w-full max-w-md md:max-w-none md:justify-self-end">
+            <h2 class="text-xl font-semibold text-on-surface mb-1">Create account</h2>
+            <p class="text-sm text-on-surface-variant mb-6">Register as a farmer to save calculations and manage your farm profile.</p>
+
+            {% if messages %}
+            {% for message in messages %}
+            <div class="{% if message.tags == 'error' %}bg-red-50 border border-red-200 text-red-800{% else %}bg-primary/5 border border-primary/30 text-primary{% endif %} rounded-lg px-3 py-2 text-sm mb-3">
+                {{ message }}
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            <form method="post" action="{% url 'et:register' %}" class="space-y-4" data-loading-text="Creating your account...">
+                {% csrf_token %}
+
+                <div>
+                    <label for="id_full_name" class="block text-xs font-bold tracking-wider text-outline uppercase mb-1.5">
+                        Full name <span class="text-red-500">*</span>
+                    </label>
+                    {{ form.full_name }}
+                    {% if form.full_name.errors %}
+                    <div class="bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2 text-xs mt-1.5">
+                        {{ form.full_name.errors }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="id_email" class="block text-xs font-bold tracking-wider text-outline uppercase mb-1.5">Email</label>
+                    {{ form.email }}
+                </div>
+
+                <div>
+                    <label for="id_password" class="block text-xs font-bold tracking-wider text-outline uppercase mb-1.5">Password</label>
+                    {{ form.password }}
+                </div>
+
+                <div>
+                    <label for="id_password_confirm" class="block text-xs font-bold tracking-wider text-outline uppercase mb-1.5">Confirm password</label>
+                    {{ form.password_confirm }}
+                </div>
+
+                {% if form.non_field_errors %}
+                <div class="bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2 text-sm">
+                    {{ form.non_field_errors }}
+                </div>
+                {% endif %}
+
+                <button type="submit" class="w-full bg-primary text-white font-semibold text-sm py-3 rounded-lg shadow-md hover:bg-primary-container active:scale-95 transition-all">
+                    Register
+                </button>
+            </form>
+
+            <p class="mt-4 text-center text-sm text-on-surface-variant">
+                Already have an account?
+                <a href="{% url 'et:login' %}" class="text-primary font-semibold hover:underline">Sign in</a>
+            </p>
+        </div>
+    </div>
+</div>
 {% endblock %}
