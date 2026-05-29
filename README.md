@@ -55,6 +55,21 @@ Key modules:
 pip install -r requirements.txt
 ```
 
+### Environment (Supabase + Django)
+
+Copy `.env.example` to `.env` and fill in values (`.env` is gitignored):
+
+```bash
+cp .env.example .env
+```
+
+Required for farmer login and cloud persistence:
+
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY` (service key is **server-only**)
+- `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`
+
+In the Supabase SQL editor, run `supabase/schema.sql` to create tables and Row Level Security policies.
+
 ### Database + static
 
 ```bash
@@ -69,8 +84,17 @@ python manage.py runserver
 ```
 
 Open:
-- [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
-- App routes are under `/et/` (root redirects to `/et/fetch-data/`)
+- [http://127.0.0.1:8000/](http://127.0.0.1:8000/) → farmer dashboard (sign in required when Supabase is configured)
+- Auth: `/et/auth/register/`, `/et/auth/login/`
+- Tools: `/et/fetch-data/`, `/et/env-canada-forecast/`, `/et/aquacrop/`
+
+### Farmer accounts (Supabase)
+
+- **Register / login** — Supabase Auth; session stores access token server-side (24h expiry).
+- **Farm profile** — `/et/farm/` → `farms` table.
+- **Auto-save** — ET comparison runs, AquaCrop simulations, and forecast runs persist to Supabase when logged in.
+- **Usage logs** — each run/view/export is recorded in `usage_logs`.
+- **Rate limits** — login/register throttled via `django-ratelimit`.
 
 ---
 

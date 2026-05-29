@@ -590,11 +590,12 @@
         }
     </style>
     {% block extra_css %}{% endblock %}
+    {% block head_assets %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
     <nav class="navbar">
         <div class="nav-container">
-            <a href="{% url 'et:enhanced_comparison' %}" class="nav-brand">
+            <a href="{% if supabase_logged_in %}{% url 'et:dashboard' %}{% else %}{% url 'et:login' %}{% endif %}" class="nav-brand">
                 <div class="brand-icon">
                     <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M11 2C11 2 5 9 5 13.5C5 16.538 7.686 19 11 19C14.314 19 17 16.538 17 13.5C17 9 11 2 11 2Z" fill="#BB9F06" opacity="0.85"/>
@@ -607,33 +608,22 @@
                 </div>
             </a>
             <ul class="nav-links" id="navLinks">
-                <li><a href="{% url 'et:acis_fetch' %}" {% if request.resolver_match.url_name == 'acis_fetch' %}class="active"{% endif %}>
-                    ET Setup
+                {% if supabase_logged_in %}
+                <li><a href="{% url 'et:dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}class="active"{% endif %}>
+                    Dashboard
                 </a></li>
-                <li><a href="{% url 'et:env_canada_forecast' %}" {% if request.resolver_match.url_name == 'env_canada_forecast' %}class="active"{% endif %}>
-                    Forecast & Water Plan
+                <li><a href="{% url 'et:farm_profile' %}" {% if request.resolver_match.url_name == 'farm_profile' %}class="active"{% endif %}>
+                    Farm
                 </a></li>
-                <li><a href="{% url 'et:aquacrop_simulation' %}" {% if request.resolver_match.url_name == 'aquacrop_simulation' %}class="active"{% endif %}>
-                    Crop Simulation
+                <li><a href="{% url 'et:logout' %}">Sign out</a></li>
+                {% else %}
+                <li><a href="{% url 'et:login' %}" {% if request.resolver_match.url_name == 'login' %}class="active"{% endif %}>
+                    Sign in
                 </a></li>
-                <li><a href="{% url 'et:priestley_taylor' %}" {% if request.resolver_match.url_name == 'priestley_taylor' %}class="active"{% endif %}>
-                    Priestley-Taylor
+                <li><a href="{% url 'et:register' %}" {% if request.resolver_match.url_name == 'register' %}class="active"{% endif %}>
+                    Register
                 </a></li>
-                <li><a href="{% url 'et:penman_monteith' %}" {% if request.resolver_match.url_name == 'penman_monteith' %}class="active"{% endif %}>
-                    Penman-Monteith
-                </a></li>
-                <li><a href="{% url 'et:maule' %}" {% if request.resolver_match.url_name == 'maule' %}class="active"{% endif %}>
-                    Maule
-                </a></li>
-                <li><a href="{% url 'et:hargreaves' %}" {% if request.resolver_match.url_name == 'hargreaves' %}class="active"{% endif %}>
-                    Hargreaves
-                </a></li>
-                <li><a href="{% url 'et:method_info' %}" {% if request.resolver_match.url_name == 'method_info' %}class="active"{% endif %}>
-                    Method Guide
-                </a></li>
-                <li><a href="{% url 'et:help' %}" {% if request.resolver_match.url_name == 'help' %}class="active"{% endif %}>
-                    Help
-                </a></li>
+                {% endif %}
             </ul>
             <button type="button" class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">
                 <i class="fas fa-bars" aria-hidden="true"></i>
@@ -649,6 +639,15 @@
     </div>
 
     <div class="container">
+        {% if messages %}
+        <div style="margin: 16px 0;">
+            {% for message in messages %}
+            <div class="{% if message.tags == 'error' %}error-message{% else %}info-box{% endif %}" style="margin-bottom: 8px;">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% block content %}{% endblock %}
     </div>
     <div class="global-attribution">© 2026 Dr. Evan Davies &amp; Smriti Mohapatra</div>

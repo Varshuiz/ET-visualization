@@ -1,0 +1,460 @@
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Unit toggle functionality
+    const unitToggle = document.getElementById('unitToggle');
+    if (unitToggle) {
+        unitToggle.addEventListener('change', function() {
+            const newUnit = this.checked ? 'inches' : 'mm';
+            const url = new URL(window.location);
+            url.searchParams.set('unit', newUnit);
+            
+            // Show loading state
+            const toggleSection = document.querySelector('.unit-toggle-section');
+            if (toggleSection) {
+                toggleSection.style.opacity = '0.6';
+                toggleSection.style.pointerEvents = 'none';
+            }
+            const loadingBtn = document.getElementById('toggleLoadingBtn');
+            if (loadingBtn) {
+                loadingBtn.style.display = 'inline-block';
+            }
+            
+            window.location.href = url.toString();
+        });
+    }
+
+    // Auto-scroll to results if they exist
+    const resultsSection = document.querySelector('.results-section');
+    if (resultsSection) {
+        setTimeout(() => {
+            resultsSection.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }, 500);
+    }
+
+    renderFallbackCharts();
+    renderSavedRunChartJs();
+});
+
+function getFallbackRows() {
+    return [
+        {% for row in et_data %}
+        {
+            date: "{{ row.Date|date:'Y-m-d' }}",
+            {% if 'PT' in available_methods %}PT: {{ row.ET_PT|default:"null" }},{% endif %}
+            {% if 'PM' in available_methods %}PM: {{ row.ET_PM|default:"null" }},{% endif %}
+            {% if 'Maule' in available_methods %}Maule: {{ row.ET_Maule|default:"null" }},{% endif %}
+            {% if 'Hargreaves' in available_methods %}Hargreaves: {{ row.ET_Hargreaves|default:"null" }},{% endif %}
+        },
+        {% endfor %}
+    ];
+}
+
+function renderFallbackCharts(selectedMethods = null) {
+    const mainCanvas = document.getElementById('fallbackMainChart');
+    const diffCanvas = document.getElementById('fallbackDiffChart');
+    if (!mainCanvas || !diffCanvas) return;
+
+    const rows = getFallbackRows();
+
+    const colors = {
+        PT: '#1F77B4',
+        PM: '#D62728',
+        Maule: '#2CA02C',
+        Hargreaves: '#9467BD',
+    };
+    const methodNames = {
+        PT: 'Priestley-Taylor',
+        PM: 'Penman-Monteith',
+        Maule: 'Maule',
+        Hargreaves: 'Hargreaves-Samani',
+    };
+
+    const methods = (selectedMethods && selectedMethods.length ? selectedMethods : ['PT', 'PM', 'Maule', 'Hargreaves'])
+        .filter(m => rows.some(r => r[m] !== undefined));
+    if (!methods.length || !rows.length) return;
+
+    const reference = methods.includes('PM') ? 'PM' : methods[0];
+    const mainSeries = methods.map(method => ({
+        label: methodNames[method],
+        color: colors[method],
+        values: rows.map(r => (r[method] == null ? null : Number(r[method])))
+    }));
+    const diffSeries = methods
+        .filter(m => m !== reference)
+        .map(method => ({
+            label: `|${methodNames[reference]} - ${methodNames[method]}|`,
+            color: colors[method],
+            values: rows.map(r => {
+                if (r[reference] == null || r[method] == null) return null;
+                return Math.abs(Number(r[reference]) - Number(r[method]));
+            })
+        }));
+
+    drawSimpleLineChart(mainCanvas, rows.map(r => r.date), mainSeries, 'ET ({{ unit_info.daily_label }})');
+    drawSimpleLineChart(diffCanvas, rows.map(r => r.date), diffSeries, 'Difference ({{ unit_info.daily_label }})');
+
+    renderSeasonFallback(rows, methods, methodNames, colors);
+}
+
+function drawSimpleLineChart(canvas, labels, series, yLabel) {
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(600, Math.floor(rect.width || 900));
+    const height = 360;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    canvas.style.height = `${height}px`;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.clearRect(0, 0, width, height);
+    if (!series.length) return;
+
+    const pad = { top: 20, right: 20, bottom: 42, left: 56 };
+    const plotW = width - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+    const vals = series.flatMap(s => s.values.filter(v => v != null));
+    if (!vals.length) return;
+    let minY = Math.min(...vals);
+    let maxY = Math.max(...vals);
+    if (minY === maxY) {
+        minY -= 1;
+        maxY += 1;
+    }
+    const xFor = i => pad.left + (i / Math.max(labels.length - 1, 1)) * plotW;
+    const yFor = v => pad.top + (1 - (v - minY) / (maxY - minY)) * plotH;
+
+    // grid
+    ctx.strokeStyle = '#e7efef';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const y = pad.top + (i / 4) * plotH;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(width - pad.right, y);
+        ctx.stroke();
+    }
+
+    // axes
+    ctx.strokeStyle = '#9ab4b6';
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top);
+    ctx.lineTo(pad.left, height - pad.bottom);
+    ctx.lineTo(width - pad.right, height - pad.bottom);
+    ctx.stroke();
+
+    // y label
+    ctx.fillStyle = '#5e6f72';
+    ctx.font = '12px Arial';
+    ctx.fillText(yLabel, 8, 16);
+
+    // x ticks (sparse)
+    const tickCount = Math.min(6, labels.length);
+    for (let t = 0; t < tickCount; t++) {
+        const idx = Math.floor((t / Math.max(tickCount - 1, 1)) * (labels.length - 1));
+        const x = xFor(idx);
+        ctx.fillStyle = '#6b7f81';
+        ctx.font = '11px Arial';
+        ctx.fillText(labels[idx], x - 28, height - 20);
+    }
+
+    // series lines
+    series.forEach(s => {
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        let started = false;
+        s.values.forEach((v, i) => {
+            if (v == null) return;
+            const x = xFor(i);
+            const y = yFor(v);
+            if (!started) {
+                ctx.moveTo(x, y);
+                started = true;
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        ctx.stroke();
+    });
+
+    // legend
+    let lx = pad.left;
+    const ly = height - 8;
+    series.forEach(s => {
+        ctx.fillStyle = s.color;
+        ctx.fillRect(lx, ly - 9, 10, 4);
+        lx += 14;
+        ctx.fillStyle = '#445a5d';
+        ctx.font = '11px Arial';
+        ctx.fillText(s.label, lx, ly - 5);
+        lx += ctx.measureText(s.label).width + 14;
+    });
+}
+
+function renderSeasonFallback(rows, methods, methodNames, colors) {
+    const seasonRows = rows.filter(r => {
+        const m = Number((r.date || '').split('-')[1]);
+        return m >= 5 && m <= 10;
+    });
+    if (!seasonRows.length) return;
+
+    // cumulative by method
+    const cumulativeSeries = methods.map(method => {
+        let running = 0;
+        return {
+            label: `${methodNames[method]} cumulative`,
+            color: colors[method],
+            values: seasonRows.map(r => {
+                const v = r[method] == null ? 0 : Number(r[method]);
+                running += v;
+                return running;
+            })
+        };
+    });
+    drawSimpleLineChart(
+        document.getElementById('fallbackSeasonCum'),
+        seasonRows.map(r => r.date),
+        cumulativeSeries,
+        'Cumulative ET ({{ unit_info.daily_label }})'
+    );
+
+    // daily 3-day moving average
+    const dailySeries = methods.map(method => {
+        const vals = seasonRows.map(r => (r[method] == null ? null : Number(r[method])));
+        const smooth = vals.map((_, i) => {
+            const w = vals.slice(Math.max(0, i - 2), i + 1).filter(v => v != null);
+            if (!w.length) return null;
+            return w.reduce((a, b) => a + b, 0) / w.length;
+        });
+        return { label: `${methodNames[method]} (3-day avg)`, color: colors[method], values: smooth };
+    });
+    drawSimpleLineChart(
+        document.getElementById('fallbackSeasonDaily'),
+        seasonRows.map(r => r.date),
+        dailySeries,
+        'Daily ET ({{ unit_info.daily_label }})'
+    );
+
+    // month averages + totals by method in bar-like line chart style
+    const months = [5, 6, 7, 8, 9, 10];
+    const monthLabels = months.map(m => `2025-${String(m).padStart(2, '0')}`);
+    const monthAvgSeries = methods.map(method => {
+        const values = months.map(m => {
+            const group = seasonRows.filter(r => Number(r.date.split('-')[1]) === m).map(r => r[method]).filter(v => v != null);
+            if (!group.length) return 0;
+            return group.reduce((a, b) => a + Number(b), 0) / group.length;
+        });
+        return { label: `${methodNames[method]} monthly avg`, color: colors[method], values };
+    });
+    drawSimpleLineChart(
+        document.getElementById('fallbackSeasonByMonth'),
+        monthLabels,
+        monthAvgSeries,
+        'Avg ET ({{ unit_info.daily_label }})'
+    );
+
+    const totalsSeries = methods.map(method => ({
+        label: `${methodNames[method]} total`,
+        color: colors[method],
+        values: [seasonRows.map(r => (r[method] == null ? 0 : Number(r[method]))).reduce((a, b) => a + b, 0)]
+    }));
+    drawSimpleLineChart(
+        document.getElementById('fallbackSeasonByMethod'),
+        ['season-total'],
+        totalsSeries,
+        'Total ET ({{ unit_info.daily_label }})'
+    );
+}
+
+// NEW: Interactive checkbox functions
+function toggleAllMethods() {
+    const checkboxes = document.querySelectorAll('.method-checkboxes input[type="checkbox"]');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    
+    checkboxes.forEach(cb => {
+        cb.checked = !allChecked;
+    });
+    
+    updatePlot();
+}
+
+function updatePlot() {
+    // Get selected methods
+    const selectedMethods = [];
+    
+    // Check each method checkbox - safely handle null elements
+    const ptCheckbox = document.getElementById('show-pt');
+    if (ptCheckbox?.checked) {
+        selectedMethods.push('PT');
+    }
+    
+    const pmCheckbox = document.getElementById('show-pm');
+    if (pmCheckbox?.checked) {
+        selectedMethods.push('PM');
+    }
+    
+    const mauleCheckbox = document.getElementById('show-maule');
+    if (mauleCheckbox?.checked) {
+        selectedMethods.push('Maule');
+    }
+    
+    const hargreavesCheckbox = document.getElementById('show-hargreaves');
+    if (hargreavesCheckbox?.checked) {
+        selectedMethods.push('Hargreaves');
+    }
+    
+    // If no methods selected, show message
+    if (selectedMethods.length === 0) {
+        alert('Please select at least one method to display');
+        return;
+    }
+    
+    // Build query parameters
+    const params = new URLSearchParams();
+    params.append('unit', '{{ selected_unit }}');
+    selectedMethods.forEach(method => {
+        params.append('methods', method);
+    });
+    
+    // Fallback mode: redraw browser charts instead of requesting server plot.
+    const fallbackCanvas = document.getElementById('fallbackMainChart');
+    if (fallbackCanvas) {
+        renderFallbackCharts(selectedMethods);
+        return;
+    }
+
+    // Server-image mode: request updated plot images.
+    const plotImg = document.getElementById('comparisonPlot');
+    const growingSeasonImg = document.getElementById('growingSeasonPlot');
+    if (!plotImg) return;
+    
+    plotImg.style.opacity = '0.5';
+    plotImg.style.transition = 'opacity 0.3s';
+    if (growingSeasonImg) {
+        growingSeasonImg.style.opacity = '0.5';
+        growingSeasonImg.style.transition = 'opacity 0.3s';
+    }
+    
+    // Fetch updated plot
+    fetch('{% url "et:update_comparison_plot" %}?' + params.toString())
+        .then(response => response.json())
+        .then(data => {
+            if (data.plot_url) {
+                plotImg.src = 'data:image/png;base64,' + data.plot_url;
+                plotImg.style.opacity = '1';
+                if (growingSeasonImg && data.growing_season_plot_url) {
+                    growingSeasonImg.src = 'data:image/png;base64,' + data.growing_season_plot_url;
+                    growingSeasonImg.style.opacity = '1';
+                } else if (growingSeasonImg) {
+                    growingSeasonImg.style.opacity = '1';
+                }
+            } else if (data.error) {
+                console.error('Server error:', data.error);
+                alert('Error updating plot: ' + data.error);
+                plotImg.style.opacity = '1';
+                if (growingSeasonImg) growingSeasonImg.style.opacity = '1';
+            }
+        })
+        .catch(error => {
+            console.error('Error updating plot:', error);
+            alert('Failed to update plot. Please try again.');
+            plotImg.style.opacity = '1';
+            if (growingSeasonImg) growingSeasonImg.style.opacity = '1';
+        });
+}
+
+function renderSavedRunChartJs() {
+    const dailyCanvas = document.getElementById('chartDailyET');
+    if (!dailyCanvas || typeof Chart === 'undefined') return;
+
+    const rows = getFallbackRows();
+    if (!rows.length) return;
+
+    const colors = { PT: '#1F77B4', PM: '#D62728', Maule: '#2CA02C', Hargreaves: '#9467BD' };
+    const methodNames = { PT: 'Priestley-Taylor', PM: 'Penman-Monteith', Maule: 'Maulé', Hargreaves: 'Hargreaves-Samani' };
+    const methods = ['PT', 'PM', 'Maule', 'Hargreaves'].filter(m => rows.some(r => r[m] !== undefined));
+    const labels = rows.map(r => r.date);
+
+    const dailyDatasets = methods.map(method => ({
+        label: methodNames[method],
+        data: rows.map(r => (r[method] == null ? null : Number(r[method]))),
+        borderColor: colors[method],
+        backgroundColor: colors[method] + '33',
+        tension: 0.2,
+        pointRadius: 0,
+        borderWidth: 2,
+    }));
+
+    new Chart(dailyCanvas, {
+        type: 'line',
+        data: { labels, datasets: dailyDatasets },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'top' } },
+            scales: { y: { title: { display: true, text: 'ET ({{ unit_info.daily_label }})' } } },
+        },
+    });
+
+    const cumCanvas = document.getElementById('chartCumulativeET');
+    if (cumCanvas) {
+        const cumDatasets = methods.map(method => {
+            let running = 0;
+            return {
+                label: methodNames[method] + ' cumulative',
+                data: rows.map(r => {
+                    const v = r[method] == null ? 0 : Number(r[method]);
+                    running += v;
+                    return running;
+                }),
+                borderColor: colors[method],
+                backgroundColor: colors[method] + '22',
+                tension: 0.2,
+                pointRadius: 0,
+                borderWidth: 2,
+                fill: false,
+            };
+        });
+        new Chart(cumCanvas, {
+            type: 'line',
+            data: { labels, datasets: cumDatasets },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'top' } },
+                scales: { y: { title: { display: true, text: 'Cumulative ET ({{ unit_info.total_label }})' } } },
+            },
+        });
+    }
+
+    const barCanvas = document.getElementById('chartMethodBar');
+    if (barCanvas) {
+        const avgs = methods.map(method => {
+            const vals = rows.map(r => r[method]).filter(v => v != null).map(Number);
+            return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+        });
+        new Chart(barCanvas, {
+            type: 'bar',
+            data: {
+                labels: methods.map(m => methodNames[m]),
+                datasets: [{
+                    label: 'Average daily ET',
+                    data: avgs,
+                    backgroundColor: methods.map(m => colors[m] + 'cc'),
+                    borderColor: methods.map(m => colors[m]),
+                    borderWidth: 1,
+                }],
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { title: { display: true, text: 'ET ({{ unit_info.daily_label }})' } } },
+            },
+        });
+    }
+}
+
+
+</script>

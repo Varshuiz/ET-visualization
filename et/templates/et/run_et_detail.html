@@ -1,0 +1,61 @@
+{% extends 'et/base.html' %}
+
+{% block title %}ET calculation | AqualET{% endblock %}
+
+{% block extra_css %}
+{% include 'et/partials/et_comparison_styles.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <p style="margin-bottom: 12px;">
+        <a href="{% url 'et:dashboard' %}" style="color: #087F8C; font-weight: 600;">← Back to Dashboard</a>
+    </p>
+
+    <div class="page-header">
+        <h1>ET calculation details</h1>
+        {% if acis_location %}
+        <p class="subtitle">{{ acis_location.description }}</p>
+        <p style="color: #fff; font-size: 0.9rem; opacity: 0.9;">
+            Data period: {{ acis_location.start_date }} to {{ acis_location.end_date }}
+        </p>
+        {% endif %}
+        <p style="color: #fff; font-size: 0.9rem; opacity: 0.85;">Saved {{ run.created_at|slice:":16" }}</p>
+    </div>
+
+    <div class="card" style="margin-bottom: 24px;">
+        <h2 style="color: #095256; margin-bottom: 12px;">Summary</h2>
+        <table style="width:100%; max-width: 640px;">
+            <tr>
+                <td style="padding:6px 8px; color:#5a6f70; width:140px;">Location</td>
+                <td style="padding:6px 8px;">{{ run.city|default:"—" }}{% if run.city and run.province %}, {% endif %}{{ run.province|default:"" }}</td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px; color:#5a6f70;">Methods</td>
+                <td style="padding:6px 8px;">{{ run.et_method|default:"—" }}</td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px; color:#5a6f70;">Date range</td>
+                <td style="padding:6px 8px;">{{ run.date_range_start|default:"—" }} – {{ run.date_range_end|default:"—" }}</td>
+            </tr>
+            <tr>
+                <td style="padding:6px 8px; color:#5a6f70;">Units</td>
+                <td style="padding:6px 8px;">{{ unit_info.daily_label }}</td>
+            </tr>
+        </table>
+    </div>
+
+    {% if plot_warning %}
+    <div class="message" style="margin-bottom: 20px; background: #eef8f5; color: #24544c; border: 1px solid #cfe9e2; border-radius: 10px; padding: 14px 16px;">
+        {{ plot_warning }}
+    </div>
+    {% endif %}
+
+    {% include 'et/partials/et_comparison_results.html' %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% include 'et/partials/et_comparison_scripts.html' %}
+{% endblock %}

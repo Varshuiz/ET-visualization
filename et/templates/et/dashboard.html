@@ -1,0 +1,453 @@
+{% extends 'et/base.html' %}
+
+{% block title %}{% if possessive_name %}{{ possessive_name }} Dashboard{% else %}Dashboard{% endif %} | AqualET{% endblock %}
+
+{% block body_class %}dashboard-page{% endblock %}
+
+{% block head_assets %}
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                "primary-container": "#2d6a6a",
+                "on-primary-container": "#c2e4da",
+                "surface-bright": "#f8faf9",
+                "on-surface": "#191c1c",
+                "on-surface-variant": "#3f4848",
+                "outline": "#707978",
+                "surface-container": "#eceeed",
+                "surface-container-low": "#f2f4f3",
+                "surface-container-lowest": "#ffffff",
+                "tertiary": "#314f48",
+                "primary": "#0c5252",
+                "background": "#f8faf9",
+            },
+            fontFamily: { sans: ["Inter", "sans-serif"] },
+        },
+    },
+};
+</script>
+<style>
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    body.dashboard-page { font-family: 'Inter', sans-serif; background: #f8faf9; color: #191c1c; }
+    body.dashboard-page .navbar,
+    body.dashboard-page .global-attribution { display: none !important; }
+    body.dashboard-page > .container {
+        max-width: none;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+    body.dashboard-page > .container > .info-box,
+    body.dashboard-page > .container > .error-message { display: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-[260px] min-h-screen flex flex-col justify-between fixed left-0 top-0 z-50 p-4 shadow-md" style="background-color: #0D170D;">
+        <div class="flex flex-col gap-6">
+            <div class="flex items-center gap-3 px-2 py-4">
+                <span class="material-symbols-outlined text-[#f8faf9] text-[28px]">agriculture</span>
+                <span class="text-xl font-bold text-[#f8faf9]">AqualET</span>
+            </div>
+            <nav class="flex flex-col gap-1">
+                <a class="flex items-center gap-3 p-3 rounded-lg font-bold transition-all bg-[#2d6a6a]/20 text-[#c2e4da]" href="{% url 'et:dashboard' %}">
+                    <span class="material-symbols-outlined">dashboard</span>
+                    <span class="text-sm font-medium">Dashboard</span>
+                </a>
+                <a class="flex items-center gap-3 p-3 rounded-lg transition-colors text-[#adcdc4]/70 hover:text-white hover:bg-white/10" href="#et-analysis-tools">
+                    <span class="material-symbols-outlined">analytics</span>
+                    <span class="text-sm font-medium">ET Analysis</span>
+                </a>
+                <a class="flex items-center gap-3 p-3 rounded-lg transition-colors text-[#adcdc4]/70 hover:text-white hover:bg-white/10" href="#simulation-planning">
+                    <span class="material-symbols-outlined">science</span>
+                    <span class="text-sm font-medium">Simulations</span>
+                </a>
+                <a class="flex items-center gap-3 p-3 rounded-lg transition-colors text-[#adcdc4]/70 hover:text-white hover:bg-white/10" href="#recent-history">
+                    <span class="material-symbols-outlined">history</span>
+                    <span class="text-sm font-medium">History</span>
+                </a>
+                <a class="flex items-center gap-3 p-3 rounded-lg transition-colors text-[#adcdc4]/70 hover:text-white hover:bg-white/10" href="{% url 'et:farm_profile' %}">
+                    <span class="material-symbols-outlined">agriculture</span>
+                    <span class="text-sm font-medium">Farm Profile</span>
+                </a>
+            </nav>
+        </div>
+        <div class="px-3 py-4 border-t border-white/10 flex flex-col gap-3">
+            <a href="{% url 'et:logout' %}" class="flex items-center gap-2 text-[#adcdc4]/70 hover:text-white text-sm transition-colors">
+                <span class="material-symbols-outlined text-sm">logout</span>
+                Sign out
+            </a>
+            <div class="flex items-center gap-2 text-[#adcdc4]/60">
+                <span class="material-symbols-outlined text-sm">location_on</span>
+                <span class="text-xs font-bold tracking-widest uppercase">WESTERN CANADA REGION</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="ml-[260px] min-h-screen flex-1 w-full">
+        {% if messages %}
+        <div class="px-8 pt-4">
+            {% for message in messages %}
+            <div class="mb-2 px-4 py-3 rounded-lg text-sm {% if message.tags == 'error' %}bg-red-50 text-red-800 border border-red-200{% else %}bg-emerald-50 text-emerald-800 border border-emerald-200{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Hero -->
+        <header class="min-h-[200px] flex flex-col justify-end px-8 pb-8 shadow-sm" style="background-color: #2D6A6A;">
+            <div class="flex flex-wrap justify-between items-start gap-6 w-full">
+                <div class="flex flex-col gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        {% if first_name %}
+                        <span class="text-3xl md:text-4xl font-bold text-white">Welcome back, {{ first_name }}</span>
+                        <span class="material-symbols-outlined text-3xl text-yellow-400">waving_hand</span>
+                        {% else %}
+                        <span class="text-3xl md:text-4xl font-bold text-white">Farmer dashboard</span>
+                        {% endif %}
+                    </div>
+                    <p class="text-[#c2e4da]/90 text-base max-w-xl">
+                        {% if farm %}
+                        Monitoring crop water intelligence for {{ farm.farm_name }} — {{ farm.city }}, {{ farm.province }}.
+                        {% else %}
+                        Your farm profile and recent tool activity.
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="flex gap-4 flex-wrap">
+                    <div class="backdrop-blur-md rounded-xl p-4 min-w-[140px] flex flex-col gap-1 border border-white/10 bg-white/10">
+                        <span class="text-xs font-bold tracking-widest uppercase text-[#c2e4da]/70">TOTAL ET RUNS</span>
+                        <span class="text-3xl font-bold text-white">{{ et_runs|length }}</span>
+                    </div>
+                    <div class="backdrop-blur-md rounded-xl p-4 min-w-[140px] flex flex-col gap-1 border border-white/10 bg-white/10">
+                        <span class="text-xs font-bold tracking-widest uppercase text-[#c2e4da]/70">AQUACROP</span>
+                        <span class="text-3xl font-bold text-white">{{ aquacrop_runs|length }}</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="p-8 grid grid-cols-12 gap-6">
+            <!-- Left column -->
+            <div class="col-span-12 lg:col-span-8 flex flex-col gap-8">
+                <!-- ET Analysis Tools -->
+                <section id="et-analysis-tools">
+                    <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                        <h2 class="text-xs font-bold tracking-widest uppercase text-[#707978]">ET Analysis</h2>
+                        <a class="text-[#0c5252] text-sm font-medium hover:underline flex items-center gap-1" href="{% url 'et:method_info' %}">
+                            Method Guide <span class="material-symbols-outlined text-sm">arrow_right_alt</span>
+                        </a>
+                    </div>
+                    <p class="text-sm text-[#3f4848] mb-4">Open a calculator or simulation from here.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        <a href="{% url 'et:acis_fetch' %}" class="bg-white p-5 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0px_8px_24px_rgba(0,0,0,0.08)] transition-all group block no-underline text-inherit">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-[#eceeed] flex items-center justify-center text-[#0c5252]">
+                                    <span class="material-symbols-outlined">water_drop</span>
+                                </div>
+                                <span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold tracking-tighter uppercase">READY</span>
+                            </div>
+                            <h3 class="text-lg font-semibold mb-2 text-[#191c1c]">ET Setup</h3>
+                            <p class="text-sm text-[#3f4848] mb-4">Choose location, date range, and ET methods for your field.</p>
+                            <span class="text-[#0c5252] font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">Open <span class="material-symbols-outlined text-sm">arrow_right_alt</span></span>
+                        </a>
+                        <a href="{% url 'et:comparison_with_acis' %}" class="bg-white p-5 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0px_8px_24px_rgba(0,0,0,0.08)] transition-all group block no-underline text-inherit">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-[#eceeed] flex items-center justify-center text-[#0c5252]">
+                                    <span class="material-symbols-outlined">insert_chart</span>
+                                </div>
+                                <span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold tracking-tighter uppercase">READY</span>
+                            </div>
+                            <h3 class="text-lg font-semibold mb-2 text-[#191c1c]">ET Results</h3>
+                            <p class="text-sm text-[#3f4848] mb-4">Compare calculated ET with ACIS and export your results.</p>
+                            <span class="text-[#0c5252] font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">Open <span class="material-symbols-outlined text-sm">arrow_right_alt</span></span>
+                        </a>
+                        <a href="{% url 'et:priestley_taylor' %}" class="bg-white p-5 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0px_8px_24px_rgba(0,0,0,0.08)] transition-all group block no-underline text-inherit">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-[#eceeed] flex items-center justify-center text-[#0c5252]">
+                                    <span class="material-symbols-outlined">wb_sunny</span>
+                                </div>
+                                <span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold tracking-tighter uppercase">READY</span>
+                            </div>
+                            <h3 class="text-lg font-semibold mb-2 text-[#191c1c]">Priestley-Taylor</h3>
+                            <p class="text-sm text-[#3f4848] mb-4">Run the Priestley-Taylor reference ET method alone.</p>
+                            <span class="text-[#0c5252] font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">Open <span class="material-symbols-outlined text-sm">arrow_right_alt</span></span>
+                        </a>
+                        <a href="{% url 'et:penman_monteith' %}" class="bg-white p-5 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0px_8px_24px_rgba(0,0,0,0.08)] transition-all group block no-underline text-inherit">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-[#eceeed] flex items-center justify-center text-[#0c5252]">
+                                    <span class="material-symbols-outlined">calculate</span>
+                                </div>
+                                <span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold tracking-tighter uppercase">READY</span>
+                            </div>
+                            <h3 class="text-lg font-semibold mb-2 text-[#191c1c]">Penman-Monteith</h3>
+                            <p class="text-sm text-[#3f4848] mb-4">Run the FAO-56 Penman-Monteith reference ET method.</p>
+                            <span class="text-[#0c5252] font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">Open <span class="material-symbols-outlined text-sm">arrow_right_alt</span></span>
+                        </a>
+                        <a href="{% url 'et:maule' %}" class="bg-white p-5 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0px_8px_24px_rgba(0,0,0,0.08)] transition-all group block no-underline text-inherit">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-[#eceeed] flex items-center justify-center text-[#0c5252]">
+                                    <span class="material-symbols-outlined">thermostat</span>
+                                </div>
+                                <span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold tracking-tighter uppercase">READY</span>
+                            </div>
+                            <h3 class="text-lg font-semibold mb-2 text-[#191c1c]">Maule</h3>
+                            <p class="text-sm text-[#3f4848] mb-4">Temperature-based ET estimate for quick comparisons.</p>
+                            <span class="text-[#0c5252] font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">Open <span class="material-symbols-outlined text-sm">arrow_right_alt</span></span>
+                        </a>
+                        <a href="{% url 'et:hargreaves' %}" class="bg-white p-5 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0px_8px_24px_rgba(0,0,0,0.08)] transition-all group block no-underline text-inherit">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-[#eceeed] flex items-center justify-center text-[#0c5252]">
+                                    <span class="material-symbols-outlined">trending_up</span>
+                                </div>
+                                <span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold tracking-tighter uppercase">READY</span>
+                            </div>
+                            <h3 class="text-lg font-semibold mb-2 text-[#191c1c]">Hargreaves</h3>
+                            <p class="text-sm text-[#3f4848] mb-4">Hargreaves temperature-based reference ET calculator.</p>
+                            <span class="text-[#0c5252] font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">Open <span class="material-symbols-outlined text-sm">arrow_right_alt</span></span>
+                        </a>
+                        <a href="{% url 'et:method_info' %}" class="bg-white p-5 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0px_8px_24px_rgba(0,0,0,0.08)] transition-all group block no-underline text-inherit">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-[#eceeed] flex items-center justify-center text-[#86A873]">
+                                    <span class="material-symbols-outlined">menu_book</span>
+                                </div>
+                                <span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold tracking-tighter uppercase">READY</span>
+                            </div>
+                            <h3 class="text-lg font-semibold mb-2 text-[#191c1c]">Method Guide</h3>
+                            <p class="text-sm text-[#3f4848] mb-4">Learn how each ET method works and when to use it.</p>
+                            <span class="text-[#0c5252] font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">Open <span class="material-symbols-outlined text-sm">arrow_right_alt</span></span>
+                        </a>
+                    </div>
+                    <p class="mt-4 text-sm">
+                        <a href="{% url 'et:farm_profile' %}" class="text-[#0c5252] font-semibold hover:underline">Edit farm profile →</a>
+                    </p>
+                </section>
+
+                <!-- Recent history -->
+                <div id="recent-history" class="flex flex-col gap-8">
+                    <section>
+                        <h2 class="text-xs font-bold tracking-widest uppercase text-[#707978] mb-4">Recent ET calculations</h2>
+                        <div class="bg-white rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
+                            {% if et_runs %}
+                            <table class="history-table w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-[#eceeed]">
+                                        <th class="p-4 text-xs font-bold tracking-widest uppercase text-[#707978]">When</th>
+                                        <th class="p-4 text-xs font-bold tracking-widest uppercase text-[#707978]">Location</th>
+                                        <th class="p-4 text-xs font-bold tracking-widest uppercase text-[#707978]">Methods</th>
+                                        <th class="p-4 text-xs font-bold tracking-widest uppercase text-[#707978]">Date range</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm divide-y divide-[#eceeed]">
+                                    {% for row in et_runs %}
+                                    <tr class="clickable-row hover:bg-[#f2f4f3] transition-colors cursor-pointer" tabindex="0" role="link"
+                                        data-href="{% url 'et:et_run_detail' row.id %}"
+                                        aria-label="View ET calculation from {{ row.created_at|slice:':16' }}">
+                                        <td class="p-4">{{ row.created_at|slice:":16" }}</td>
+                                        <td class="p-4">
+                                            {% if row.city or row.province %}
+                                                {{ row.city|default:"" }}{% if row.city and row.province %}, {% endif %}{{ row.province|default:"" }}
+                                            {% else %}—{% endif %}
+                                        </td>
+                                        <td class="p-4">{{ row.et_method|default:"—" }}</td>
+                                        <td class="p-4">
+                                            {% if row.date_range_start %}{{ row.date_range_start }}{% else %}—{% endif %}
+                                            —
+                                            {% if row.date_range_end %}{{ row.date_range_end }}{% else %}—{% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            {% else %}
+                            <p class="p-6 text-[#707978] text-sm">No saved ET runs yet.</p>
+                            {% endif %}
+                        </div>
+                    </section>
+
+                    <section>
+                        <h2 class="text-xs font-bold tracking-widest uppercase text-[#707978] mb-4">Recent AquaCrop runs</h2>
+                        <div class="bg-white rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
+                            {% if aquacrop_runs %}
+                            <table class="history-table w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-[#eceeed]">
+                                        <th class="p-4 text-xs font-bold tracking-widest uppercase text-[#707978]">When</th>
+                                        <th class="p-4 text-xs font-bold tracking-widest uppercase text-[#707978]">Crop / mode</th>
+                                        <th class="p-4 text-xs font-bold tracking-widest uppercase text-[#707978]">Period</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm divide-y divide-[#eceeed]">
+                                    {% for row in aquacrop_runs %}
+                                    <tr class="clickable-row hover:bg-[#f2f4f3] transition-colors cursor-pointer" tabindex="0" role="link"
+                                        data-href="{% url 'et:aquacrop_run_detail' row.id %}"
+                                        aria-label="View AquaCrop run for {{ row.crop_type }}">
+                                        <td class="p-4">{{ row.created_at|slice:":16" }}</td>
+                                        <td class="p-4">{{ row.crop_type }} ({{ row.mode|default:"—" }})</td>
+                                        <td class="p-4">{{ row.start_date }} – {{ row.end_date }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            {% else %}
+                            <p class="p-6 text-[#707978] text-sm">No saved AquaCrop runs yet.</p>
+                            {% endif %}
+                        </div>
+                    </section>
+
+                    <section>
+                        <h2 class="text-xs font-bold tracking-widest uppercase text-[#707978] mb-4">Recent forecast runs</h2>
+                        <div class="bg-white rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
+                            {% if forecast_runs %}
+                            <table class="history-table w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-[#eceeed]">
+                                        <th class="p-4 text-xs font-bold tracking-widest uppercase text-[#707978]">When</th>
+                                        <th class="p-4 text-xs font-bold tracking-widest uppercase text-[#707978]">Location</th>
+                                        <th class="p-4 text-xs font-bold tracking-widest uppercase text-[#707978]">Horizon</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm divide-y divide-[#eceeed]">
+                                    {% for row in forecast_runs %}
+                                    <tr class="clickable-row hover:bg-[#f2f4f3] transition-colors cursor-pointer" tabindex="0" role="link"
+                                        data-href="{% url 'et:forecast_run_detail' row.id %}"
+                                        aria-label="View forecast for {{ row.city }}">
+                                        <td class="p-4">{{ row.created_at|slice:":16" }}</td>
+                                        <td class="p-4">{{ row.city }}, {{ row.province }}</td>
+                                        <td class="p-4">{{ row.forecast_days }} days</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            {% else %}
+                            <p class="p-6 text-[#707978] text-sm">No saved forecast runs yet.</p>
+                            {% endif %}
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- Right column -->
+            <div class="col-span-12 lg:col-span-4 flex flex-col gap-8">
+                <section>
+                    <h2 class="text-xs font-bold tracking-widest uppercase text-[#707978] mb-4">Farm profile</h2>
+                    <div class="bg-white p-6 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-[#eceeed]">
+                        {% if farm %}
+                        <div class="flex items-center gap-4 mb-6">
+                            <div class="w-12 h-12 rounded-full bg-[#eceeed] flex items-center justify-center text-[#0c5252]">
+                                <span class="material-symbols-outlined">flag</span>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-[#191c1c]">{{ farm.farm_name }}</h3>
+                                <p class="text-sm text-[#707978]">{{ farm.city }}, {{ farm.province }}</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div class="bg-[#f8faf9] p-3 rounded-lg">
+                                <span class="text-[10px] font-bold tracking-widest uppercase text-[#707978] block mb-1">CROP</span>
+                                <span class="text-sm font-bold text-[#191c1c]">{{ farm.crop_type|default:"—" }}</span>
+                            </div>
+                            <div class="bg-[#f8faf9] p-3 rounded-lg">
+                                <span class="text-[10px] font-bold tracking-widest uppercase text-[#707978] block mb-1">AREA</span>
+                                <span class="text-sm font-bold text-[#191c1c]">{% if farm.area_hectares %}{{ farm.area_hectares }} ha{% else %}—{% endif %}</span>
+                            </div>
+                        </div>
+                        <p class="text-sm text-[#3f4848] mb-6">Irrigation: {{ farm.irrigation_type|default:"—" }}</p>
+                        {% else %}
+                        <p class="text-sm text-[#707978] mb-6">No farm profile yet. <a href="{% url 'et:farm_profile' %}" class="text-[#0c5252] font-semibold hover:underline">Add your farm details</a>.</p>
+                        {% endif %}
+                        <a href="{% url 'et:farm_profile' %}" class="block w-full py-3 px-4 border border-[#bfc8c8] rounded-lg text-sm font-medium text-center text-[#191c1c] hover:bg-[#eceeed] transition-colors no-underline">
+                            Edit Configuration
+                        </a>
+                    </div>
+                </section>
+
+                <section id="simulation-planning">
+                    <h2 class="text-xs font-bold tracking-widest uppercase text-[#707978] mb-4">Simulation &amp; Planning</h2>
+                    <div class="flex flex-col gap-4">
+                        <a href="{% url 'et:env_canada_forecast' %}" class="block no-underline text-white p-6 rounded-xl shadow-lg relative overflow-hidden group" style="background-color: #2D6A6A;">
+                            <div class="relative z-10">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <span class="material-symbols-outlined text-white">bolt</span>
+                                    <h3 class="text-lg font-semibold">Forecast &amp; Water Plan</h3>
+                                </div>
+                                <p class="text-sm text-[#c2e4da]/80 mb-6">
+                                    Environment Canada forecast ET and irrigation planning.
+                                </p>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm font-bold">Open →</span>
+                                    <span class="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_right_alt</span>
+                                </div>
+                            </div>
+                            <div class="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform">
+                                <span class="material-symbols-outlined text-[120px]">cloud_sync</span>
+                            </div>
+                        </a>
+                        <a href="{% url 'et:aquacrop_simulation' %}" class="bg-white p-6 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-[#eceeed] hover:border-[#2d6a6a]/30 transition-all group block no-underline text-inherit">
+                            <div class="flex items-center gap-3 mb-3">
+                                <div class="w-10 h-10 rounded-lg bg-[#eceeed] flex items-center justify-center text-[#0c5252]">
+                                    <span class="material-symbols-outlined">science</span>
+                                </div>
+                                <h3 class="text-lg font-semibold text-[#191c1c]">Crop Simulation</h3>
+                            </div>
+                            <p class="text-sm text-[#3f4848] mb-2">AquaCrop yield and water balance for your crop and soil.</p>
+                            <span class="text-[#0c5252] font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">Open <span class="material-symbols-outlined text-sm">arrow_right_alt</span></span>
+                        </a>
+                        <a href="{% url 'et:help' %}" class="bg-white p-6 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-[#eceeed] hover:border-[#2d6a6a]/30 transition-all group block no-underline text-inherit">
+                            <div class="flex items-center gap-3 mb-3">
+                                <div class="w-10 h-10 rounded-lg bg-[#eceeed] flex items-center justify-center text-[#86A873]">
+                                    <span class="material-symbols-outlined">help</span>
+                                </div>
+                                <h3 class="text-lg font-semibold text-[#191c1c]">Help</h3>
+                            </div>
+                            <p class="text-sm text-[#3f4848] mb-2">Step-by-step guides and FAQs for using AqualET.</p>
+                            <span class="text-[#0c5252] font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">Open <span class="material-symbols-outlined text-sm">arrow_right_alt</span></span>
+                        </a>
+                    </div>
+                </section>
+
+                <section class="mt-2">
+                    <div class="relative rounded-xl overflow-hidden h-48 group">
+                        <img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Golden wheat fields on the Canadian prairies" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCdhkH-Idrc5DYmVaOiC-iyh0enn0xp-z482nUHxnsyAW3piqcLPrtfiVGwRtfxPl_7zrdxmT1hlkvicMOvwhnzoaQOvn6wFDl7OcdV6ue9jCvjuYCw9GidsEeyNOt2ZToA9Iu_o_bM9O2dQ2u5DQHVkrTDTT3DdrSe2Ehl9BJ-1cZ2xQccwSmOrOxFU-bDfffbi_1b1NTj1Z12J29lr7BTnA7t9scyEpFQLTARdTExajvBW1AlOG15Y48_FvMtlCPb3lSC4lYFl_s">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+                            <span class="text-white text-xs font-bold tracking-widest uppercase">
+                                {% if farm and farm.province %}{{ farm.province|upper }} SECTOR{% else %}WESTERN CANADA SECTOR{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+(function () {
+    function go(row) {
+        var href = row.getAttribute('data-href');
+        if (href) window.location.href = href;
+    }
+    document.querySelectorAll('.clickable-row').forEach(function (row) {
+        row.addEventListener('click', function () { go(row); });
+        row.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                go(row);
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

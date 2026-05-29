@@ -1,0 +1,43 @@
+{% extends 'et/base.html' %}
+
+{% block title %}Sign in | AqualET{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 480px; margin: 40px auto;">
+    <div class="card">
+        <h1 style="color: #095256; margin-bottom: 8px;">Sign in</h1>
+        <p style="color: #666; margin-bottom: 24px;">Access ET tools, AquaCrop, and forecasts for your farm.</p>
+
+        {% if messages %}
+        {% for message in messages %}
+        <div class="{% if message.tags == 'error' %}error-message{% else %}info-box{% endif %}" style="margin-bottom: 16px;">
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <form method="post" action="{% url 'et:login' %}">
+            {% csrf_token %}
+            {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label for="id_email">Email</label>
+                {{ form.email }}
+            </div>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label for="id_password">Password</label>
+                {{ form.password }}
+            </div>
+            {% if form.non_field_errors %}
+            <div class="error-message" style="margin-bottom: 12px;">{{ form.non_field_errors }}</div>
+            {% endif %}
+            <button type="submit" class="submit-btn" style="width: 100%;">Sign in</button>
+        </form>
+        <p style="margin-top: 20px; text-align: center; color: #666;">
+            No account? <a href="{% url 'et:register' %}">Register</a>
+        </p>
+    </div>
+</div>
+<style>
+    #id_email, #id_password { width: 100%; padding: 12px; border: 2px solid #e0f2f1; border-radius: 8px; }
+</style>
+{% endblock %}

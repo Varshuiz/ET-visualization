@@ -1,0 +1,55 @@
+{% extends 'et/base.html' %}
+
+{% block title %}Register | AqualET{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 480px; margin: 40px auto;">
+    <div class="card">
+        <h1 style="color: #095256; margin-bottom: 8px;">Create account</h1>
+        <p style="color: #666; margin-bottom: 24px;">Register as a farmer to save calculations and manage your farm profile.</p>
+
+        {% if messages %}
+        {% for message in messages %}
+        <div class="{% if message.tags == 'error' %}error-message{% else %}info-box{% endif %}" style="margin-bottom: 16px;">
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <form method="post" action="{% url 'et:register' %}">
+            {% csrf_token %}
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label for="id_full_name">Full name <span style="color:#e74c3c;">*</span></label>
+                {{ form.full_name }}
+                {% if form.full_name.errors %}
+                <div class="error-message" style="margin-top:6px;">{{ form.full_name.errors }}</div>
+                {% endif %}
+            </div>
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label for="id_email">Email</label>
+                {{ form.email }}
+            </div>
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label for="id_password">Password</label>
+                {{ form.password }}
+            </div>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label for="id_password_confirm">Confirm password</label>
+                {{ form.password_confirm }}
+            </div>
+            {% if form.non_field_errors %}
+            <div class="error-message" style="margin-bottom: 12px;">{{ form.non_field_errors }}</div>
+            {% endif %}
+            <button type="submit" class="submit-btn" style="width: 100%;">Register</button>
+        </form>
+        <p style="margin-top: 20px; text-align: center; color: #666;">
+            Already have an account? <a href="{% url 'et:login' %}">Sign in</a>
+        </p>
+    </div>
+</div>
+<style>
+    #id_full_name, #id_email, #id_password, #id_password_confirm {
+        width: 100%; padding: 12px; border: 2px solid #e0f2f1; border-radius: 8px;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends 'et/base.html' %}
+
+{% block title %}Forecast run | AqualET{% endblock %}
+
+{% block content %}
+<div class="container">
+    <p style="margin-bottom: 12px;">
+        <a href="{% url 'et:dashboard' %}" style="color: #087F8C;">← Back to dashboard</a>
+    </p>
+
+    <div class="page-header">
+        <h1>Forecast run details</h1>
+        <p class="subtitle">Saved {{ run.created_at|slice:":16" }}</p>
+    </div>
+
+    <div class="card" style="margin-bottom: 20px;">
+        <h2 style="color: #095256; margin-bottom: 12px;">Summary</h2>
+        <table style="width:100%; max-width: 560px;">
+            <tr><td style="padding:6px 8px; color:#5a6f70;">Location</td>
+                <td style="padding:6px 8px;">{{ run.city|default:"—" }}, {{ run.province|default:"—" }}</td></tr>
+            <tr><td style="padding:6px 8px; color:#5a6f70;">Horizon</td>
+                <td style="padding:6px 8px;">{{ run.forecast_days }} days</td></tr>
+            <tr><td style="padding:6px 8px; color:#5a6f70;">ET method</td>
+                <td style="padding:6px 8px;">{{ run.et_method|default:"—" }}</td></tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 style="color: #095256; margin-bottom: 12px;">Full results</h2>
+        <pre style="background:#f4f7f6; padding:16px; border-radius:8px; overflow:auto; font-size:0.85rem; line-height:1.45;">{{ result_json }}</pre>
+    </div>
+</div>
+{% endblock %}

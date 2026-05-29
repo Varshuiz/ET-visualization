@@ -33,6 +33,15 @@ from .views_forecast import (
 from .views_ingestion import acis_data_view
 from .views_legacy import location_search_api
 from .views_pages import about, help_guide, method_comparison_info
+from .views_auth import login_view, logout_view, register_view
+from .views_dashboard import (
+    aquacrop_run_detail_view,
+    dashboard_view,
+    et_run_detail_view,
+    et_run_download_csv_view,
+    farm_profile_view,
+    forecast_run_detail_view,
+)
 
 __all__ = [
     "index",
@@ -65,7 +74,17 @@ __all__ = [
     "_pt_daily_et_from_temperature",
     "build_historical_confidence",
     "build_irrigation_confidence_plot",
+    "register_view",
+    "login_view",
+    "logout_view",
+    "dashboard_view",
+    "farm_profile_view",
+    "et_run_detail_view",
+    "et_run_download_csv_view",
+    "aquacrop_run_detail_view",
+    "forecast_run_detail_view",
 ]
+from .persistence import log_feature_usage, persist_aquacrop_run, persist_et_run, persist_forecast_run
 import base64
 import calendar
 import io
@@ -321,6 +340,17 @@ def index(request):
                 if pm_ok:
                     download_cols.extend(['ET_PM', 'ET_PM_smooth'])
                 request.session['et_data_csv'] = df[download_cols].to_csv(index=False)
+
+                persist_et_run(
+                    request,
+                    inputs={"source": "home_upload", "unit": selected_unit},
+                    result_data={
+                        "stats_pt": et_stats_pt,
+                        "stats_pm": et_stats_pm,
+                        "row_count": len(df),
+                        "methods": ["PT"] + (["PM"] if pm_ok else []),
+                    },
+                )
 
                 et_data = []
                 for _, row in df.iterrows():
@@ -615,6 +645,7 @@ def download_et_csv(request):
         return HttpResponse("No ET data found in session. Please upload and process a file first.", 
                           status=404)
 
+    log_feature_usage(request, "et_calculator", "export", {"format": "csv"})
     response = HttpResponse(csv_data, content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="computed_et_data.csv"'
     return response
@@ -626,6 +657,7 @@ def download_comparison_csv(request):
         return HttpResponse("No ET comparison data found in session. Please upload and process a file first.", 
                           status=404)
 
+    log_feature_usage(request, "et_calculator", "export", {"format": "csv", "variant": "comparison"})
     response = HttpResponse(csv_data, content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="et_comparison_data.csv"'
     return response
@@ -1429,6 +1461,8 @@ def _validate_acis_coordinates(latitude, longitude, province_display):
 
 def acis_data_view(request):
     """View for loading weather data used by ET method calculations."""
+    if request.method == "GET":
+        log_feature_usage(request, "et_setup", "view")
     error_message = None
     df_preview = None
     success_message = None
@@ -1683,6 +1717,16 @@ def acis_data_view(request):
                 
                 # Store in session
                 request.session['acis_data'] = df.to_json(date_format='iso')
+                log_feature_usage(
+                    request,
+                    "et_setup",
+                    "run",
+                    {
+                        "province": selected_province,
+                        "start_date": start_date,
+                        "end_date": end_date,
+                    },
+                )
                 request.session['acis_location'] = {
                     'latitude': latitude,
                     'longitude': longitude,
@@ -1761,6 +1805,7 @@ def acis_data_view(request):
 
 def comparison_with_acis(request):
     """Enhanced ET calculator with method-only ET comparison."""
+    log_feature_usage(request, "et_calculator", "view")
     et_data = None
     et_stats = None
     comparison_stats = None
@@ -1992,7 +2037,7 @@ def comparison_with_acis(request):
             growing_season_stats = calculate_growing_season_stats(
                 df, f'ET_{primary_method}', selected_unit
             )
-        
+
         try:
             growing_season_plots = create_multi_method_growing_season_plots(
                 df,
@@ -2123,6 +2168,29 @@ def comparison_with_acis(request):
                 lambda v: round(float(v), unit_info['decimal_places']) if v else 0
             )
         et_data = table_df.to_dict('records')
+
+        from .et_results_display import normalize_et_data_records
+
+        persist_et_run(
+            request,
+            inputs={
+                "location": location_info,
+                "unit": selected_unit,
+                "methods": available_methods,
+            },
+            result_data={
+                "et_stats": et_stats,
+                "comparison_stats": comparison_stats,
+                "growing_season_stats": growing_season_stats,
+                "methods": available_methods,
+                "date_min": str(df["Date"].min()) if "Date" in df.columns else None,
+                "date_max": str(df["Date"].max()) if "Date" in df.columns else None,
+                "row_count": len(df),
+                "unit": selected_unit,
+                "et_data": normalize_et_data_records(et_data),
+                "csv": request.session.get("et_data_csv") or "",
+            },
+        )
     
     except Exception as e:
         print(f"Calculation error: {e}")
@@ -2134,10 +2202,13 @@ def comparison_with_acis(request):
             'unit_info': unit_info,
         })
     
+    from .et_results_display import build_comparison_stats_diffs
+
     context = {
         'et_data': et_data,
         'et_stats': et_stats,
         'comparison_stats': comparison_stats,
+        'comparison_stats_diffs': build_comparison_stats_diffs(comparison_stats),
         'growing_season_stats': growing_season_stats,
         'plot_url': plot_url,
         'plot_warning': plot_warning,
@@ -2146,6 +2217,9 @@ def comparison_with_acis(request):
         'unit_info': unit_info,
         'acis_location': location_info,
         'available_methods': available_methods,
+        'is_saved_run': False,
+        'has_charts': bool(et_data),
+        'run': {},
     }
     
     return render(request, 'et/comparison.html', context)
@@ -2760,6 +2834,24 @@ def env_canada_forecast_view(request):
                 }
             )
 
+            persist_forecast_run(
+                request,
+                province=province_display,
+                city=city_name,
+                forecast_days=selected_days,
+                et_method="FAO-PM + GDD crop stage",
+                result_data={
+                    "df_forecast": df_forecast,
+                    "total_precip": total_precip,
+                    "estimated_et_total": estimated_et_total,
+                    "net_water_balance": net_water_balance,
+                    "irrigation_needed": irrigation_needed,
+                    "recommendation_level": recommendation_level,
+                    "crop_type": crop_type,
+                    "soil_type": soil_type,
+                },
+            )
+
             return render(request, "et/env_canada_forecast.html", context)
 
         except Exception as e:
@@ -3091,6 +3183,21 @@ def aquacrop_simulation(request):
                     "forecast_mode_caveat": forecast_mode_caveat,
                     "multi_year_mode": multi_year_mode,
                 }
+            )
+
+            persist_aquacrop_run(
+                request,
+                mode=sim_mode,
+                crop_type=crop,
+                start_date=start_date,
+                end_date=end_date,
+                results=results,
+                extra={
+                    "soil": soil,
+                    "irrigation": irrigation,
+                    "city": city_name,
+                    "historical_results_rows": historical_results_rows,
+                },
             )
 
         except Exception as e:

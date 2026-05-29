@@ -1,0 +1,225 @@
+{% if et_data or et_stats %}
+<div class="results-section">
+    <h2 style="color: #095256; margin-bottom: 20px;">Method Statistics</h2>
+    <div class="method-grid">
+        {% if et_stats.PT %}
+        <div class="method-card priestley-taylor">
+            <div class="method-header">
+                <div class="method-icon">PT</div>
+                <div class="method-title">{{ et_stats.PT.name|default:"Priestley-Taylor" }}</div>
+            </div>
+            <div class="stat-item"><span class="stat-label">Average ET:</span><span class="stat-value">{{ et_stats.PT.avg|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <div class="stat-item"><span class="stat-label">Maximum:</span><span class="stat-value">{{ et_stats.PT.max|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <div class="stat-item"><span class="stat-label">Minimum:</span><span class="stat-value">{{ et_stats.PT.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <div class="stat-item"><span class="stat-label">Std deviation:</span><span class="stat-value">{{ et_stats.PT.std|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+        </div>
+        {% endif %}
+        {% if et_stats.PM %}
+        <div class="method-card penman-monteith">
+            <div class="method-header">
+                <div class="method-icon">PM</div>
+                <div class="method-title">{{ et_stats.PM.name|default:"Penman-Monteith" }}</div>
+            </div>
+            <div class="stat-item"><span class="stat-label">Average ET:</span><span class="stat-value">{{ et_stats.PM.avg|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <div class="stat-item"><span class="stat-label">Maximum:</span><span class="stat-value">{{ et_stats.PM.max|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <div class="stat-item"><span class="stat-label">Minimum:</span><span class="stat-value">{{ et_stats.PM.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <div class="stat-item"><span class="stat-label">Std deviation:</span><span class="stat-value">{{ et_stats.PM.std|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+        </div>
+        {% endif %}
+        {% if et_stats.Maule %}
+        <div class="method-card maule">
+            <div class="method-header">
+                <div class="method-icon">M</div>
+                <div class="method-title">{{ et_stats.Maule.name|default:"Maulé" }}</div>
+            </div>
+            <div class="stat-item"><span class="stat-label">Average ET:</span><span class="stat-value">{{ et_stats.Maule.avg|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <div class="stat-item"><span class="stat-label">Maximum:</span><span class="stat-value">{{ et_stats.Maule.max|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <div class="stat-item"><span class="stat-label">Minimum:</span><span class="stat-value">{{ et_stats.Maule.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <div class="stat-item"><span class="stat-label">Std deviation:</span><span class="stat-value">{{ et_stats.Maule.std|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+        </div>
+        {% endif %}
+        {% if et_stats.Hargreaves %}
+        <div class="method-card hargreaves">
+            <div class="method-header">
+                <div class="method-icon">H</div>
+                <div class="method-title">{{ et_stats.Hargreaves.name|default:"Hargreaves-Samani" }}</div>
+            </div>
+            <div class="stat-item"><span class="stat-label">Average ET:</span><span class="stat-value">{{ et_stats.Hargreaves.avg|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <div class="stat-item"><span class="stat-label">Maximum:</span><span class="stat-value">{{ et_stats.Hargreaves.max|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <div class="stat-item"><span class="stat-label">Minimum:</span><span class="stat-value">{{ et_stats.Hargreaves.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <div class="stat-item"><span class="stat-label">Std deviation:</span><span class="stat-value">{{ et_stats.Hargreaves.std|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if comparison_stats.correlations or comparison_stats_diffs %}
+    <h2 style="color: #095256; margin: 40px 0 20px 0;">Method Comparison</h2>
+    {% if comparison_stats.correlations %}
+    <h3 style="color: #087F8C; margin-bottom: 14px; font-size: 1rem;">Correlations</h3>
+    <div class="correlation-grid">
+        {% for key, value in comparison_stats.correlations.items %}
+        <div class="correlation-card">
+            <div class="correlation-header">{{ key }}</div>
+            <div>
+                <span class="correlation-value {% if value >= 0.9 %}correlation-high{% elif value >= 0.7 %}correlation-medium{% else %}correlation-low{% endif %}">{{ value|floatformat:3 }}</span>
+            </div>
+            <div style="margin-top: 10px; color: #5AAA95; font-size: 0.9rem;">
+                {% if value >= 0.9 %}Very Strong Agreement{% elif value >= 0.7 %}Good Agreement{% else %}Moderate Agreement{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% if comparison_stats_diffs %}
+    <h3 style="color: #087F8C; margin: 24px 0 14px; font-size: 1rem;">Mean absolute difference from reference</h3>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Comparison</th><th>Mean |difference| ({{ unit_info.daily_label }})</th></tr></thead>
+            <tbody>
+                {% for label, value in comparison_stats_diffs %}
+                <tr><td>{{ label }}</td><td>{{ value|floatformat:unit_info.decimal_places }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {% if is_saved_run and has_charts %}
+    <div class="plot-container">
+        <h2 style="color: #095256; margin-bottom: 20px;">ET Comparison Visualization</h2>
+        <div style="margin-bottom: 28px;">
+            <h3 style="color: #087F8C; font-size: 1rem; margin-bottom: 10px;">Daily ET by method</h3>
+            <canvas id="chartDailyET" class="fallback-chart"></canvas>
+        </div>
+        <div style="margin-bottom: 28px;">
+            <h3 style="color: #087F8C; font-size: 1rem; margin-bottom: 10px;">Cumulative ET</h3>
+            <canvas id="chartCumulativeET" class="fallback-chart"></canvas>
+        </div>
+        <div>
+            <h3 style="color: #087F8C; font-size: 1rem; margin-bottom: 10px;">Average ET by method</h3>
+            <canvas id="chartMethodBar" class="fallback-chart"></canvas>
+        </div>
+    </div>
+    {% elif plot_url %}
+    <div class="plot-container">
+        <h2 style="color: #095256; margin-bottom: 20px;">ET Comparison Visualization</h2>
+        <img id="comparisonPlot" src="data:image/png;base64,{{ plot_url }}" alt="ET Comparison Plot">
+        <div class="method-checkboxes">
+            <button class="select-all-btn" type="button" onclick="toggleAllMethods()">Toggle All Methods</button>
+            <h4>Select Methods to Display</h4>
+            <div class="checkbox-group">
+                {% if 'PT' in available_methods %}<div class="checkbox-item pt"><input type="checkbox" id="show-pt" checked onchange="updatePlot()"><label for="show-pt">Priestley-Taylor</label></div>{% endif %}
+                {% if 'PM' in available_methods %}<div class="checkbox-item pm"><input type="checkbox" id="show-pm" checked onchange="updatePlot()"><label for="show-pm">Penman-Monteith</label></div>{% endif %}
+                {% if 'Maule' in available_methods %}<div class="checkbox-item maule"><input type="checkbox" id="show-maule" checked onchange="updatePlot()"><label for="show-maule">Maulé</label></div>{% endif %}
+                {% if 'Hargreaves' in available_methods %}<div class="checkbox-item hargreaves"><input type="checkbox" id="show-hargreaves" checked onchange="updatePlot()"><label for="show-hargreaves">Hargreaves-Samani</label></div>{% endif %}
+            </div>
+        </div>
+    </div>
+    {% elif et_data %}
+    <div class="plot-container">
+        <h2 style="color: #095256; margin-bottom: 20px;">ET Comparison Visualization</h2>
+        <p style="color: #5a6b6d; margin-bottom: 8px;">Using browser-rendered charts.</p>
+        <canvas id="fallbackMainChart" class="fallback-chart"></canvas>
+        <canvas id="fallbackDiffChart" class="fallback-chart"></canvas>
+        <div class="method-checkboxes">
+            <button class="select-all-btn" type="button" onclick="toggleAllMethods()">Toggle All Methods</button>
+            <h4>Select Methods to Display</h4>
+            <div class="checkbox-group">
+                {% if 'PT' in available_methods %}<div class="checkbox-item pt"><input type="checkbox" id="show-pt" checked onchange="updatePlot()"><label for="show-pt">Priestley-Taylor</label></div>{% endif %}
+                {% if 'PM' in available_methods %}<div class="checkbox-item pm"><input type="checkbox" id="show-pm" checked onchange="updatePlot()"><label for="show-pm">Penman-Monteith</label></div>{% endif %}
+                {% if 'Maule' in available_methods %}<div class="checkbox-item maule"><input type="checkbox" id="show-maule" checked onchange="updatePlot()"><label for="show-maule">Maulé</label></div>{% endif %}
+                {% if 'Hargreaves' in available_methods %}<div class="checkbox-item hargreaves"><input type="checkbox" id="show-hargreaves" checked onchange="updatePlot()"><label for="show-hargreaves">Hargreaves-Samani</label></div>{% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if growing_season_plots.growing_season_analysis %}
+    <div class="plot-container">
+        <h2 style="color: #095256; margin-bottom: 20px;">Growing Season Analysis (Multi-Method)</h2>
+        <img id="growingSeasonPlot" src="data:image/png;base64,{{ growing_season_plots.growing_season_analysis }}" alt="Growing Season Analysis">
+    </div>
+    {% elif et_data and not is_saved_run %}
+    <div class="plot-container">
+        <h2 style="color: #095256; margin-bottom: 20px;">Growing Season Analysis (Multi-Method)</h2>
+        <div class="fallback-grid">
+            <canvas id="fallbackSeasonCum" class="fallback-chart"></canvas>
+            <canvas id="fallbackSeasonDaily" class="fallback-chart"></canvas>
+            <canvas id="fallbackSeasonByMonth" class="fallback-chart"></canvas>
+            <canvas id="fallbackSeasonByMethod" class="fallback-chart"></canvas>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if growing_season_stats.yearly_stats %}
+    <h2 style="color: #095256; margin: 40px 0 20px 0;">Growing Season Statistics</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Year</th>
+                    <th>Total ET ({{ unit_info.total_label }})</th>
+                    <th>Avg daily ET ({{ unit_info.daily_label }})</th>
+                    <th>Days recorded</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for y in growing_season_stats.yearly_stats %}
+                <tr>
+                    <td>{{ y.year }}</td>
+                    <td>{{ y.total_et|floatformat:unit_info.total_decimal_places }}</td>
+                    <td>{{ y.avg_daily_et|floatformat:unit_info.daily_decimal_places }}</td>
+                    <td>{{ y.days_recorded }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if et_data %}
+    <h2 style="color: #095256; margin: 40px 0 20px 0;">Detailed ET Data (First 20 rows)</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    {% if 'PT' in available_methods %}<th>Priestley-Taylor<br>({{ unit_info.daily_label }})</th>{% endif %}
+                    {% if 'PM' in available_methods %}<th>Penman-Monteith<br>({{ unit_info.daily_label }})</th>{% endif %}
+                    {% if 'Maule' in available_methods %}<th>Maulé<br>({{ unit_info.daily_label }})</th>{% endif %}
+                    {% if 'Hargreaves' in available_methods %}<th>Hargreaves<br>({{ unit_info.daily_label }})</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in et_data|slice:":20" %}
+                <tr>
+                    <td>{{ row.Date|date:"Y-m-d" }}</td>
+                    {% if 'PT' in available_methods %}<td>{{ row.ET_PT|floatformat:unit_info.decimal_places }}</td>{% endif %}
+                    {% if 'PM' in available_methods %}<td>{{ row.ET_PM|floatformat:unit_info.decimal_places }}</td>{% endif %}
+                    {% if 'Maule' in available_methods %}<td>{{ row.ET_Maule|floatformat:unit_info.decimal_places }}</td>{% endif %}
+                    {% if 'Hargreaves' in available_methods %}<td>{{ row.ET_Hargreaves|floatformat:unit_info.decimal_places }}</td>{% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="download-section">
+        {% if is_saved_run and run.id %}
+        <a href="{% url 'et:et_run_download_csv' run.id %}" class="download-btn">Download Complete Data as CSV</a>
+        {% else %}
+        <a href="{% url 'et:download_comparison_csv' %}" class="download-btn">Download Complete Data as CSV</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if not is_saved_run %}
+    <div class="source-credit-card">
+        <p style="margin: 0; color: #2e3e3f; line-height: 1.7;">
+            For full data sources, credits and references see the
+            <a href="{% url 'et:method_info' %}#references-data-sources">Method Guide</a>.
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endif %}

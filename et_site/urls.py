@@ -25,8 +25,8 @@ urlpatterns = [
     # ET Calculator app URLs
     path('et/', include('et.urls')),
     
-    # Redirect root to ET comparison calculator (main page)
-    path('', RedirectView.as_view(url='/et/fetch-data/', permanent=False)),
+    # Redirect root to farmer dashboard (or login flow via protected ET Setup)
+    path('', RedirectView.as_view(url='/et/dashboard/', permanent=False)),
     
     # Alternative direct access routes
     path('calculator/', include('et.urls')),  # Alternative path

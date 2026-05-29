@@ -1,16 +1,28 @@
 from pathlib import Path
 import os
+import sys
 import tempfile
+
+from dotenv import load_dotenv
+
 try:
     import dj_database_url
 except ImportError:
     dj_database_url = None
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-d*g&f7)@f!#m!m93u5m8s$nuxcld4oauz5)e*if87y^@^ca!$p')
+DEBUG = os.environ.get("DEBUG", "False").lower() in ("1", "true", "yes")
 
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "django-insecure-dev-only-change-me"
+    else:
+        from django.core.exceptions import ImproperlyConfigured
+
+        raise ImproperlyConfigured("SECRET_KEY environment variable is required when DEBUG=False")
 
 
 def _parse_env_list(raw_value: str):
@@ -60,6 +72,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'et.context_processors.supabase_auth',
             ],
         },
     },
@@ -113,6 +126,46 @@ SESSION_FILE_PATH = os.environ.get("DJANGO_SESSION_FILE_PATH", default_session_d
 os.makedirs(SESSION_FILE_PATH, exist_ok=True)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Supabase (service key is server-only — never in templates or client JS)
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+RUNNING_TESTS = "test" in sys.argv
+SUPABASE_ENFORCE_AUTH = (
+    not RUNNING_TESTS
+    and os.environ.get("SUPABASE_ENFORCE_AUTH", "true").lower() in ("1", "true", "yes")
+    and bool(SUPABASE_URL and SUPABASE_ANON_KEY and SUPABASE_SERVICE_KEY)
+)
+
+# Session security (24-hour inactivity expiry; refresh on each request)
+SESSION_COOKIE_AGE = int(os.environ.get("SESSION_COOKIE_AGE", str(60 * 60 * 24)))
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "False").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+CSRF_COOKIE_SECURE = os.environ.get("CSRF_COOKIE_SECURE", "False").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+CSRF_COOKIE_HTTPONLY = False
+
+# Security headers (SecurityMiddleware)
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+if not DEBUG:
+    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "True").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
 # In-process cache (per web worker) for small, frequently-hit forecast URLs.
 # For multi-worker production this is still effective at reducing hot-path latency.
