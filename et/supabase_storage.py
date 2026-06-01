@@ -99,7 +99,20 @@ def _insert(table: str, row: dict) -> dict | None:
         return None
 
 
-def _select(table: str, user_id: str, *, limit: int = 20, order_col: str = "created_at") -> list:
+# Slim column lists for dashboard history tables (omit heavy result_data JSON).
+DASHBOARD_ET_COLUMNS = "id,created_at,city,province,et_method,date_range_start,date_range_end"
+DASHBOARD_AQUACROP_COLUMNS = "id,created_at,crop_type,mode,start_date,end_date"
+DASHBOARD_FORECAST_COLUMNS = "id,created_at,city,province,forecast_days"
+
+
+def _select(
+    table: str,
+    user_id: str,
+    *,
+    limit: int = 20,
+    order_col: str = "created_at",
+    columns: str = "*",
+) -> list:
     uid = normalize_user_id(user_id)
     if not uid or not supabase_configured():
         return []
@@ -108,7 +121,7 @@ def _select(table: str, user_id: str, *, limit: int = 20, order_col: str = "crea
         if tbl is None:
             return []
         resp = (
-            tbl.select("*")
+            tbl.select(columns)
             .eq("user_id", uid)
             .order(order_col, desc=True)
             .limit(limit)
@@ -460,16 +473,16 @@ def log_usage(
     )
 
 
-def list_recent_et_calculations(user_id: str, limit: int = 10):
-    return _select("et_calculations", user_id, limit=limit)
+def list_recent_et_calculations(user_id: str, limit: int = 10, *, columns: str = "*"):
+    return _select("et_calculations", user_id, limit=limit, columns=columns)
 
 
-def list_recent_aquacrop_runs(user_id: str, limit: int = 10):
-    return _select("aquacrop_runs", user_id, limit=limit)
+def list_recent_aquacrop_runs(user_id: str, limit: int = 10, *, columns: str = "*"):
+    return _select("aquacrop_runs", user_id, limit=limit, columns=columns)
 
 
-def list_recent_forecast_runs(user_id: str, limit: int = 10):
-    return _select("forecast_runs", user_id, limit=limit)
+def list_recent_forecast_runs(user_id: str, limit: int = 10, *, columns: str = "*"):
+    return _select("forecast_runs", user_id, limit=limit, columns=columns)
 
 
 def sanitize_aquacrop_results(results: dict) -> dict:

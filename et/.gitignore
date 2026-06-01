@@ -18,7 +18,7 @@ db.sqlite3
 db.sqlite3-journal
 media/
 staticfiles/
-static/
+# Keep et/static/ (app assets like logo.png) in git; only ignore collectstatic output above.
 
 # Environment variables
 .env

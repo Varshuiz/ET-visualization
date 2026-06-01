@@ -35,6 +35,33 @@ def fetch_openmeteo_historical_data(latitude, longitude, start_date, end_date):
     Returns a normalized dataframe with at least:
     Date, Tmax, Tmin, Precipitation, RH, u2/Wind_Speed (where available/defaulted).
     """
+    from .weather_cache import (
+        dataframe_from_cache_payload,
+        dataframe_to_cache_payload,
+        get_cached,
+        set_cached,
+        weather_cache_key,
+    )
+
+    cache_key = weather_cache_key(
+        "historical_weather",
+        lat=round(float(latitude), 4),
+        lon=round(float(longitude), 4),
+        start=str(start_date),
+        end=str(end_date),
+    )
+    cached = get_cached(cache_key)
+    if cached is not None:
+        return dataframe_from_cache_payload(cached)
+
+    df = _fetch_openmeteo_historical_data_uncached(latitude, longitude, start_date, end_date)
+    if df is not None and not df.empty:
+        set_cached(cache_key, dataframe_to_cache_payload(df))
+    return df
+
+
+def _fetch_openmeteo_historical_data_uncached(latitude, longitude, start_date, end_date):
+    """Uncached implementation for historical weather (ECCC primary, Open-Meteo fallback)."""
     # Primary path: ECCC daily climate observations (+ built-in Open-Meteo temp gap-fill).
     try:
         eccc_df = build_aquacrop_weather_from_eccc(

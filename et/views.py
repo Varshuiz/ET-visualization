@@ -734,7 +734,7 @@ def get_lethbridge_forecast():
     from .environment_canada_scraper import EnvironmentCanadaScraper
 
     cache_key = "lethbridge_msc_forecast_v1"
-    cache_ttl = int(os.environ.get("LETHBRIDGE_FORECAST_CACHE_SECONDS", "900"))
+    cache_ttl = int(os.environ.get("LETHBRIDGE_FORECAST_CACHE_SECONDS", "3600"))
 
     if cache_ttl > 0:
         cached = cache.get(cache_key)

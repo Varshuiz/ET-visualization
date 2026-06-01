@@ -761,8 +761,30 @@ class EnvironmentCanadaScraper:
 
 def fetch_env_canada_forecast(city_name='Calgary', days=None, province_code='AB'):
     """Drop-in replacement for the old RSS-based function."""
+    from .weather_cache import (
+        dataframe_from_cache_payload,
+        dataframe_to_cache_payload,
+        get_cached,
+        set_cached,
+        weather_cache_key,
+    )
+
+    days_key = days if days is not None else "all"
+    cache_key = weather_cache_key(
+        "eccc_forecast",
+        city=(city_name or "").strip().lower(),
+        province=(province_code or "AB").upper(),
+        days=days_key,
+    )
+    cached = get_cached(cache_key)
+    if cached is not None:
+        return dataframe_from_cache_payload(cached)
+
     scraper = EnvironmentCanadaScraper()
-    return scraper.fetch_forecast(city_name, days, province_code)
+    df = scraper.fetch_forecast(city_name, days, province_code)
+    if df is not None and not df.empty:
+        set_cached(cache_key, dataframe_to_cache_payload(df))
+    return df
 
 
 def print_precipitation_forecast(city_name='Calgary', days=5, province_code='AB'):

@@ -190,27 +190,13 @@ def merge_openmeteo_forecast_drivers(df, latitude, longitude, timeout=30):
         return out
     start = dates.min().strftime("%Y-%m-%d")
     end = dates.max().strftime("%Y-%m-%d")
-    url = "https://api.open-meteo.com/v1/forecast"
-    params = {
-        "latitude": float(latitude),
-        "longitude": float(longitude),
-        "start_date": start,
-        "end_date": end,
-        "daily": "wind_speed_10m_max,relative_humidity_2m_mean,shortwave_radiation_sum",
-        "timezone": "auto",
-    }
-    try:
-        r = requests.get(url, params=params, timeout=timeout)
-        r.raise_for_status()
-        daily = r.json().get("daily", {})
-        tlist = daily.get("time", [])
-        if not tlist:
-            return out
-        wlist = daily.get("wind_speed_10m_max") or []
-        rhlist = daily.get("relative_humidity_2m_mean") or []
-        rslist = daily.get("shortwave_radiation_sum") or []
-    except Exception:
+    daily = _fetch_openmeteo_forecast_daily(latitude, longitude, start, end, timeout=timeout)
+    tlist = daily.get("time", [])
+    if not tlist:
         return out
+    wlist = daily.get("wind_speed_10m_max") or []
+    rhlist = daily.get("relative_humidity_2m_mean") or []
+    rslist = daily.get("shortwave_radiation_sum") or []
 
     n = len(tlist)
 
@@ -262,6 +248,42 @@ def merge_openmeteo_forecast_drivers(df, latitude, longitude, timeout=30):
     still_rs = out["Rs_mjm2"].isna()
     out.loc[still_rs, "Rs_mjm2"] = fill_rs.loc[still_rs]
     return out
+
+
+def _fetch_openmeteo_forecast_daily(latitude, longitude, start, end, timeout=30):
+    """Fetch Open-Meteo daily forecast drivers with a 1-hour Django cache."""
+    from .weather_cache import get_cached, set_cached, weather_cache_key
+
+    cache_key = weather_cache_key(
+        "openmeteo_forecast_daily",
+        lat=round(float(latitude), 4),
+        lon=round(float(longitude), 4),
+        start=start,
+        end=end,
+    )
+    cached = get_cached(cache_key)
+    if cached is not None:
+        return cached
+
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": float(latitude),
+        "longitude": float(longitude),
+        "start_date": start,
+        "end_date": end,
+        "daily": "wind_speed_10m_max,relative_humidity_2m_mean,shortwave_radiation_sum",
+        "timezone": "auto",
+    }
+    try:
+        r = requests.get(url, params=params, timeout=timeout)
+        r.raise_for_status()
+        daily = r.json().get("daily", {}) or {}
+    except Exception:
+        daily = {}
+
+    if daily.get("time"):
+        set_cached(cache_key, daily)
+    return daily
 
 
 def merge_openmeteo_forecast_wind(df, latitude, longitude, timeout=25):

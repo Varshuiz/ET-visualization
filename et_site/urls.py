@@ -18,6 +18,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import RedirectView
+from django.conf import settings
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -33,6 +34,9 @@ urlpatterns = [
     path('evapotranspiration/', include('et.urls')),  # SEO-friendly path
     
 ]
+
+if settings.DEBUG and "debug_toolbar" in settings.INSTALLED_APPS:
+    urlpatterns = [path("__debug__/", include("debug_toolbar.urls"))] + urlpatterns
 
 # Optional: Add custom error handlers
 # handler404 = 'et.views.custom_404_view'

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from django.contrib import messages
@@ -17,6 +18,9 @@ from .et_results_display import comparison_context_from_saved_row, parse_run_res
 from .saved_run_display import aquacrop_context_from_saved_row, forecast_context_from_saved_row
 from .persistence import log_feature_usage
 from .supabase_storage import (
+    DASHBOARD_AQUACROP_COLUMNS,
+    DASHBOARD_ET_COLUMNS,
+    DASHBOARD_FORECAST_COLUMNS,
     get_aquacrop_run_by_id,
     get_et_calculation_by_id,
     get_farm_for_user,
@@ -27,6 +31,8 @@ from .supabase_storage import (
     list_recent_forecast_runs,
     save_farm,
 )
+
+DASHBOARD_RUN_LIMIT = 5
 
 
 def _first_name(full_name: str) -> str:
@@ -54,8 +60,7 @@ def _pretty_json(data: Any) -> str:
         return str(data)
 
 
-def _dashboard_profile_context(user_id: str) -> dict[str, str]:
-    profile = get_profile(user_id) if user_id else None
+def _profile_context_from_row(profile: dict | None) -> dict[str, str]:
     full_name = (profile or {}).get("full_name", "").strip()
     first = _first_name(full_name)
     return {
@@ -66,18 +71,56 @@ def _dashboard_profile_context(user_id: str) -> dict[str, str]:
     }
 
 
+def _load_dashboard_supabase_data(user_id: str) -> dict[str, Any]:
+    """Fetch farm, profile, and recent runs in parallel (slim columns, capped at 5 rows)."""
+    if not user_id:
+        return {
+            "farm": None,
+            "profile": None,
+            "et_runs": [],
+            "aquacrop_runs": [],
+            "forecast_runs": [],
+        }
+
+    tasks = {
+        "farm": lambda: get_farm_for_user(user_id),
+        "profile": lambda: get_profile(user_id),
+        "et_runs": lambda: list_recent_et_calculations(
+            user_id, limit=DASHBOARD_RUN_LIMIT, columns=DASHBOARD_ET_COLUMNS
+        ),
+        "aquacrop_runs": lambda: list_recent_aquacrop_runs(
+            user_id, limit=DASHBOARD_RUN_LIMIT, columns=DASHBOARD_AQUACROP_COLUMNS
+        ),
+        "forecast_runs": lambda: list_recent_forecast_runs(
+            user_id, limit=DASHBOARD_RUN_LIMIT, columns=DASHBOARD_FORECAST_COLUMNS
+        ),
+    }
+
+    results: dict[str, Any] = {}
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(fn): key for key, fn in tasks.items()}
+        for future in futures:
+            key = futures[future]
+            try:
+                results[key] = future.result()
+            except Exception:
+                results[key] = None if key in ("farm", "profile") else []
+
+    return results
+
+
 @supabase_login_required
 def dashboard_view(request):
     user_id = get_current_user_id(request)
-    farm = get_farm_for_user(user_id) if user_id else None
+    supabase_data = _load_dashboard_supabase_data(user_id)
     log_feature_usage(request, "dashboard", "view")
 
     context = {
-        "farm": farm,
-        "et_runs": list_recent_et_calculations(user_id, limit=8) if user_id else [],
-        "aquacrop_runs": list_recent_aquacrop_runs(user_id, limit=8) if user_id else [],
-        "forecast_runs": list_recent_forecast_runs(user_id, limit=8) if user_id else [],
-        **_dashboard_profile_context(user_id or ""),
+        "farm": supabase_data["farm"],
+        "et_runs": supabase_data["et_runs"],
+        "aquacrop_runs": supabase_data["aquacrop_runs"],
+        "forecast_runs": supabase_data["forecast_runs"],
+        **_profile_context_from_row(supabase_data["profile"]),
     }
     return render(request, "et/dashboard.html", context)
 

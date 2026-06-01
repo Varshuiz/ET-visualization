@@ -416,6 +416,42 @@ def build_aquacrop_weather_from_eccc(
     Build AquaCrop weather dataframe from ECCC climate-daily observations.
     Output columns: MinTemp, MaxTemp, Precipitation, ReferenceET, Date
     """
+    from .weather_cache import (
+        dataframe_from_cache_payload,
+        dataframe_to_cache_payload,
+        get_cached,
+        set_cached,
+        weather_cache_key,
+    )
+
+    cache_key = weather_cache_key(
+        "eccc_aquacrop_weather",
+        lat=round(float(latitude), 4),
+        lon=round(float(longitude), 4),
+        start=str(start_date),
+        end=str(end_date),
+        elevation=round(float(elevation), 1),
+    )
+    cached = get_cached(cache_key)
+    if cached is not None:
+        return dataframe_from_cache_payload(cached)
+
+    weather_df = _build_aquacrop_weather_from_eccc_impl(
+        latitude, longitude, start_date, end_date, elevation=elevation
+    )
+    if weather_df is not None and not weather_df.empty:
+        set_cached(cache_key, dataframe_to_cache_payload(weather_df))
+    return weather_df
+
+
+def _build_aquacrop_weather_from_eccc_impl(
+    latitude: float,
+    longitude: float,
+    start_date: str,
+    end_date: str,
+    elevation: float = 766.0,
+) -> pd.DataFrame:
+    """Uncached ECCC → AquaCrop weather builder."""
     start_ts = pd.to_datetime(start_date, errors="coerce")
     end_ts = pd.to_datetime(end_date, errors="coerce")
     if pd.isna(start_ts) or pd.isna(end_ts):

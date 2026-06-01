@@ -167,11 +167,19 @@ if not DEBUG:
         "yes",
     )
 
-# In-process cache (per web worker) for small, frequently-hit forecast URLs.
-# For multi-worker production this is still effective at reducing hot-path latency.
+# In-process cache (per web worker) for weather API responses and hot-path URLs.
+# TTL defaults to 1 hour via WEATHER_CACHE_TTL_SECONDS in et.weather_cache.
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "et-locmem",
     }
 }
+
+if DEBUG and not RUNNING_TESTS:
+    INSTALLED_APPS += ["debug_toolbar"]
+    MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")
+    INTERNAL_IPS = ["127.0.0.1", "::1"]
+    DEBUG_TOOLBAR_CONFIG = {
+        "SHOW_TOOLBAR_CALLBACK": lambda request: DEBUG,
+    }

@@ -36,7 +36,7 @@ class ETPlannerViewTests(TestCase):
         response = self.client.get(reverse("et:acis_fetch"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Prepare ET Inputs")
-        self.assertContains(response, "Select province")
+        self.assertContains(response, "Province")
 
     def test_et_results_requires_seeded_data(self):
         response = self.client.get(reverse("et:comparison_with_acis"))
