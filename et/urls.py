@@ -11,6 +11,11 @@ urlpatterns = [
     path("auth/login/", views.login_view, name="login"),
     path("auth/logout/", views.logout_view, name="logout"),
     path("dashboard/", views.dashboard_view, name="dashboard"),
+    path(
+        "dashboard/runs/<str:run_type>/<uuid:run_id>/delete/",
+        views.delete_run_view,
+        name="delete_run",
+    ),
     path("dashboard/et/<uuid:run_id>/", views.et_run_detail_view, name="et_run_detail"),
     path("dashboard/et/<uuid:run_id>/download-csv/", views.et_run_download_csv_view, name="et_run_download_csv"),
     path("et-calculation/<uuid:run_id>/", views.et_run_detail_view, name="et_calculation_detail"),
@@ -45,4 +50,9 @@ urlpatterns = [
     path("update-comparison-plot/", protect(views.update_comparison_plot), name="update_comparison_plot"),
     path("env-canada-forecast/", protect(views.env_canada_forecast_view), name="env_canada_forecast"),
     path("aquacrop/", protect(views.aquacrop_simulation), name="aquacrop_simulation"),
+    path(
+        "api/aquacrop-season-prefill/",
+        protect(views.aquacrop_season_prefill_api),
+        name="aquacrop_season_prefill",
+    ),
 ]

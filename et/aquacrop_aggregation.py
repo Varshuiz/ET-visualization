@@ -276,6 +276,41 @@ def format_yield_table(yield_results: dict) -> list:
     return rows
 
 
+def _weekly_yield_rows_from_daily(
+    daily_df: pd.DataFrame, crop_name: str, start_date_str: str
+) -> dict[int, dict]:
+    """Map week_idx → peak biomass and marketable yield for that week."""
+    if daily_df is None or daily_df.empty or "biomass" not in daily_df.columns:
+        return {}
+
+    df = daily_df.copy()
+    if "Date" not in df.columns:
+        start_dt = pd.to_datetime(start_date_str.replace("/", "-"), errors="coerce")
+        if pd.isna(start_dt):
+            return {}
+        df["Date"] = pd.date_range(start_dt, periods=len(df), freq="D")
+
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Date"])
+    if df.empty:
+        return {}
+
+    start_dt = df["Date"].min().normalize()
+    df["week_idx"] = ((df["Date"] - start_dt).dt.days // 7).astype(int)
+
+    by_week: dict[int, dict] = {}
+    for wk, grp in df.groupby("week_idx", sort=True):
+        bmax = float(grp["biomass"].max())
+        y = compute_yield_tha(bmax, crop_name)
+        by_week[int(wk)] = {
+            "week_after_planting": int(wk) + 1,
+            "period_label": f"Week {int(wk) + 1}",
+            "yield_tha": round(float(y), 3),
+            "biomass_peak_tha": round(bmax, 3),
+        }
+    return by_week
+
+
 def build_weekly_yield_projection(
     daily_df: pd.DataFrame, crop_name: str, start_date_str: str
 ) -> list:
@@ -283,34 +318,157 @@ def build_weekly_yield_projection(
     End-of-week potential marketable yield (t/ha) from peak simulated dry biomass
     within each calendar week after simulation start (indicative trajectory).
     """
-    if daily_df is None or daily_df.empty or "biomass" not in daily_df.columns:
+    return build_weekly_yield_comparison(daily_df, crop_name, start_date_str, actual_daily_df=None)
+
+
+def build_weekly_yield_comparison(
+    optimal_daily_df: pd.DataFrame,
+    crop_name: str,
+    start_date_str: str,
+    actual_daily_df: pd.DataFrame | None = None,
+) -> list:
+    """
+    Weekly rows with optimal vs farmer-irrigation marketable yield (t/ha).
+    Peak biomass within each week × harvest index.
+    """
+    optimal_by_week = _weekly_yield_rows_from_daily(optimal_daily_df, crop_name, start_date_str)
+    if not optimal_by_week:
         return []
 
-    df = daily_df.copy()
-    if "Date" not in df.columns:
-        start_dt = pd.to_datetime(start_date_str, errors="coerce")
-        if pd.isna(start_dt):
-            return []
-        df["Date"] = pd.date_range(start_dt, periods=len(df), freq="D")
-
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df = df.dropna(subset=["Date"])
-    if df.empty:
-        return []
-
-    start_dt = df["Date"].min().normalize()
-    df["week_idx"] = ((df["Date"] - start_dt).dt.days // 7).astype(int)
+    actual_by_week = (
+        _weekly_yield_rows_from_daily(actual_daily_df, crop_name, start_date_str)
+        if actual_daily_df is not None
+        else {}
+    )
 
     out = []
-    for wk, grp in df.groupby("week_idx", sort=True):
-        bmax = float(grp["biomass"].max())
-        y = compute_yield_tha(bmax, crop_name)
+    for wk in sorted(optimal_by_week.keys()):
+        opt = optimal_by_week[wk]
+        act = actual_by_week.get(wk)
         out.append(
             {
-                "week_after_planting": int(wk) + 1,
-                "period_label": f"Week {int(wk) + 1}",
-                "yield_tha": round(float(y), 3),
-                "biomass_peak_tha": round(bmax, 3),
+                "week_after_planting": opt["week_after_planting"],
+                "period_label": opt["period_label"],
+                "yield_tha": opt["yield_tha"],
+                "biomass_peak_tha": opt["biomass_peak_tha"],
+                "optimal_yield_tha": opt["yield_tha"],
+                "your_yield_tha": act["yield_tha"] if act else None,
+                "biomass_peak_optimal_tha": opt["biomass_peak_tha"],
+                "biomass_peak_actual_tha": act["biomass_peak_tha"] if act else None,
             }
         )
     return out
+
+
+def build_simulation_results_tables(
+    results: dict,
+    start_date_str: str,
+) -> tuple[list[dict], list[dict]]:
+    """
+    Daily and weekly result rows for the AquaCrop results data table.
+
+    Weekly aggregation: sum ET, precipitation, irrigation; mean soil water & biomass.
+  """
+    crop_growth = results.get("daily_output")
+    water_flux = results.get("water_flux")
+    if crop_growth is None or (isinstance(crop_growth, pd.DataFrame) and crop_growth.empty):
+        return [], []
+
+    cg = crop_growth.copy() if isinstance(crop_growth, pd.DataFrame) else pd.DataFrame(crop_growth)
+    wf = (
+        water_flux.copy()
+        if isinstance(water_flux, pd.DataFrame) and water_flux is not None and not water_flux.empty
+        else pd.DataFrame()
+    )
+
+    n = len(cg)
+    start_dt = pd.to_datetime(str(start_date_str).replace("/", "-"), errors="coerce")
+    if pd.isna(start_dt):
+        start_dt = pd.Timestamp.today().normalize()
+
+    if "Date" in cg.columns:
+        dates = pd.to_datetime(cg["Date"], errors="coerce")
+    else:
+        dates = pd.date_range(start_dt, periods=n, freq="D")
+
+    tr = pd.to_numeric(
+        wf.get("Tr", pd.Series(0.0, index=range(n))), errors="coerce"
+    ).fillna(0.0)
+    es = pd.to_numeric(
+        wf.get("Es", pd.Series(0.0, index=range(n))), errors="coerce"
+    ).fillna(0.0)
+    if len(tr) < n:
+        tr = pd.concat([tr, pd.Series([0.0] * (n - len(tr)))], ignore_index=True)
+    if len(es) < n:
+        es = pd.concat([es, pd.Series([0.0] * (n - len(es)))], ignore_index=True)
+    tr, es = tr.iloc[:n], es.iloc[:n]
+
+    precip = pd.to_numeric(
+        wf.get("Infl", pd.Series(0.0, index=range(n))), errors="coerce"
+    ).fillna(0.0).iloc[:n]
+    irrigation = pd.to_numeric(
+        wf.get("IrrDay", pd.Series(0.0, index=range(n))), errors="coerce"
+    ).fillna(0.0).iloc[:n]
+    biomass = pd.to_numeric(
+        cg.get("biomass", pd.Series(0.0, index=range(n))), errors="coerce"
+    ).fillna(0.0).iloc[:n]
+    # Root-zone water (Wr, mm) is in water_flux, not crop_growth (aquacrop-OSPy output layout).
+    soil_water = pd.to_numeric(
+        wf.get("Wr", wf.get("soil_water", pd.Series(np.nan, index=range(n)))),
+        errors="coerce",
+    )
+    if len(soil_water) < n:
+        soil_water = pd.concat(
+            [soil_water, pd.Series([np.nan] * (n - len(soil_water)))],
+            ignore_index=True,
+        )
+    soil_water = soil_water.iloc[:n]
+
+    daily_df = pd.DataFrame(
+        {
+            "Date": dates,
+            "et_mm": (tr + es).values,
+            "precipitation_mm": precip.values,
+            "irrigation_mm": irrigation.values,
+            "soil_moisture": soil_water.values,
+            "biomass_tha": biomass.values,
+        }
+    )
+    daily_df["Date"] = pd.to_datetime(daily_df["Date"], errors="coerce")
+    daily_df = daily_df.dropna(subset=["Date"]).reset_index(drop=True)
+    if daily_df.empty:
+        return [], []
+
+    daily_rows = []
+    for _, row in daily_df.iterrows():
+        sm = row["soil_moisture"]
+        daily_rows.append(
+            {
+                "period": row["Date"].strftime("%Y-%m-%d"),
+                "et_mm": round(float(row["et_mm"]), 2),
+                "precipitation_mm": round(float(row["precipitation_mm"]), 2),
+                "irrigation_mm": round(float(row["irrigation_mm"]), 2),
+                "soil_moisture": round(float(sm), 2) if pd.notna(sm) else None,
+                "biomass_tha": round(float(row["biomass_tha"]), 3),
+            }
+        )
+
+    week_start = daily_df["Date"].min().normalize()
+    daily_df["week_idx"] = ((daily_df["Date"] - week_start).dt.days // 7).astype(int)
+    weekly_rows = []
+    for wk, grp in daily_df.groupby("week_idx", sort=True):
+        ws = grp["Date"].min()
+        we = grp["Date"].max()
+        sm_mean = grp["soil_moisture"].mean()
+        weekly_rows.append(
+            {
+                "period": f"Week {int(wk) + 1} ({_fmt_month_day(ws)} – {_fmt_month_day(we)})",
+                "et_mm": round(float(grp["et_mm"].sum()), 2),
+                "precipitation_mm": round(float(grp["precipitation_mm"].sum()), 2),
+                "irrigation_mm": round(float(grp["irrigation_mm"].sum()), 2),
+                "soil_moisture": round(float(sm_mean), 2) if pd.notna(sm_mean) else None,
+                "biomass_tha": round(float(grp["biomass_tha"].mean()), 3),
+            }
+        )
+
+    return daily_rows, weekly_rows

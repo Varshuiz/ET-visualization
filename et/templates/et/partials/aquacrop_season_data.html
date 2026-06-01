@@ -1,0 +1,156 @@
+{# AIMM-style optional farmer season data (weekly weather + field management) #}
+<details id="seasonDataPanel" class="border border-outline-variant/60 rounded-xl bg-surface-container-low/40 overflow-hidden group" {% if not season_data_collapsed %}open{% endif %}>
+    <summary class="cursor-pointer select-none px-5 py-4 bg-surface-container-low flex items-center justify-between gap-3 list-none [&::-webkit-details-marker]:hidden">
+        <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">agriculture</span>
+            <span class="text-sm font-bold text-on-surface">Your Season Data</span>
+            <span class="text-xs font-normal text-on-surface-variant">(Optional — enables actual vs optimal comparison)</span>
+        </div>
+        <span class="material-symbols-outlined text-on-surface-variant transition-transform group-open:rotate-180">expand_more</span>
+    </summary>
+
+    <div class="px-5 pb-5 pt-2 space-y-5 border-t border-outline-variant/40">
+        <input type="hidden" name="season_data_collapsed" id="season_data_collapsed" value="{% if season_data_collapsed %}1{% else %}0{% endif %}">
+
+        <div class="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-xs text-on-surface-variant leading-relaxed">
+            <strong class="text-on-surface">Weekly table period:</strong>
+            one row per 7 days from <strong>first week</strong> (planting date, if it falls within the range) through <strong>season end</strong>.
+            Change the dates below, then click <strong>Update week rows</strong> to rebuild the table (use <strong>Pre-fill weather from ECCC</strong> to load weather into those rows).
+        </div>
+
+        <div class="form-grid">
+            <div class="form-group space-y-2">
+                <label for="season_period_start" class="text-xs font-bold uppercase tracking-wider text-outline">Season data from</label>
+                <input type="text" id="season_period_start" value="{{ start_date|default:'' }}"
+                       placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}"
+                       aria-describedby="seasonPeriodHint"
+                       class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+            </div>
+            <div class="form-group space-y-2">
+                <label for="season_period_end" class="text-xs font-bold uppercase tracking-wider text-outline">Season data through</label>
+                <input type="text" id="season_period_end" value="{{ end_date|default:'' }}"
+                       placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}"
+                       aria-describedby="seasonPeriodHint"
+                       class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+            </div>
+            <div class="form-group space-y-2">
+                <label for="planting_date" class="text-xs font-bold uppercase tracking-wider text-outline">Planting Date</label>
+                <input type="text" name="planting_date" id="planting_date" value="{{ planting_date|default:'' }}"
+                       placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}"
+                       class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                <p class="text-[11px] text-on-surface-variant">First weekly row starts here when it is on or after “Season data from”.</p>
+            </div>
+            <div class="form-group space-y-2">
+                <label for="allowable_mad_pct" class="text-xs font-bold uppercase tracking-wider text-outline flex items-center gap-1">
+                    Allowable Soil Moisture Depletion (%)
+                    <button type="button" class="mad-tooltip-trigger text-primary" title="AIMM guidance"
+                            aria-label="Explain allowable soil moisture depletion">
+                        <span class="material-symbols-outlined text-base">info</span>
+                    </button>
+                </label>
+                <input type="number" name="allowable_mad_pct" id="allowable_mad_pct" min="10" max="80" step="1"
+                       value="{{ allowable_mad_pct|default:'50' }}"
+                       class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                <p id="madTooltipText" class="text-[11px] text-on-surface-variant leading-snug hidden">
+                    Typical allowable depletion (MAD): <strong>50%</strong> for grain and oilseed with surface or wheel-move irrigation;
+                    <strong>30%</strong> for centre pivot systems or potatoes. Lower MAD means more frequent irrigation.
+                </p>
+            </div>
+            <div class="form-group space-y-2">
+                <label for="application_efficiency_pct" class="text-xs font-bold uppercase tracking-wider text-outline">Application Efficiency (%)</label>
+                <input type="number" name="application_efficiency_pct" id="application_efficiency_pct" min="1" max="100" step="1"
+                       value="{{ application_efficiency_pct|default:'81' }}"
+                       class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+            </div>
+        </div>
+
+        <p id="seasonPeriodHint" class="text-[11px] text-on-surface-variant -mt-2">
+            These dates stay in sync with <strong>Start date</strong> and <strong>End date</strong> in the simulation settings above.
+        </p>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <button type="button" id="btnRefreshSeasonRows" class="text-sm font-semibold text-on-surface border border-outline-variant rounded-lg px-4 py-2 hover:bg-surface-container-low transition-colors inline-flex items-center gap-2">
+                <span class="material-symbols-outlined text-base">calendar_month</span>
+                Update week rows
+            </button>
+            <button type="button" id="btnLoadEcccSeason" class="text-sm font-semibold text-primary border border-primary/30 rounded-lg px-4 py-2 hover:bg-primary/5 transition-colors inline-flex items-center gap-2">
+                <span class="material-symbols-outlined text-base">cloud_download</span>
+                Pre-fill weather from ECCC
+            </button>
+            <span id="seasonPrefillStatus" class="text-xs text-on-surface-variant">
+                {% if eccc_weather_prefilled %}Weather pre-filled from ECCC for {{ season_city|default:selected_city }}.{% else %}Set the season period, update week rows, then pre-fill or enter values manually.{% endif %}
+            </span>
+        </div>
+        <input type="hidden" id="soil_field_capacity_pct" value="{{ soil_field_capacity_pct|default:'28' }}">
+
+        <div class="space-y-2">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-outline">Table 1 — Weather &amp; ET Data (weekly)</h4>
+            <p class="text-[11px] text-on-surface-variant">Override any value. Precipitation and reference ET can be loaded from ECCC for your selected city.</p>
+            <div class="overflow-x-auto rounded-lg border border-outline-variant/50">
+                <table class="w-full text-sm border-collapse min-w-[640px]" id="weatherSeasonTable">
+                    <thead>
+                        <tr class="bg-primary-container text-white text-left">
+                            <th class="p-2 font-semibold">Week Starting Date</th>
+                            <th class="p-2 font-semibold">Max Temp (°C)</th>
+                            <th class="p-2 font-semibold">Min Temp (°C)</th>
+                            <th class="p-2 font-semibold">Precipitation (mm)</th>
+                            <th class="p-2 font-semibold">Reference ET (mm)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="weatherSeasonBody">
+                        {% for row in weather_rows %}
+                        <tr class="border-b border-surface-variant/60 hover:bg-surface-container-low">
+                            <td class="p-1">
+                                <input type="hidden" name="weather_week_start" value="{{ row.week_start }}">
+                                <span class="px-2 py-1 text-xs text-on-surface-variant">{{ row.week_start }}</span>
+                            </td>
+                            <td class="p-1"><input type="number" step="0.1" name="weather_tmax" value="{{ row.tmax }}" class="season-input w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
+                            <td class="p-1"><input type="number" step="0.1" name="weather_tmin" value="{{ row.tmin }}" class="season-input w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
+                            <td class="p-1"><input type="number" step="0.1" name="weather_precip" value="{{ row.precipitation }}" class="season-weather-precip w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
+                            <td class="p-1"><input type="number" step="0.01" name="weather_ref_et" value="{{ row.reference_et }}" class="w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="space-y-2">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-outline">Table 2 — Field Management Data (weekly)</h4>
+            <p class="text-[11px] text-on-surface-variant">
+                <strong>Effective Irrigation = Gross Irrigation × Application Efficiency</strong> (efficiency set above).
+                Runoff uses the AIMM equation when weekly precipitation ≥ 25&nbsp;mm.
+            </p>
+            <div class="overflow-x-auto rounded-lg border border-outline-variant/50">
+                <table class="w-full text-sm border-collapse min-w-[720px]" id="mgmtSeasonTable">
+                    <thead>
+                        <tr class="bg-tertiary-container text-white text-left">
+                            <th class="p-2 font-semibold">Week Starting Date</th>
+                            <th class="p-2 font-semibold">Gross Irrigation (mm)</th>
+                            <th class="p-2 font-semibold">Effective Irrigation (mm)</th>
+                            <th class="p-2 font-semibold">Soil Moisture — Top Layer (%)</th>
+                            <th class="p-2 font-semibold">Runoff (mm)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mgmtSeasonBody">
+                        {% for row in management_rows %}
+                        <tr class="border-b border-surface-variant/60 hover:bg-surface-container-low" data-week="{{ row.week_start }}">
+                            <td class="p-1 px-2 text-xs text-on-surface-variant">{{ row.week_start }}</td>
+                            <td class="p-1"><input type="number" step="0.1" min="0" name="mgmt_gross_irr" value="{{ row.gross_irrigation }}" class="mgmt-gross w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
+                            <td class="p-1">
+                                <input type="text" readonly tabindex="-1" class="mgmt-effective w-full border-outline-variant/50 bg-surface-container rounded px-2 py-1 text-sm text-on-surface-variant"
+                                       value="{{ row.effective_irrigation }}">
+                            </td>
+                            <td class="p-1"><input type="number" step="0.1" min="0" max="100" name="mgmt_soil_moisture" value="{{ row.soil_moisture }}" class="mgmt-sm w-full border-outline-variant rounded px-2 py-1 text-sm" placeholder="FC ~{{ soil_field_capacity_pct }}%"></td>
+                            <td class="p-1">
+                                <input type="text" readonly tabindex="-1" class="mgmt-runoff w-full border-outline-variant/50 bg-surface-container rounded px-2 py-1 text-sm text-on-surface-variant"
+                                       value="{{ row.runoff }}">
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</details>

@@ -37,6 +37,7 @@ from .views_auth import login_view, logout_view, register_view
 from .views_dashboard import (
     aquacrop_run_detail_view,
     dashboard_view,
+    delete_run_view,
     et_run_detail_view,
     et_run_download_csv_view,
     farm_profile_view,
@@ -160,6 +161,8 @@ from .aquacrop_aggregation import (
     build_yield_comparison_chart,
     format_yield_table,
     build_weekly_yield_projection,
+    build_weekly_yield_comparison,
+    build_simulation_results_tables,
 )
 from .forms import UploadFileForm
 from .forecast_recommendations import (
@@ -2958,6 +2961,26 @@ def env_canada_forecast_view(request):
 
     return render(request, "et/env_canada_forecast.html", base_context())
 
+
+def _aquacrop_current_year() -> int:
+    return int(pd.Timestamp.now().year)
+
+
+def _aquacrop_default_season_dates(year: int | None = None) -> tuple[str, str]:
+    """May 1 – Sep 30 for the given calendar year (AquaCrop YYYY/MM/DD)."""
+    y = int(year) if year else _aquacrop_current_year()
+    return f"{y}/05/01", f"{y}/09/30"
+
+
+def _normalize_aquacrop_date_str(value: str) -> str:
+    """Parse user input and return dates in YYYY/MM/DD for AquaCrop."""
+    raw = (value or "").strip().replace(".", "/").replace("-", "/")
+    ts = pd.to_datetime(raw, errors="coerce")
+    if pd.isna(ts):
+        raise ValueError(f"Invalid date: {value!r}. Use YYYY/MM/DD.")
+    return ts.strftime("%Y/%m/%d")
+
+
 def aquacrop_simulation(request):
     """
     View for AquaCrop crop growth simulation
@@ -2971,6 +2994,7 @@ def aquacrop_simulation(request):
     available_crops = list(AquaCropSimulator.AVAILABLE_CROPS.keys())
     prefilled_crop = _match_aquacrop_crop(farm_defaults.get("crop_type", ""), available_crops)
     prefilled_irrigation = _map_irrigation_to_aquacrop(farm_defaults.get("irrigation_type", ""))
+    default_start, default_end = _aquacrop_default_season_dates()
 
     context = {
         "crops": available_crops,
@@ -2981,8 +3005,8 @@ def aquacrop_simulation(request):
         "selected_soil": "",
         "selected_irrigation": prefilled_irrigation,
         "timestep": "",
-        "start_date": f"{pd.Timestamp.now().year}/05/01",
-        "end_date": f"{pd.Timestamp.now().year}/09/30",
+        "start_date": default_start,
+        "end_date": default_end,
         "sim_mode": "historical_range",
         "historical_range_type": "custom",
         "simulation_year": "",
@@ -2990,6 +3014,7 @@ def aquacrop_simulation(request):
         "hist_year_end": "",
         "historical_results_rows": [],
         "weekly_yield_projection": [],
+        "weekly_yield_comparison": [],
         "forecast_mode_caveat": None,
         "multi_year_mode": False,
         "irrigation_methods": [
@@ -2999,6 +3024,23 @@ def aquacrop_simulation(request):
         ],
         "farm_prefill_note": bool(farm_defaults),
     }
+
+    from .aquacrop_season_data import build_season_tables
+
+    _coords = ALBERTA_LOCATIONS.get(default_city) if default_city else None
+    context.update(
+        build_season_tables(
+            start_date=default_start,
+            end_date=default_end,
+            city_name=default_city or None,
+            latitude=_coords["lat"] if _coords else None,
+            longitude=_coords["lon"] if _coords else None,
+            soil_type=context.get("selected_soil") or "Loam",
+            crop=prefilled_crop or "Wheat",
+            irrigation=prefilled_irrigation,
+            fetch_eccc=False,
+        )
+    )
 
     def _maturity_warning(crop_name: str, end_date_str: str):
         thresholds = {"Wheat": "09-15", "Maize": "09-20"}
@@ -3039,6 +3081,18 @@ def aquacrop_simulation(request):
             start_date = request.POST.get("start_date", "").strip()
             end_date = request.POST.get("end_date", "").strip()
 
+            # Historical range (custom): default to May 1 – Sep 30 of the current year.
+            if sim_mode == "historical_range" and historical_range_type == "custom":
+                if not start_date or not end_date:
+                    start_date, end_date = _aquacrop_default_season_dates()
+                else:
+                    start_date = _normalize_aquacrop_date_str(start_date)
+                    end_date = _normalize_aquacrop_date_str(end_date)
+                if pd.to_datetime(end_date) < pd.to_datetime(start_date):
+                    raise ValueError("End date must be on or after the start date.")
+                context["start_date"] = start_date
+                context["end_date"] = end_date
+
             try:
                 simulation_year = int(request.POST.get("simulation_year", "").strip() or 0)
             except (TypeError, ValueError):
@@ -3057,6 +3111,16 @@ def aquacrop_simulation(request):
             context["simulation_year"] = str(simulation_year) if simulation_year else ""
             context["hist_year_start"] = str(hist_year_start) if hist_year_start else ""
             context["hist_year_end"] = str(hist_year_end) if hist_year_end else ""
+
+            from .aquacrop_season_data import parse_season_data_from_post
+
+            season_post = parse_season_data_from_post(
+                request.POST,
+                soil_type=soil,
+                crop=crop,
+                irrigation=irrigation,
+            )
+            context.update(season_post)
 
             weather_df = None
             historical_results_rows = []
@@ -3147,9 +3211,20 @@ def aquacrop_simulation(request):
 
                     if results is None:
                         raise ValueError("No successful AquaCrop runs in the selected year range.")
+                elif sim_mode == "historical_range" and historical_range_type == "custom":
+                    weather_df = build_aquacrop_weather_from_eccc(
+                        latitude=lat,
+                        longitude=lon,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
                 elif sim_mode == "forecast":
                     if not start_date or not end_date:
                         raise ValueError("Forecast mode requires start and end dates.")
+                    start_date = _normalize_aquacrop_date_str(start_date)
+                    end_date = _normalize_aquacrop_date_str(end_date)
+                    context["start_date"] = start_date
+                    context["end_date"] = end_date
                     weather_df = build_aquacrop_weather_from_openmeteo_forecast(
                         latitude=lat,
                         longitude=lon,
@@ -3161,11 +3236,9 @@ def aquacrop_simulation(request):
                         "Yield and ET are exploratory only."
                     )
                 else:
-                    weather_df = build_aquacrop_weather_from_eccc(
-                        latitude=lat,
-                        longitude=lon,
-                        start_date=start_date,
-                        end_date=end_date,
+                    raise ValueError(
+                        "Unsupported simulation configuration. "
+                        "For Historical range, choose custom dates or year-to-year mode."
                     )
 
             if weather_df is not None and hasattr(weather_df, "attrs"):
@@ -3242,6 +3315,7 @@ def aquacrop_simulation(request):
                 weekly_yield_projection = build_weekly_yield_projection(
                     daily_df, crop, start_date
                 )
+                context["weekly_yield_comparison"] = weekly_yield_projection
                 if "Date" not in daily_df.columns:
                     start_dt = pd.to_datetime(start_date)
                     daily_df["Date"] = pd.date_range(start_dt, periods=len(daily_df), freq="D")
@@ -3263,6 +3337,9 @@ def aquacrop_simulation(request):
                 context["resampled_chart"] = ts_chart
                 resampled_table = resampled[["Period", y_col]].rename(columns={y_col: "value"})
                 context["resampled_data"] = resampled_table.to_dict("records")
+                daily_tbl, weekly_tbl = build_simulation_results_tables(results, start_date)
+                context["results_table_daily"] = daily_tbl
+                context["results_table_weekly"] = weekly_tbl
                 dry_biomass = results.get("yield_dry", results.get("yield_fresh", 0))
                 context["yield_tha"] = compute_yield_tha(dry_biomass, crop)
                 context["timestep"] = timestep
@@ -3280,10 +3357,40 @@ def aquacrop_simulation(request):
                     "timestep": timestep,
                     "historical_results_rows": historical_results_rows,
                     "weekly_yield_projection": weekly_yield_projection,
+                    "weekly_yield_comparison": context.get("weekly_yield_comparison", weekly_yield_projection),
                     "forecast_mode_caveat": forecast_mode_caveat,
                     "multi_year_mode": multi_year_mode,
+                    "has_season_data": season_post.get("has_season_data"),
                 }
             )
+
+            if season_post.get("has_season_data") and weather_df is not None:
+                try:
+                    from .aquacrop_actual_vs_optimal import build_actual_vs_optimal_payload
+
+                    context["actual_vs_optimal"] = build_actual_vs_optimal_payload(
+                        optimal_results=results,
+                        weather_rows=season_post.get("weather_rows") or [],
+                        management_rows=season_post.get("management_rows") or [],
+                        crop=crop,
+                        soil=soil,
+                        start_date=start_date,
+                        end_date=end_date,
+                        weather_df=weather_df,
+                        application_efficiency_pct=float(
+                            season_post.get("application_efficiency_pct") or 81
+                        ),
+                    )
+                    context["has_actual_vs_optimal"] = True
+                    if context["actual_vs_optimal"].get("weekly_yield_comparison"):
+                        context["weekly_yield_comparison"] = context["actual_vs_optimal"][
+                            "weekly_yield_comparison"
+                        ]
+                        context["weekly_yield_projection"] = context["weekly_yield_comparison"]
+                except Exception as avo_exc:
+                    print(f"[AQUACROP] actual vs optimal comparison failed: {avo_exc}")
+                    context["actual_vs_optimal_error"] = str(avo_exc)
+                    context["has_actual_vs_optimal"] = False
 
             persist_aquacrop_run(
                 request,
@@ -3299,10 +3406,22 @@ def aquacrop_simulation(request):
                     "timestep": context.get("timestep"),
                     "historical_results_rows": historical_results_rows,
                     "weekly_yield_projection": weekly_yield_projection,
+                    "weekly_yield_comparison": context.get("weekly_yield_comparison", weekly_yield_projection),
                     "resampled_chart": context.get("resampled_chart"),
                     "resampled_data": context.get("resampled_data"),
+                    "results_table_daily": context.get("results_table_daily"),
+                    "results_table_weekly": context.get("results_table_weekly"),
                     "multi_year_mode": multi_year_mode,
                     "forecast_mode_caveat": forecast_mode_caveat,
+                    "planting_date": season_post.get("planting_date"),
+                    "allowable_mad_pct": season_post.get("allowable_mad_pct"),
+                    "application_efficiency_pct": season_post.get("application_efficiency_pct"),
+                    "weather_rows": season_post.get("weather_rows"),
+                    "management_rows": season_post.get("management_rows"),
+                    "total_gross_irrigation_mm": season_post.get("total_gross_irrigation_mm"),
+                    "total_effective_irrigation_mm": season_post.get("total_effective_irrigation_mm"),
+                    "total_runoff_mm": season_post.get("total_runoff_mm"),
+                    "actual_vs_optimal": context.get("actual_vs_optimal"),
                 },
             )
 
@@ -3312,6 +3431,65 @@ def aquacrop_simulation(request):
             context["error_message"] = f"Simulation error: {str(e)}"
 
     return render(request, "et/aquacrop_simulation.html", context)
+
+
+def aquacrop_season_prefill_api(request):
+    """JSON weekly weather rows from ECCC for the season data tables."""
+    if request.method != "GET":
+        return JsonResponse({"success": False, "error": "GET required"}, status=405)
+
+    city_name = (request.GET.get("city") or request.GET.get("city_name") or "").strip()
+    start_date = (request.GET.get("start") or request.GET.get("start_date") or "").strip()
+    end_date = (request.GET.get("end") or request.GET.get("end_date") or "").strip()
+    soil_type = (request.GET.get("soil") or "Loam").strip()
+    crop = (request.GET.get("crop") or "Wheat").strip()
+    irrigation = (request.GET.get("irrigation") or "full").strip()
+
+    if not start_date or not end_date:
+        start_date, end_date = _aquacrop_default_season_dates()
+    else:
+        try:
+            start_date = _normalize_aquacrop_date_str(start_date)
+            end_date = _normalize_aquacrop_date_str(end_date)
+        except ValueError as exc:
+            return JsonResponse({"success": False, "error": str(exc)}, status=400)
+
+    fetch_eccc = (request.GET.get("eccc") or "1").strip().lower() not in ("0", "false", "no")
+    planting_date = (request.GET.get("planting_date") or "").strip() or None
+
+    coords = ALBERTA_LOCATIONS.get(city_name) if city_name else None
+    if fetch_eccc and not coords:
+        return JsonResponse(
+            {"success": False, "error": "Select a valid Alberta city for ECCC pre-fill."},
+            status=400,
+        )
+
+    from .aquacrop_season_data import build_season_tables
+
+    lat = float(coords["lat"]) if coords else None
+    lon = float(coords["lon"]) if coords else None
+    payload = build_season_tables(
+        start_date=start_date,
+        end_date=end_date,
+        city_name=city_name or None,
+        latitude=lat,
+        longitude=lon,
+        soil_type=soil_type,
+        crop=crop,
+        irrigation=irrigation,
+        fetch_eccc=fetch_eccc,
+        planting_date=planting_date,
+    )
+    return JsonResponse(
+        {
+            "success": True,
+            "eccc_prefilled": payload.get("eccc_weather_prefilled"),
+            "weather_rows": payload.get("weather_rows"),
+            "management_rows": payload.get("management_rows"),
+            "soil_field_capacity_pct": payload.get("soil_field_capacity_pct"),
+            "allowable_mad_pct": payload.get("allowable_mad_pct"),
+        }
+    )
 
 
 def aquacrop_api(request):

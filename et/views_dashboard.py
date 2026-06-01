@@ -21,6 +21,9 @@ from .supabase_storage import (
     DASHBOARD_AQUACROP_COLUMNS,
     DASHBOARD_ET_COLUMNS,
     DASHBOARD_FORECAST_COLUMNS,
+    delete_aquacrop_run,
+    delete_et_calculation,
+    delete_forecast_run,
     get_aquacrop_run_by_id,
     get_et_calculation_by_id,
     get_farm_for_user,
@@ -33,6 +36,12 @@ from .supabase_storage import (
 )
 
 DASHBOARD_RUN_LIMIT = 5
+
+_DELETE_RUN_HANDLERS = {
+    "et": (delete_et_calculation, "ET calculation"),
+    "aquacrop": (delete_aquacrop_run, "AquaCrop run"),
+    "forecast": (delete_forecast_run, "forecast run"),
+}
 
 
 def _first_name(full_name: str) -> str:
@@ -113,7 +122,6 @@ def _load_dashboard_supabase_data(user_id: str) -> dict[str, Any]:
 def dashboard_view(request):
     user_id = get_current_user_id(request)
     supabase_data = _load_dashboard_supabase_data(user_id)
-    log_feature_usage(request, "dashboard", "view")
 
     context = {
         "farm": supabase_data["farm"],
@@ -123,6 +131,31 @@ def dashboard_view(request):
         **_profile_context_from_row(supabase_data["profile"]),
     }
     return render(request, "et/dashboard.html", context)
+
+
+@supabase_login_required
+@require_http_methods(["POST"])
+def delete_run_view(request, run_type: str, run_id):
+    handler = _DELETE_RUN_HANDLERS.get((run_type or "").strip().lower())
+    redirect_url = reverse("et:dashboard") + "#recent-history"
+
+    if not handler:
+        messages.error(request, "Invalid calculation type.")
+        return redirect(redirect_url)
+
+    delete_fn, label = handler
+    user_id = get_current_user_id(request)
+    if not user_id:
+        messages.error(request, "You must be signed in to delete calculations.")
+        return redirect(reverse("et:login"))
+
+    if delete_fn(user_id, str(run_id)):
+        messages.success(request, f"Deleted {label}.")
+        log_feature_usage(request, "dashboard", "delete_run", {"run_type": run_type, "run_id": str(run_id)})
+    else:
+        messages.error(request, f"Could not delete that {label}. It may have already been removed.")
+
+    return redirect(redirect_url)
 
 
 @supabase_login_required

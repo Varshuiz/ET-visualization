@@ -1,0 +1,13 @@
+<form method="post"
+      action="{% url 'et:delete_run' run_type run_id %}"
+      class="history-delete-form inline-flex"
+      onclick="event.stopPropagation();"
+      onsubmit="return confirm('{{ confirm_message|escapejs }}');">
+    {% csrf_token %}
+    <button type="submit"
+            class="history-delete-btn inline-flex items-center justify-center p-1.5 rounded-lg text-[#707978] hover:text-[#b91c1c] hover:bg-[#fef2f2] transition-colors"
+            aria-label="Delete this saved calculation"
+            title="Delete">
+        <span class="material-symbols-outlined text-[20px] leading-none" aria-hidden="true">delete</span>
+    </button>
+</form>

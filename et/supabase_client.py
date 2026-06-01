@@ -19,19 +19,31 @@ def _create_client(api_key: str):
     return create_client(url, key)
 
 
+_service_client = None
+
+
 def get_service_client():
     """
     Server-side admin client (service role). Bypasses RLS — always filter by user_id in queries.
-    Not cached so .env / settings always apply after load_dotenv.
+    Cached — restarting the process picks up .env changes.
     """
-    key = getattr(settings, "SUPABASE_SERVICE_KEY", "") or ""
-    return _create_client(key)
+    global _service_client
+    if _service_client is None:
+        key = getattr(settings, "SUPABASE_SERVICE_KEY", "") or ""
+        _service_client = _create_client(key)
+    return _service_client
+
+
+_anon_client = None
 
 
 def get_anon_client():
-    """Used only for Supabase Auth sign-up / sign-in on the server."""
-    key = getattr(settings, "SUPABASE_ANON_KEY", "") or ""
-    return _create_client(key)
+    """Used only for Supabase Auth sign-up / sign-in on the server (cached)."""
+    global _anon_client
+    if _anon_client is None:
+        key = getattr(settings, "SUPABASE_ANON_KEY", "") or ""
+        _anon_client = _create_client(key)
+    return _anon_client
 
 
 def supabase_configured() -> bool:

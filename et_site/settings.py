@@ -138,9 +138,14 @@ SUPABASE_ENFORCE_AUTH = (
     and bool(SUPABASE_URL and SUPABASE_ANON_KEY and SUPABASE_SERVICE_KEY)
 )
 
-# Session security (24-hour inactivity expiry; refresh on each request)
+# Session security (24-hour inactivity expiry)
 SESSION_COOKIE_AGE = int(os.environ.get("SESSION_COOKIE_AGE", str(60 * 60 * 24)))
-SESSION_SAVE_EVERY_REQUEST = True
+# Only write session files when the session changes (much faster than every request).
+SESSION_SAVE_EVERY_REQUEST = os.environ.get("SESSION_SAVE_EVERY_REQUEST", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "False").lower() in (
@@ -176,10 +181,11 @@ CACHES = {
     }
 }
 
-if DEBUG and not RUNNING_TESTS:
+ENABLE_DEBUG_TOOLBAR = os.environ.get("ENABLE_DEBUG_TOOLBAR", "false").lower() in ("1", "true", "yes")
+if DEBUG and ENABLE_DEBUG_TOOLBAR and not RUNNING_TESTS:
     INSTALLED_APPS += ["debug_toolbar"]
     MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")
     INTERNAL_IPS = ["127.0.0.1", "::1"]
     DEBUG_TOOLBAR_CONFIG = {
-        "SHOW_TOOLBAR_CALLBACK": lambda request: DEBUG,
+        "SHOW_TOOLBAR_CALLBACK": lambda request: True,
     }

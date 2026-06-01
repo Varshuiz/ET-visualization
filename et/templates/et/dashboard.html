@@ -6,10 +6,15 @@
 {% block body_class %}dashboard-page{% endblock %}
 
 {% block head_assets %}
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script defer src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script>
-tailwind.config = {
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof tailwind === 'undefined') return;
+    tailwind.config = {
     theme: {
         extend: {
             colors: {
@@ -29,7 +34,8 @@ tailwind.config = {
             fontFamily: { sans: ["Inter", "sans-serif"] },
         },
     },
-};
+    };
+});
 </script>
 <style>
     .material-symbols-outlined {
@@ -294,6 +300,9 @@ tailwind.config = {
                                             —
                                             {% if row.date_range_end %}{{ row.date_range_end }}{% else %}—{% endif %}
                                         </td>
+                                        <td class="p-4 w-12 text-right align-middle">
+                                            {% include 'et/partials/history_delete_button.html' with run_type='et' run_id=row.id confirm_message='Delete this ET calculation? This cannot be undone.' %}
+                                        </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -324,6 +333,9 @@ tailwind.config = {
                                         <td class="p-4">{{ row.created_at|slice:":16" }}</td>
                                         <td class="p-4">{{ row.crop_type }} ({{ row.mode|default:"—" }})</td>
                                         <td class="p-4">{{ row.start_date }} – {{ row.end_date }}</td>
+                                        <td class="p-4 w-12 text-right align-middle">
+                                            {% include 'et/partials/history_delete_button.html' with run_type='aquacrop' run_id=row.id confirm_message='Delete this AquaCrop run? This cannot be undone.' %}
+                                        </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -354,6 +366,9 @@ tailwind.config = {
                                         <td class="p-4">{{ row.created_at|slice:":16" }}</td>
                                         <td class="p-4">{{ row.city }}, {{ row.province }}</td>
                                         <td class="p-4">{{ row.forecast_days }} days</td>
+                                        <td class="p-4 w-12 text-right align-middle">
+                                            {% include 'et/partials/history_delete_button.html' with run_type='forecast' run_id=row.id confirm_message='Delete this forecast run? This cannot be undone.' %}
+                                        </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -467,8 +482,12 @@ tailwind.config = {
         if (href) window.location.href = href;
     }
     document.querySelectorAll('.clickable-row').forEach(function (row) {
-        row.addEventListener('click', function () { go(row); });
+        row.addEventListener('click', function (e) {
+            if (e.target.closest('.history-delete-form, .history-delete-btn')) return;
+            go(row);
+        });
         row.addEventListener('keydown', function (e) {
+            if (e.target.closest('.history-delete-form, .history-delete-btn')) return;
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 go(row);

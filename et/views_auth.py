@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 
 from django.contrib import messages
 from django.shortcuts import redirect, render
@@ -11,7 +12,7 @@ from django.views.decorators.http import require_http_methods
 
 from django_ratelimit.decorators import ratelimit
 
-from .auth_supabase import clear_supabase_session, set_supabase_session
+from .auth_supabase import clear_supabase_session, is_authenticated, set_supabase_session
 from .forms_auth import LoginForm, RegisterForm
 from .supabase_client import get_anon_client, supabase_configured
 from .supabase_storage import upsert_profile
@@ -26,9 +27,19 @@ def _safe_next(request):
     return reverse("et:dashboard")
 
 
+def _upsert_profile_background(*, user_id: str, email: str, full_name: str | None = None) -> None:
+    try:
+        upsert_profile(user_id=user_id, email=email, full_name=full_name)
+    except Exception:
+        logger.exception("Background profile upsert failed for user %s", user_id)
+
+
 @ratelimit(key="ip", rate="5/m", method="POST", block=True)
 @require_http_methods(["GET", "POST"])
 def register_view(request):
+    if request.method == "GET" and is_authenticated(request):
+        return redirect(_safe_next(request))
+
     if not supabase_configured():
         messages.error(request, "Supabase is not configured. Contact the administrator.")
         return render(request, "et/auth/register.html", {"form": RegisterForm()})
@@ -72,6 +83,9 @@ def register_view(request):
 @ratelimit(key="ip", rate="10/m", method="POST", block=True)
 @require_http_methods(["GET", "POST"])
 def login_view(request):
+    if request.method == "GET" and is_authenticated(request):
+        return redirect(_safe_next(request))
+
     if not supabase_configured():
         messages.error(request, "Supabase is not configured. Contact the administrator.")
         return render(request, "et/auth/login.html", {"form": LoginForm()})
@@ -95,7 +109,11 @@ def login_view(request):
                     access_token=session.access_token,
                     refresh_token=getattr(session, "refresh_token", None),
                 )
-                upsert_profile(user_id=str(user.id), email=email)
+                threading.Thread(
+                    target=_upsert_profile_background,
+                    kwargs={"user_id": str(user.id), "email": email},
+                    daemon=True,
+                ).start()
                 return redirect(_safe_next(request))
         except Exception as exc:
             logger.warning("Supabase sign_in failed: %s", exc)

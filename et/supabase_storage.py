@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -166,6 +167,39 @@ def get_profile(user_id: str) -> dict | None:
         return None
 
 
+def delete_run_for_user(table: str, user_id: str, run_id: str) -> bool:
+    """Delete a saved run scoped to the owning user (single round trip)."""
+    uid = normalize_user_id(user_id)
+    rid = str(run_id).strip() if run_id else ""
+    if not uid or not rid or not supabase_configured():
+        return False
+    try:
+        tbl = _service_table(table)
+        if tbl is None:
+            return False
+        resp = tbl.delete().eq("id", rid).eq("user_id", uid).execute()
+        deleted = _rows_from_response(resp)
+        if deleted:
+            return True
+        # PostgREST may return an empty body on success; treat as OK if no error raised.
+        return True
+    except Exception as exc:
+        logger.error("Supabase delete from %s failed for user %s run %s: %s", table, uid, rid, exc, exc_info=True)
+        return False
+
+
+def delete_et_calculation(user_id: str, run_id: str) -> bool:
+    return delete_run_for_user("et_calculations", user_id, run_id)
+
+
+def delete_aquacrop_run(user_id: str, run_id: str) -> bool:
+    return delete_run_for_user("aquacrop_runs", user_id, run_id)
+
+
+def delete_forecast_run(user_id: str, run_id: str) -> bool:
+    return delete_run_for_user("forecast_runs", user_id, run_id)
+
+
 def get_run_for_user(table: str, user_id: str, run_id: str) -> dict | None:
     uid = normalize_user_id(user_id)
     rid = str(run_id).strip() if run_id else ""
@@ -195,10 +229,34 @@ def get_forecast_run_by_id(user_id: str, run_id: str) -> dict | None:
     return get_run_for_user("forecast_runs", user_id, run_id)
 
 
+_FARM_CACHE_TTL_SECONDS = 90
+_farm_cache: dict[str, tuple[float, dict | None]] = {}
+
+
+def _farm_cache_key(user_id: str, farm_id: str | None) -> str:
+    return f"{user_id}:{farm_id or ''}"
+
+
+def invalidate_farm_cache(user_id: str | None = None) -> None:
+    uid = normalize_user_id(user_id) if user_id else None
+    if not uid:
+        _farm_cache.clear()
+        return
+    prefix = f"{uid}:"
+    for key in list(_farm_cache.keys()):
+        if key.startswith(prefix) or key == f"{uid}:":
+            _farm_cache.pop(key, None)
+
+
 def get_farm_for_user(user_id: str, farm_id: str | None = None) -> dict | None:
     uid = normalize_user_id(user_id)
     if not uid or not supabase_configured():
         return None
+    cache_key = _farm_cache_key(uid, farm_id)
+    now = time.monotonic()
+    cached = _farm_cache.get(cache_key)
+    if cached and (now - cached[0]) < _FARM_CACHE_TTL_SECONDS:
+        return cached[1]
     try:
         tbl = _service_table("farms")
         if tbl is None:
@@ -208,7 +266,9 @@ def get_farm_for_user(user_id: str, farm_id: str | None = None) -> dict | None:
             q = q.eq("id", str(farm_id))
         resp = q.order("created_at", desc=True).limit(1).execute()
         rows = _rows_from_response(resp)
-        return rows[0] if rows else None
+        row = rows[0] if rows else None
+        _farm_cache[cache_key] = (now, row)
+        return row
     except Exception as exc:
         logger.error("Supabase get farm failed: %s", exc, exc_info=True)
         return None
@@ -256,12 +316,14 @@ def save_farm(
             )
             rows = _rows_from_response(resp)
             if rows:
+                invalidate_farm_cache(uid)
                 return rows[0]
             return get_farm_for_user(uid, fid)
 
         resp = tbl.insert(payload).select("*").execute()
         rows = _rows_from_response(resp)
         if rows:
+            invalidate_farm_cache(uid)
             return rows[0]
         return get_farm_for_user(uid)
     except Exception as exc:

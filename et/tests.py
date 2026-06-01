@@ -187,3 +187,169 @@ class ETPlannerViewTests(TestCase):
 
         inches_response = self.client.get(reverse("et:comparison_with_acis"), {"unit": "inches"})
         self.assertEqual(inches_response.status_code, 200)
+
+
+class AquaCropHistoricalRangeTests(TestCase):
+    def test_default_season_dates_may_to_september(self):
+        from et.views import _aquacrop_current_year, _aquacrop_default_season_dates
+
+        start, end = _aquacrop_default_season_dates()
+        year = _aquacrop_current_year()
+        self.assertEqual(start, f"{year}/05/01")
+        self.assertEqual(end, f"{year}/09/30")
+
+    def test_normalize_date_accepts_dashes_and_slashes(self):
+        from et.views import _normalize_aquacrop_date_str
+
+        self.assertEqual(_normalize_aquacrop_date_str("2026-05-01"), "2026/05/01")
+        self.assertEqual(_normalize_aquacrop_date_str("2026/09/30"), "2026/09/30")
+
+    def test_aquacrop_page_prefills_historical_custom_dates(self):
+        response = self.client.get(reverse("et:aquacrop_simulation"))
+        self.assertEqual(response.status_code, 200)
+        from et.views import _aquacrop_default_season_dates
+
+        start, end = _aquacrop_default_season_dates()
+        self.assertContains(response, start)
+        self.assertContains(response, end)
+        self.assertContains(response, "Historical range")
+        self.assertContains(response, "Your Season Data")
+        self.assertContains(response, "Season data from")
+        self.assertContains(response, "Update week rows")
+
+
+class AquaCropSeasonDataTests(TestCase):
+    def test_weekly_rows_may_through_september(self):
+        from et.aquacrop_season_data import build_season_tables, weekly_period_starts
+        import pandas as pd
+
+        starts = weekly_period_starts(pd.Timestamp("2026-05-01"), pd.Timestamp("2026-09-30"))
+        self.assertGreaterEqual(len(starts), 20)
+        self.assertEqual(starts[0].strftime("%Y-%m-%d"), "2026-05-01")
+
+        tables = build_season_tables(
+            start_date="2026/05/01",
+            end_date="2026/09/30",
+            fetch_eccc=False,
+        )
+        self.assertEqual(len(tables["weather_rows"]), len(starts))
+        self.assertIn("/05/01", tables["planting_date"])
+
+    def test_planting_date_shifts_first_week_row(self):
+        from et.aquacrop_season_data import build_season_tables
+
+        tables = build_season_tables(
+            start_date="2026/05/01",
+            end_date="2026/06/30",
+            planting_date="2026/05/15",
+            fetch_eccc=False,
+        )
+        self.assertEqual(tables["weather_rows"][0]["week_start"], "2026-05-15")
+
+    def test_aimm_runoff_below_25mm_is_zero(self):
+        from et.aquacrop_season_data import aimm_weekly_runoff_mm
+
+        self.assertEqual(aimm_weekly_runoff_mm(10, 20, 28), 0.0)
+
+    def test_effective_irrigation_uses_efficiency(self):
+        from et.aquacrop_season_data import effective_irrigation_mm
+
+        self.assertEqual(effective_irrigation_mm(100, 81), 81.0)
+
+
+class AquaCropActualVsOptimalTests(TestCase):
+    def test_expand_season_to_daily(self):
+        from et.aquacrop_actual_vs_optimal import expand_season_to_daily
+
+        weather = [
+            {
+                "week_start": "2026-05-01",
+                "tmax": 20,
+                "tmin": 5,
+                "precipitation": 14,
+                "reference_et": 21,
+            }
+        ]
+        mgmt = [
+            {
+                "week_start": "2026-05-01",
+                "gross_irrigation": 50,
+                "effective_irrigation": 40.5,
+                "soil_moisture": 28,
+                "runoff": 0,
+            }
+        ]
+        daily = expand_season_to_daily(weather, mgmt, "2026/05/01", "2026/05/07")
+        self.assertEqual(len(daily), 7)
+        self.assertAlmostEqual(daily["precipitation_mm"].sum(), 14.0, places=1)
+        self.assertAlmostEqual(daily["irrigation_mm"].sum(), 40.5, places=1)
+
+
+class AquaCropResultsTableTests(TestCase):
+    def test_build_simulation_results_tables_weekly_sums_and_means(self):
+        import pandas as pd
+        from et.aquacrop_aggregation import build_simulation_results_tables
+
+        n = 14
+        results = {
+            "daily_output": pd.DataFrame(
+                {
+                    "biomass": [1.0 + i * 0.1 for i in range(n)],
+                }
+            ),
+            "water_flux": pd.DataFrame(
+                {
+                    "Tr": [1.0] * n,
+                    "Es": [0.5] * n,
+                    "Infl": [2.0] * n,
+                    "IrrDay": [3.0] * n,
+                    "Wr": [100.0 + i for i in range(n)],
+                }
+            ),
+        }
+        daily, weekly = build_simulation_results_tables(results, "2026/05/01")
+        self.assertEqual(len(daily), 14)
+        self.assertEqual(len(weekly), 2)
+        self.assertAlmostEqual(weekly[0]["et_mm"], (1.5 * 7), places=1)
+        self.assertAlmostEqual(weekly[0]["precipitation_mm"], 14.0, places=1)
+        self.assertAlmostEqual(weekly[0]["irrigation_mm"], 21.0, places=1)
+
+    def test_weekly_yield_comparison_optimal_and_actual(self):
+        import pandas as pd
+        from et.aquacrop_aggregation import build_weekly_yield_comparison
+
+        n = 7
+        optimal = pd.DataFrame({"biomass": [1.0 + i * 0.2 for i in range(n)]})
+        actual = pd.DataFrame({"biomass": [0.5 + i * 0.1 for i in range(n)]})
+        rows = build_weekly_yield_comparison(optimal, "Wheat", "2026/05/01", actual_daily_df=actual)
+        self.assertEqual(len(rows), 1)
+        self.assertIsNotNone(rows[0]["optimal_yield_tha"])
+        self.assertIsNotNone(rows[0]["your_yield_tha"])
+        self.assertLess(rows[0]["your_yield_tha"], rows[0]["optimal_yield_tha"])
+
+
+class DashboardDeleteRunTests(TestCase):
+    run_id = "00000000-0000-0000-0000-000000000099"
+
+    def setUp(self):
+        session = self.client.session
+        session["supabase_user_id"] = "11111111-1111-1111-1111-111111111111"
+        session.save()
+
+    def test_delete_run_requires_post(self):
+        url = reverse("et:delete_run", kwargs={"run_type": "et", "run_id": self.run_id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 405)
+
+    @patch("et.views_dashboard.delete_et_calculation", return_value=True)
+    def test_delete_et_run_redirects_to_history(self, _mock_delete):
+        url = reverse("et:delete_run", kwargs={"run_type": "et", "run_id": self.run_id})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("#recent-history", response.url)
+
+    def test_delete_invalid_run_type(self):
+        url = reverse("et:delete_run", kwargs={"run_type": "invalid", "run_id": self.run_id})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("#recent-history", response.url)

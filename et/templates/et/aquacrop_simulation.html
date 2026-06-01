@@ -6,10 +6,15 @@
 {% block body_class %}aquacrop-page{% endblock %}
 
 {% block head_assets %}
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script defer src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script>
-tailwind.config = {
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof tailwind === 'undefined') return;
+    tailwind.config = {
     theme: {
         extend: {
             colors: {
@@ -35,7 +40,8 @@ tailwind.config = {
             fontFamily: { sans: ["Inter", "sans-serif"] },
         },
     },
-};
+    };
+});
 </script>
 {% endblock %}
 
@@ -299,6 +305,8 @@ tailwind.config = {
                             <p class="text-xs text-on-surface-variant/70">If no file is uploaded, weather is fetched from ECCC for the selected city and date range.</p>
                         </div>
 
+                        {% include 'et/partials/aquacrop_season_data.html' %}
+
                         <div class="flex justify-end">
                             <button type="submit" class="submit-btn bg-primary hover:bg-primary-container text-white font-bold px-8 py-3 rounded-lg flex items-center gap-2 transition-all shadow-lg">
                                 <span class="material-symbols-outlined">rocket_launch</span>
@@ -330,6 +338,80 @@ tailwind.config = {
                 {% endif %}
                 {% if forecast_mode_caveat %}
                 <div class="warning-box rounded-lg border-l-4 border-amber-500 bg-amber-50 text-amber-900 px-4 py-3 text-sm">{{ forecast_mode_caveat }}</div>
+                {% endif %}
+
+                {% if has_actual_vs_optimal %}
+                <div class="space-y-6 border-2 border-primary/25 rounded-2xl p-6 bg-gradient-to-b from-primary/5 to-transparent">
+                    <div>
+                        <h2 class="text-xl font-bold text-primary flex items-center gap-2">
+                            <span class="material-symbols-outlined">compare_arrows</span>
+                            Actual vs Optimal
+                        </h2>
+                        <p class="text-sm text-on-surface-variant mt-1">
+                            Compare your recorded season inputs against the AquaCrop optimal irrigation simulation for the same weather period.
+                        </p>
+                    </div>
+
+                    <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                            <h3 class="text-lg font-semibold text-primary">Water &amp; soil drivers</h3>
+                            <div class="inline-flex rounded-lg border border-outline-variant/60 p-1 bg-surface-container-low text-sm" role="group" aria-label="Daily or weekly view">
+                                <label class="px-3 py-1.5 rounded-md cursor-pointer has-[:checked]:bg-primary has-[:checked]:text-white font-medium">
+                                    <input type="radio" name="avo_flux_mode" value="daily" class="sr-only" checked> Daily
+                                </label>
+                                <label class="px-3 py-1.5 rounded-md cursor-pointer has-[:checked]:bg-primary has-[:checked]:text-white font-medium">
+                                    <input type="radio" name="avo_flux_mode" value="weekly" class="sr-only"> Weekly
+                                </label>
+                            </div>
+                        </div>
+                        <p class="text-xs text-on-surface-variant mb-3">Precipitation, reference ET, irrigation applied (your effective mm), and top-layer soil moisture from your season tables.</p>
+                        <div class="relative h-[360px]">
+                            <canvas id="avoFluxChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+                        <h3 class="text-lg font-semibold text-primary mb-2">Biomass by week</h3>
+                        <p class="text-sm text-on-surface-variant mb-4">
+                            Side-by-side peak weekly biomass (t/ha): <strong>Optimal Irrigation Biomass</strong> (AquaCrop with model irrigation strategy) vs
+                            <strong>Your Irrigation Biomass</strong> (AquaCrop re-run using your effective irrigation schedule).
+                        </p>
+                        <div class="relative h-[340px]">
+                            <canvas id="avoBiomassChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-surface-container-lowest rounded-xl p-6 shadow-sm overflow-x-auto">
+                        <h3 class="text-lg font-semibold text-primary mb-4">Season water balance summary</h3>
+                        <table class="w-full text-sm border-collapse">
+                            <thead>
+                                <tr class="bg-primary-container text-white">
+                                    <th class="p-3 text-left">Measure</th>
+                                    <th class="p-3 text-right">Season total</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-surface-variant">
+                                <tr><td class="p-3">Total Precipitation</td><td class="p-3 text-right font-medium">{{ actual_vs_optimal.water_balance.total_precipitation_mm }} mm</td></tr>
+                                <tr><td class="p-3">Total Gross Irrigation</td><td class="p-3 text-right font-medium">{{ actual_vs_optimal.water_balance.total_gross_irrigation_mm }} mm</td></tr>
+                                <tr><td class="p-3">Total Effective Irrigation</td><td class="p-3 text-right font-medium">{{ actual_vs_optimal.water_balance.total_effective_irrigation_mm }} mm</td></tr>
+                                <tr><td class="p-3">Total Runoff (AIMM)</td><td class="p-3 text-right font-medium">{{ actual_vs_optimal.water_balance.total_runoff_mm }} mm</td></tr>
+                                <tr><td class="p-3">Total ET (optimal simulation)</td><td class="p-3 text-right font-medium">{{ actual_vs_optimal.water_balance.total_et_optimal_mm }} mm</td></tr>
+                                <tr class="bg-surface-container-low">
+                                    <td class="p-3 font-semibold">Final Biomass — Optimal</td>
+                                    <td class="p-3 text-right font-bold text-primary">{{ actual_vs_optimal.water_balance.final_biomass_optimal_tha }} t/ha</td>
+                                </tr>
+                                <tr class="bg-surface-container-low">
+                                    <td class="p-3 font-semibold">Final Biomass — Your irrigation</td>
+                                    <td class="p-3 text-right font-bold text-primary">{{ actual_vs_optimal.water_balance.final_biomass_actual_tha }} t/ha</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% elif actual_vs_optimal_error %}
+                <div class="warning-box rounded-lg border-l-4 border-amber-500 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
+                    Actual vs optimal comparison could not be generated: {{ actual_vs_optimal_error }}
+                </div>
                 {% endif %}
 
                 <div class="results-summary grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -408,7 +490,60 @@ tailwind.config = {
                 </div>
                 {% endif %}
 
-                {% if resampled_data %}
+                {% if results_table_weekly or results_table_daily %}
+                <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm overflow-x-auto">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                        <h3 class="text-lg font-semibold text-primary">Simulation Results Data</h3>
+                        <div class="inline-flex rounded-lg border border-outline-variant/60 p-1 bg-surface-container-low text-sm" role="group" aria-label="Daily or weekly results table">
+                            <label class="px-3 py-1.5 rounded-md cursor-pointer has-[:checked]:bg-primary has-[:checked]:text-white font-medium">
+                                <input type="radio" name="results_table_mode" value="weekly" class="sr-only" checked> Weekly
+                            </label>
+                            <label class="px-3 py-1.5 rounded-md cursor-pointer has-[:checked]:bg-primary has-[:checked]:text-white font-medium">
+                                <input type="radio" name="results_table_mode" value="daily" class="sr-only"> Daily
+                            </label>
+                        </div>
+                    </div>
+                    <p class="text-xs text-on-surface-variant mb-3">
+                        Weekly view sums ET, precipitation, and irrigation; averages soil water (root zone, mm) and biomass. Daily view shows model output for each day.
+                    </p>
+                    <table class="w-full border-collapse text-sm min-w-[640px]">
+                        <thead>
+                            <tr class="bg-primary-container text-white">
+                                <th class="p-3 text-left">Period</th>
+                                <th class="p-3 text-right">ET (mm)</th>
+                                <th class="p-3 text-right">Precipitation (mm)</th>
+                                <th class="p-3 text-right">Irrigation (mm)</th>
+                                <th class="p-3 text-right">Soil water (mm)</th>
+                                <th class="p-3 text-right">Biomass (t/ha)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTableWeekly">
+                            {% for row in results_table_weekly %}
+                            <tr class="border-b border-surface-variant">
+                                <td class="p-3">{{ row.period }}</td>
+                                <td class="p-3 text-right">{{ row.et_mm|floatformat:2 }}</td>
+                                <td class="p-3 text-right">{{ row.precipitation_mm|floatformat:2 }}</td>
+                                <td class="p-3 text-right">{{ row.irrigation_mm|floatformat:2 }}</td>
+                                <td class="p-3 text-right">{% if row.soil_moisture is not None %}{{ row.soil_moisture|floatformat:2 }}{% else %}—{% endif %}</td>
+                                <td class="p-3 text-right">{{ row.biomass_tha|floatformat:3 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tbody id="resultsTableDaily" class="hidden">
+                            {% for row in results_table_daily %}
+                            <tr class="border-b border-surface-variant">
+                                <td class="p-3">{{ row.period }}</td>
+                                <td class="p-3 text-right">{{ row.et_mm|floatformat:2 }}</td>
+                                <td class="p-3 text-right">{{ row.precipitation_mm|floatformat:2 }}</td>
+                                <td class="p-3 text-right">{{ row.irrigation_mm|floatformat:2 }}</td>
+                                <td class="p-3 text-right">{% if row.soil_moisture is not None %}{{ row.soil_moisture|floatformat:2 }}{% else %}—{% endif %}</td>
+                                <td class="p-3 text-right">{{ row.biomass_tha|floatformat:3 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% elif resampled_data %}
                 <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm overflow-x-auto">
                     <h3 class="text-lg font-semibold text-primary mb-4">{% if timestep == 'weekly' %}Weekly{% else %}Biweekly{% endif %} Data Table</h3>
                     <table class="w-full border-collapse text-sm">
@@ -460,26 +595,33 @@ tailwind.config = {
                 </div>
                 {% endif %}
 
-                {% if weekly_yield_projection %}
+                {% if weekly_yield_comparison or weekly_yield_projection %}
                 <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm overflow-x-auto">
-                    <h3 class="text-lg font-semibold text-primary mb-2">Weekly yield projection (biomass × harvest index)</h3>
+                    <h3 class="text-lg font-semibold text-primary mb-2">Weekly yield comparison</h3>
                     <p class="text-sm text-on-surface-variant mb-4">
-                        Indicative trajectory from simulated peak weekly biomass; not a substitute for field-calibrated forecasts.
+                        Marketable yield (t/ha) from peak weekly biomass × crop harvest index.
+                        {% if has_actual_vs_optimal %}
+                        <strong>Optimal Irrigation Yield</strong> uses the model irrigation strategy; <strong>Your Irrigation Yield</strong> uses your effective irrigation from season data.
+                        {% else %}
+                        Enter season irrigation data and re-run to compare optimal vs your irrigation yield.
+                        {% endif %}
                     </p>
-                    <table class="w-full border-collapse text-sm">
+                    <table class="w-full border-collapse text-sm min-w-[520px]">
                         <thead>
                             <tr class="bg-primary-container text-white">
                                 <th class="p-3 text-left">Week after planting</th>
-                                <th class="p-3 text-right">Potential marketable yield (t/ha)</th>
-                                <th class="p-3 text-right">Peak biomass (t/ha)</th>
+                                <th class="p-3 text-right">Optimal Irrigation Yield (t/ha)</th>
+                                <th class="p-3 text-right">Your Irrigation Yield (t/ha)</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for row in weekly_yield_projection %}
+                            {% for row in weekly_yield_comparison|default:weekly_yield_projection %}
                             <tr class="border-b border-surface-variant">
                                 <td class="p-3">{{ row.period_label }}</td>
-                                <td class="p-3 text-right">{{ row.yield_tha|floatformat:3 }}</td>
-                                <td class="p-3 text-right">{{ row.biomass_peak_tha|floatformat:3 }}</td>
+                                <td class="p-3 text-right font-medium">{% if row.optimal_yield_tha is not None %}{{ row.optimal_yield_tha|floatformat:3 }}{% else %}{{ row.yield_tha|floatformat:3 }}{% endif %}</td>
+                                <td class="p-3 text-right font-medium">
+                                    {% if row.your_yield_tha is not None %}{{ row.your_yield_tha|floatformat:3 }}{% else %}<span class="text-on-surface-variant">—</span>{% endif %}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -552,11 +694,90 @@ tailwind.config = {
 {% if has_results %}
 {{ results.growth_chart|json_script:"growth-data" }}
 {{ results.water_balance_chart|json_script:"water-balance-data" }}
+{% if has_actual_vs_optimal %}
+{{ actual_vs_optimal|json_script:"actual-vs-optimal-data" }}
+{% endif %}
 
 <script>
 // Get chart data
 const growthData = JSON.parse(document.getElementById('growth-data').textContent);
 const waterBalanceData = JSON.parse(document.getElementById('water-balance-data').textContent);
+
+(function initActualVsOptimalCharts() {
+    const dataEl = document.getElementById('actual-vs-optimal-data');
+    const fluxCanvas = document.getElementById('avoFluxChart');
+    const biomassCanvas = document.getElementById('avoBiomassChart');
+    if (!dataEl || !fluxCanvas || !biomassCanvas) return;
+
+    const avo = JSON.parse(dataEl.textContent);
+    const flux = avo.flux_chart || {};
+    const biomass = avo.biomass_chart || {};
+    let fluxChart = null;
+
+    function fluxDatasets(mode) {
+        const src = mode === 'weekly' ? (flux.weekly || {}) : (flux.daily || {});
+        return [
+            { label: 'Precipitation (mm)', data: src.precipitation || [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.15)', tension: 0.25, yAxisID: 'y' },
+            { label: 'Reference ET (mm)', data: src.reference_et || [], borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', tension: 0.25, yAxisID: 'y' },
+            { label: 'Irrigation applied (mm)', data: src.irrigation || [], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', tension: 0.25, yAxisID: 'y' },
+            { label: 'Soil moisture top layer (%)', data: src.soil_moisture || [], borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.08)', tension: 0.25, yAxisID: 'y1' },
+        ];
+    }
+
+    function renderFlux(mode) {
+        const labels = mode === 'weekly' ? (flux.weekly?.labels || []) : (flux.daily?.labels || []);
+        if (fluxChart) fluxChart.destroy();
+        fluxChart = new Chart(fluxCanvas.getContext('2d'), {
+            type: 'line',
+            data: { labels, datasets: fluxDatasets(mode) },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { legend: { position: 'top' } },
+                scales: {
+                    y: { beginAtZero: true, position: 'left', title: { display: true, text: 'mm' } },
+                    y1: { beginAtZero: true, position: 'right', min: 0, max: 100, title: { display: true, text: 'Soil moisture (%)' }, grid: { drawOnChartArea: false } },
+                },
+            },
+        });
+    }
+
+    document.querySelectorAll('input[name="avo_flux_mode"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            if (radio.checked) renderFlux(radio.value);
+        });
+    });
+    renderFlux('daily');
+
+    new Chart(biomassCanvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: biomass.labels || [],
+            datasets: [
+                {
+                    label: 'Optimal Irrigation Biomass (t/ha)',
+                    data: biomass.optimal_biomass || [],
+                    backgroundColor: 'rgba(8, 127, 140, 0.85)',
+                },
+                {
+                    label: 'Your Irrigation Biomass (t/ha)',
+                    data: biomass.actual_biomass || [],
+                    backgroundColor: 'rgba(187, 159, 6, 0.85)',
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'top' } },
+            scales: {
+                x: { title: { display: true, text: 'Week starting' } },
+                y: { beginAtZero: true, title: { display: true, text: 'Biomass (t/ha)' } },
+            },
+        },
+    });
+})();
 
 // Growth Chart
 const growthCtx = document.getElementById('growthChart').getContext('2d');
@@ -744,6 +965,23 @@ if (hasWeekly) {
     if (wrap) wrap.style.display = 'none';
 }
 
+(function resultsTableToggle() {
+    const weeklyBody = document.getElementById('resultsTableWeekly');
+    const dailyBody = document.getElementById('resultsTableDaily');
+    if (!weeklyBody || !dailyBody) return;
+    function setMode(mode) {
+        const showWeekly = mode === 'weekly';
+        weeklyBody.classList.toggle('hidden', !showWeekly);
+        dailyBody.classList.toggle('hidden', showWeekly);
+    }
+    document.querySelectorAll('input[name="results_table_mode"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            if (radio.checked) setMode(radio.value);
+        });
+    });
+    setMode('weekly');
+})();
+
 // Download results function
 function downloadResults() {
     const crop = '{{ selected_crop }}';
@@ -786,6 +1024,246 @@ function downloadResults() {
 {% endif %}
 
 <script>
+(function aquacropSeasonData() {
+    const prefillUrl = "{% url 'et:aquacrop_season_prefill' %}";
+    const panel = document.getElementById('seasonDataPanel');
+    const collapsedInput = document.getElementById('season_data_collapsed');
+    const fcInput = document.getElementById('soil_field_capacity_pct');
+    const effInput = document.getElementById('application_efficiency_pct');
+    const madInput = document.getElementById('allowable_mad_pct');
+    const cropSelect = document.getElementById('crop');
+    const irrSelect = document.getElementById('irrigation');
+    const soilSelect = document.getElementById('soil');
+    const citySelect = document.getElementById('city_name');
+    const startIn = document.getElementById('start_date_input');
+    const endIn = document.getElementById('end_date_input');
+    const seasonStartIn = document.getElementById('season_period_start');
+    const seasonEndIn = document.getElementById('season_period_end');
+    const plantingIn = document.getElementById('planting_date');
+    const refreshBtn = document.getElementById('btnRefreshSeasonRows');
+    const weatherBody = document.getElementById('weatherSeasonBody');
+    const mgmtBody = document.getElementById('mgmtSeasonBody');
+    const statusEl = document.getElementById('seasonPrefillStatus');
+    const loadBtn = document.getElementById('btnLoadEcccSeason');
+    const madTooltip = document.getElementById('madTooltipText');
+    const madTrigger = document.querySelector('.mad-tooltip-trigger');
+
+    const SOIL_FC = {
+        'Sandy Loam': 22, 'Loam': 28, 'Clay Loam': 32,
+        'Sandy Clay Loam': 30, 'Silty Clay': 36, 'Clay': 38
+    };
+
+    function defaultMad(crop, irrigation) {
+        const c = (crop || '').toLowerCase();
+        if (c === 'potato') return 30;
+        if (irrigation === 'full') return 30;
+        return 50;
+    }
+
+    function getFc() {
+        const soil = soilSelect?.value;
+        if (soil && SOIL_FC[soil]) return SOIL_FC[soil];
+        return parseFloat(fcInput?.value) || 28;
+    }
+
+    function aimmRunoff(precip, sm, fc) {
+        const R = parseFloat(precip) || 0;
+        if (R < 25) return 0;
+        const SM = parseFloat(sm) || 0;
+        const FC = Math.max(parseFloat(fc) || 28, 1);
+        const lnR = Math.log(R);
+        const I = 0.9177 + 1.811 * lnR - 0.0097 * lnR * (SM / FC) * 100;
+        return Math.max(0, Math.round((R - Math.max(0, I)) * 100) / 100);
+    }
+
+    function recalcMgmtRow(row) {
+        const grossIn = row.querySelector('.mgmt-gross');
+        const effOut = row.querySelector('.mgmt-effective');
+        const smIn = row.querySelector('.mgmt-sm');
+        const runoffOut = row.querySelector('.mgmt-runoff');
+        const precipIn = row.closest('table') ? null : null;
+        const week = row.dataset.week;
+        let precip = 0;
+        if (weatherBody && week) {
+            const wRows = weatherBody.querySelectorAll('tr');
+            wRows.forEach((wr) => {
+                const hidden = wr.querySelector('input[name="weather_week_start"]');
+                if (hidden && hidden.value === week) {
+                    const p = wr.querySelector('.season-weather-precip');
+                    precip = parseFloat(p?.value) || 0;
+                }
+            });
+        }
+        const gross = parseFloat(grossIn?.value) || 0;
+        const effPct = parseFloat(effInput?.value) || 81;
+        const eff = Math.round(gross * effPct) / 100;
+        const sm = smIn?.value !== '' ? parseFloat(smIn.value) : getFc() * 0.6;
+        if (effOut) effOut.value = eff.toFixed(2);
+        if (runoffOut) runoffOut.value = aimmRunoff(precip, sm, getFc()).toFixed(2);
+    }
+
+    function recalcAllMgmt() {
+        mgmtBody?.querySelectorAll('tr').forEach(recalcMgmtRow);
+    }
+
+    function bindMgmtListeners() {
+        mgmtBody?.querySelectorAll('.mgmt-gross, .mgmt-sm').forEach((el) => {
+            el.removeEventListener('input', recalcAllMgmt);
+            el.addEventListener('input', recalcAllMgmt);
+        });
+        weatherBody?.querySelectorAll('.season-weather-precip').forEach((el) => {
+            el.removeEventListener('input', recalcAllMgmt);
+            el.addEventListener('input', recalcAllMgmt);
+        });
+    }
+
+    function renderTables(weatherRows, mgmtRows, fc) {
+        if (fcInput && fc) fcInput.value = fc;
+        if (!weatherBody || !mgmtBody) return;
+        weatherBody.innerHTML = (weatherRows || []).map((r) => `
+            <tr class="border-b border-surface-variant/60 hover:bg-surface-container-low">
+                <td class="p-1"><input type="hidden" name="weather_week_start" value="${r.week_start}">
+                <span class="px-2 py-1 text-xs text-on-surface-variant">${r.week_start}</span></td>
+                <td class="p-1"><input type="number" step="0.1" name="weather_tmax" value="${r.tmax ?? ''}" class="season-input w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
+                <td class="p-1"><input type="number" step="0.1" name="weather_tmin" value="${r.tmin ?? ''}" class="season-input w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
+                <td class="p-1"><input type="number" step="0.1" name="weather_precip" value="${r.precipitation ?? ''}" class="season-weather-precip w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
+                <td class="p-1"><input type="number" step="0.01" name="weather_ref_et" value="${r.reference_et ?? ''}" class="w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
+            </tr>`).join('');
+        mgmtBody.innerHTML = (mgmtRows || []).map((r) => `
+            <tr class="border-b border-surface-variant/60 hover:bg-surface-container-low" data-week="${r.week_start}">
+                <td class="p-1 px-2 text-xs text-on-surface-variant">${r.week_start}</td>
+                <td class="p-1"><input type="number" step="0.1" min="0" name="mgmt_gross_irr" value="${r.gross_irrigation ?? ''}" class="mgmt-gross w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
+                <td class="p-1"><input type="text" readonly tabindex="-1" class="mgmt-effective w-full border-outline-variant/50 bg-surface-container rounded px-2 py-1 text-sm text-on-surface-variant" value="${r.effective_irrigation ?? ''}"></td>
+                <td class="p-1"><input type="number" step="0.1" min="0" max="100" name="mgmt_soil_moisture" value="${r.soil_moisture ?? ''}" class="mgmt-sm w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
+                <td class="p-1"><input type="text" readonly tabindex="-1" class="mgmt-runoff w-full border-outline-variant/50 bg-surface-container rounded px-2 py-1 text-sm text-on-surface-variant" value="${r.runoff ?? ''}"></td>
+            </tr>`).join('');
+        bindMgmtListeners();
+        recalcAllMgmt();
+    }
+
+    function seasonDateRange() {
+        const y = new Date().getFullYear();
+        let start = seasonStartIn?.value?.trim() || startIn?.value?.trim() || `${y}/05/01`;
+        let end = seasonEndIn?.value?.trim() || endIn?.value?.trim() || `${y}/09/30`;
+        return { start, end };
+    }
+
+    function syncSeasonPeriodToSimulation() {
+        const { start, end } = seasonDateRange();
+        if (startIn) startIn.value = start;
+        if (endIn) endIn.value = end;
+        if (seasonStartIn) seasonStartIn.value = start;
+        if (seasonEndIn) seasonEndIn.value = end;
+    }
+
+    function syncSimulationToSeasonPeriod() {
+        if (startIn && seasonStartIn) seasonStartIn.value = startIn.value;
+        if (endIn && seasonEndIn) seasonEndIn.value = endIn.value;
+    }
+
+    async function fetchSeasonTables({ fetchEccc }) {
+        const { start, end } = seasonDateRange();
+        syncSeasonPeriodToSimulation();
+        const params = new URLSearchParams({
+            start,
+            end,
+            soil: soilSelect?.value || 'Loam',
+            crop: cropSelect?.value || 'Wheat',
+            irrigation: irrSelect?.value || 'full',
+            eccc: fetchEccc ? '1' : '0',
+        });
+        const planting = plantingIn?.value?.trim();
+        if (planting) params.set('planting_date', planting);
+        if (fetchEccc) {
+            const city = citySelect?.value;
+            if (!city) {
+                if (statusEl) statusEl.textContent = 'Select a city first.';
+                return;
+            }
+            params.set('city', city);
+        }
+        const resp = await fetch(`${prefillUrl}?${params.toString()}`, { credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Could not update season table');
+        renderTables(data.weather_rows, data.management_rows, data.soil_field_capacity_pct);
+        if (madInput && data.allowable_mad_pct) madInput.value = data.allowable_mad_pct;
+        return data;
+    }
+
+    async function refreshSeasonRows() {
+        if (statusEl) statusEl.textContent = 'Updating week rows…';
+        if (refreshBtn) refreshBtn.disabled = true;
+        try {
+            await fetchSeasonTables({ fetchEccc: false });
+            const { start, end } = seasonDateRange();
+            if (statusEl) {
+                statusEl.textContent = `Week rows updated for ${start} through ${end}. Enter data or pre-fill weather from ECCC.`;
+            }
+        } catch (err) {
+            if (statusEl) statusEl.textContent = err.message || 'Could not update week rows.';
+        } finally {
+            if (refreshBtn) refreshBtn.disabled = false;
+        }
+    }
+
+    async function loadEcccPrefill() {
+        const city = citySelect?.value;
+        if (!city) {
+            if (statusEl) statusEl.textContent = 'Select a city first.';
+            return;
+        }
+        if (statusEl) statusEl.textContent = 'Loading ECCC weekly data…';
+        if (loadBtn) loadBtn.disabled = true;
+        try {
+            const data = await fetchSeasonTables({ fetchEccc: true });
+            if (statusEl) {
+                statusEl.textContent = data.eccc_prefilled
+                    ? `Weather pre-filled from ECCC for ${city}.`
+                    : `Week rows created; limited ECCC data for ${city} — enter values manually.`;
+            }
+        } catch (err) {
+            if (statusEl) statusEl.textContent = err.message || 'Could not load ECCC data.';
+        } finally {
+            if (loadBtn) loadBtn.disabled = false;
+        }
+    }
+
+    if (panel && collapsedInput) {
+        panel.addEventListener('toggle', () => {
+            collapsedInput.value = panel.open ? '0' : '1';
+        });
+    }
+    syncSimulationToSeasonPeriod();
+    startIn?.addEventListener('change', syncSimulationToSeasonPeriod);
+    endIn?.addEventListener('change', syncSimulationToSeasonPeriod);
+    startIn?.addEventListener('input', syncSimulationToSeasonPeriod);
+    endIn?.addEventListener('input', syncSimulationToSeasonPeriod);
+    seasonStartIn?.addEventListener('change', syncSeasonPeriodToSimulation);
+    seasonEndIn?.addEventListener('change', syncSeasonPeriodToSimulation);
+    refreshBtn?.addEventListener('click', refreshSeasonRows);
+    loadBtn?.addEventListener('click', loadEcccPrefill);
+    effInput?.addEventListener('input', recalcAllMgmt);
+    soilSelect?.addEventListener('change', () => {
+        const fc = getFc();
+        if (fcInput) fcInput.value = fc;
+        recalcAllMgmt();
+    });
+    cropSelect?.addEventListener('change', () => {
+        if (madInput) madInput.value = defaultMad(cropSelect.value, irrSelect?.value);
+    });
+    irrSelect?.addEventListener('change', () => {
+        if (madInput) madInput.value = defaultMad(cropSelect?.value, irrSelect.value);
+    });
+    madTrigger?.addEventListener('click', () => madTooltip?.classList.toggle('hidden'));
+
+    bindMgmtListeners();
+    recalcAllMgmt();
+
+    document.getElementById('simulationForm')?.addEventListener('submit', syncSeasonPeriodToSimulation);
+})();
+</script>
+
+<script>
 (function simModeUi() {
     const panelSingle = document.getElementById('panelSingleYear');
     const panelHistSub = document.getElementById('panelHistoricalSub');
@@ -818,12 +1296,16 @@ function downloadResults() {
             if (el) el.style.display = showCustomDates ? '' : 'none';
         });
         if (startIn && endIn) {
-            if (mode === 'single_year') {
-                startIn.removeAttribute('required');
-                endIn.removeAttribute('required');
-            } else {
+            const needDates = (mode === 'historical_range' && ht === 'custom') || mode === 'forecast';
+            if (needDates) {
                 startIn.setAttribute('required', 'required');
                 endIn.setAttribute('required', 'required');
+                const y = new Date().getFullYear();
+                if (!startIn.value.trim()) startIn.value = `${y}/05/01`;
+                if (!endIn.value.trim()) endIn.value = `${y}/09/30`;
+            } else {
+                startIn.removeAttribute('required');
+                endIn.removeAttribute('required');
             }
         }
     }

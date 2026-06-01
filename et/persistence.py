@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 
 from .auth_supabase import get_current_user_id, normalize_user_id
 from .supabase_client import supabase_configured
@@ -20,17 +21,28 @@ def _user_and_farm(request):
 
 
 def log_feature_usage(request, feature: str, action: str, metadata: dict | None = None) -> None:
+    """
+    Record usage without blocking the HTTP response (Supabase insert in background).
+    """
     user_id = normalize_user_id(get_current_user_id(request))
     if not user_id or not supabase_configured():
         return
     email = request.session.get("supabase_user_email")
-    store.log_usage(
-        user_id=user_id,
-        feature=feature,
-        action=action,
-        metadata=metadata,
-        hash_email=email,
-    )
+    meta = dict(metadata or {})
+
+    def _worker() -> None:
+        try:
+            store.log_usage(
+                user_id=user_id,
+                feature=feature,
+                action=action,
+                metadata=meta,
+                hash_email=email,
+            )
+        except Exception as exc:
+            logger.debug("log_feature_usage background failed: %s", exc)
+
+    threading.Thread(target=_worker, daemon=True).start()
 
 
 def persist_et_run(request, *, inputs: dict, result_data: dict) -> None:

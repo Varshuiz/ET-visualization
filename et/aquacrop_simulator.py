@@ -100,6 +100,7 @@ class AquaCropSimulator:
         weather_data=None,
         irrigation_method='rainfed',
         initial_water_content='FC',
+        irrigation_schedule=None,
     ):
         """
         Run AquaCrop simulation following official format
@@ -165,7 +166,17 @@ class AquaCropSimulator:
                 initial_wc = InitialWaterContent(value=[initial_water_content])
             
             # Irrigation
-            if irrigation_method == 'rainfed':
+            if irrigation_schedule is not None and len(irrigation_schedule) > 0:
+                sched = irrigation_schedule.copy()
+                sched["Date"] = pd.to_datetime(sched["Date"], errors="coerce")
+                sched = sched.dropna(subset=["Date"])
+                sched["Depth"] = pd.to_numeric(sched["Depth"], errors="coerce").fillna(0.0)
+                irrigation = IrrigationManagement(
+                    irrigation_method=3,
+                    Schedule=sched,
+                    AppEff=100,
+                )
+            elif irrigation_method == 'rainfed':
                 irrigation = IrrigationManagement(irrigation_method=0)
             elif irrigation_method == 'full':
                 irrigation = IrrigationManagement(irrigation_method=1, SMT=[80] * 4)
@@ -427,18 +438,28 @@ class AquaCropSimulator:
         output = self.results['daily_output']
         if len(output) == 0:
             return None
-        
+
+        wf = self.results.get('water_flux')
+        if not isinstance(wf, pd.DataFrame):
+            wf = pd.DataFrame()
+
         # Use days after planting (dap) or simple day numbers
         if 'dap' in output.columns:
             dates = [f"Day {int(d)}" for d in output['dap'].tolist()]
         else:
             dates = [f"Day {i+1}" for i in range(len(output))]
-            
+
+        soil_series = (
+            wf['Wr'].tolist()
+            if isinstance(wf, pd.DataFrame) and 'Wr' in wf.columns
+            else []
+        )
+
         return {
             'dates': dates,
             'canopy_cover': output['canopy_cover'].tolist() if 'canopy_cover' in output else [],
             'biomass': output['biomass'].tolist() if 'biomass' in output else [],
-            'soil_water': output['Wr'].tolist() if 'Wr' in output else [],
+            'soil_water': soil_series,
         }
     
     def get_water_balance_data(self):
@@ -504,8 +525,15 @@ class AquaCropSimulator:
         }
 
 
-def run_aquacrop_simulation(crop='Wheat', soil='Loam', start_date='2024/05/01',
-                            end_date='2024/09/01', irrigation='rainfed', weather_df=None):
+def run_aquacrop_simulation(
+    crop='Wheat',
+    soil='Loam',
+    start_date='2024/05/01',
+    end_date='2024/09/01',
+    irrigation='rainfed',
+    weather_df=None,
+    irrigation_schedule=None,
+):
     """Convenience function"""
     simulator = AquaCropSimulator()
     results = simulator.run_simulation(
@@ -514,7 +542,8 @@ def run_aquacrop_simulation(crop='Wheat', soil='Loam', start_date='2024/05/01',
         start_date=start_date,
         end_date=end_date,
         irrigation_method=irrigation,
-        weather_data=weather_df
+        weather_data=weather_df,
+        irrigation_schedule=irrigation_schedule,
     )
     
     results['growth_chart'] = simulator.get_growth_chart_data()
