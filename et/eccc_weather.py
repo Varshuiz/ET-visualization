@@ -46,8 +46,27 @@ def _distance_km(latitude: float, longitude: float, station_lat: float, station_
     return float(np.sqrt(dlat_km**2 + dlon_km**2))
 
 
-@lru_cache(maxsize=64)
 def _fetch_eccc_daily_features(bbox: str, start_date: str, end_date: str) -> list[dict]:
+    """ECCC climate-daily features (process LRU + Django cache for repeat requests)."""
+    from .weather_cache import get_cached, set_cached, weather_cache_key
+
+    cache_key = weather_cache_key(
+        "eccc_daily_features",
+        bbox=bbox,
+        start=str(start_date),
+        end=str(end_date),
+    )
+    cached = get_cached(cache_key)
+    if cached is not None:
+        return cached
+
+    features = _fetch_eccc_daily_features_remote(bbox, start_date, end_date)
+    if features:
+        set_cached(cache_key, features)
+    return features
+
+
+def _fetch_eccc_daily_features_remote(bbox: str, start_date: str, end_date: str) -> list[dict]:
     params = {
         "bbox": bbox,
         "datetime": f"{start_date}/{end_date}",

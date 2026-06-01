@@ -185,6 +185,12 @@ def merge_openmeteo_forecast_drivers(df, latitude, longitude, timeout=30):
     mask_u2 = out["u2_ms"].isna() & out["Wind_kmh_max"].notna()
     out.loc[mask_u2, "u2_ms"] = out.loc[mask_u2, "Wind_kmh_max"].map(kmh_max_wind_to_u2_ms)
 
+    need_u2 = out["u2_ms"].isna().any()
+    need_rh = out["RH_percent"].isna().any()
+    need_rs = out["Rs_mjm2"].isna().any()
+    if not (need_u2 or need_rh or need_rs):
+        return out
+
     dates = pd.to_datetime(out["Date"], errors="coerce")
     if dates.isna().all():
         return out

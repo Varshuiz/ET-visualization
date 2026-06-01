@@ -132,7 +132,7 @@ class EnvironmentCanadaScraper:
     BASE_URL_STABLE = "https://dd.weather.gc.ca/citypage_weather/xml/{prov}/{code}_e.xml"
     BASE_URL_TODAY = "https://dd.weather.gc.ca/today/citypage_weather/{prov}/{hour}/"
     ECCC_CLIMATE_DAILY_URL = "https://api.weather.gc.ca/collections/climate-daily/items"
-    CACHE_TTL_SECONDS = 600  # 10 minutes
+    CACHE_TTL_SECONDS = 3600  # align with Django weather cache (1 hour)
     _FORECAST_CACHE = {}
     _LOCATION_CODES_BY_PROVINCE = None
 
@@ -759,6 +759,16 @@ class EnvironmentCanadaScraper:
 # Convenience functions
 # ---------------------------------------------------------------------------
 
+_FORECAST_SCRAPER: EnvironmentCanadaScraper | None = None
+
+
+def _forecast_scraper() -> EnvironmentCanadaScraper:
+    global _FORECAST_SCRAPER
+    if _FORECAST_SCRAPER is None:
+        _FORECAST_SCRAPER = EnvironmentCanadaScraper()
+    return _FORECAST_SCRAPER
+
+
 def fetch_env_canada_forecast(city_name='Calgary', days=None, province_code='AB'):
     """Drop-in replacement for the old RSS-based function."""
     from .weather_cache import (
@@ -780,8 +790,7 @@ def fetch_env_canada_forecast(city_name='Calgary', days=None, province_code='AB'
     if cached is not None:
         return dataframe_from_cache_payload(cached)
 
-    scraper = EnvironmentCanadaScraper()
-    df = scraper.fetch_forecast(city_name, days, province_code)
+    df = _forecast_scraper().fetch_forecast(city_name, days, province_code)
     if df is not None and not df.empty:
         set_cached(cache_key, dataframe_to_cache_payload(df))
     return df

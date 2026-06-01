@@ -1,6 +1,13 @@
+import os
+
 import numpy as np
 import pandas as pd
 import requests
+
+
+def _enrich_observed_rn() -> bool:
+    """Hourly ECCC net-radiation bulk fetch is slow; ET comparison estimates Rn from Rs."""
+    return os.environ.get("ECCC_ENRICH_RN", "false").lower() in ("1", "true", "yes")
 
 from .eccc_weather import add_eccc_rh_to_dataframe, add_eccc_rn_to_dataframe
 from .eccc_weather import build_aquacrop_weather_from_eccc
@@ -82,7 +89,8 @@ def _fetch_openmeteo_historical_data_uncached(latitude, longitude, start_date, e
         if not df.empty:
             # RH and wind are not guaranteed in this ECCC-normalized path; fill via existing enrichment/defaults.
             df = add_eccc_rh_to_dataframe(df, latitude=latitude, longitude=longitude, prefer_eccc=True)
-            df = add_eccc_rn_to_dataframe(df, latitude=latitude, longitude=longitude, prefer_eccc=True)
+            if _enrich_observed_rn():
+                df = add_eccc_rn_to_dataframe(df, latitude=latitude, longitude=longitude, prefer_eccc=True)
             df["RH"] = pd.to_numeric(df.get("RH"), errors="coerce").fillna(65.0)
             df["u2"] = 2.0
             df["Wind_Speed"] = df["u2"]

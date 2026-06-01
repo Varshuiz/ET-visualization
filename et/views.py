@@ -1746,8 +1746,7 @@ def acis_data_view(request):
                 if df is None or len(df) == 0:
                     raise ValueError("No weather data returned from selected source")
 
-                # Overlay RH from ECCC climate observations where available.
-                df = add_eccc_rh_to_dataframe(df, latitude=latitude, longitude=longitude, prefer_eccc=True)
+                # RH already enriched in fetch_openmeteo_historical_data (ECCC daily API).
                 
                 print(f"Available columns: {df.columns.tolist()}")
                 
@@ -1762,21 +1761,15 @@ def acis_data_view(request):
                 if 'Tavg' not in df.columns:
                     df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
                 
-                # Add day of year for radiation calculations
-                df['day_of_year'] = df['Date'].dt.dayofyear
-                
-                # Calculate extraterrestrial radiation
-                df['Ra'] = df.apply(
-                    lambda row: calculate_extraterrestrial_radiation(latitude, row['day_of_year']), 
-                    axis=1
-                )
+                # Add day of year for radiation calculations (vectorized)
+                doy = df['Date'].dt.dayofyear.to_numpy()
+                df['Ra'] = calculate_extraterrestrial_radiation_vec(latitude, doy)
                 
                 # Estimate solar radiation if not provided
                 if 'Solar_Radiation' not in df.columns:
                     temp_range = (df['Tmax'] - df['Tmin']).clip(lower=1)
                     kRs = 0.16
-                    df['Solar_Radiation'] = kRs * np.sqrt(temp_range) * df['Ra']
-                    df['Solar_Radiation'] = df['Solar_Radiation'].clip(3, 40)
+                    df['Solar_Radiation'] = (kRs * np.sqrt(temp_range) * df['Ra']).clip(3, 40)
                 
                 df['Rs'] = df['Solar_Radiation']
                 
@@ -2736,7 +2729,9 @@ def env_canada_forecast_view(request):
         for key in sorted(SOIL_IRRIGATION_FACTORS.keys())
     ]
 
-    scraper = EnvironmentCanadaScraper()
+    from .environment_canada_scraper import _forecast_scraper
+
+    scraper = _forecast_scraper()
     cities_by_province = _forecast_cities_by_province_for_ui(scraper)
 
     def cities_in_province(pname):
