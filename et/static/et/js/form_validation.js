@@ -160,22 +160,19 @@
     }
 
     function validateForecastForm(form) {
+        var citySelect = form.querySelector('#city_select');
         var cityInput = form.querySelector('#citySearchInput');
-        var cityHidden = form.querySelector('#city_name_input');
+        var cityField = citySelect || cityInput;
         var province = form.querySelector('#province_select');
         var crop = form.querySelector('#crop_type');
         var soil = form.querySelector('#soil_type');
 
-        if (cityHidden && cityInput) {
-            cityHidden.value = cityInput.value.trim();
-        }
-
-        var fields = [province, cityInput, crop, soil].filter(Boolean);
+        var fields = [province, cityField, crop, soil].filter(Boolean);
         bindClearOnInput(fields);
 
         var ok = validateFields(fields);
-        if (ok && cityInput && cityHidden) {
-            var city = cityInput.value.trim();
+        if (ok && cityField) {
+            var city = cityField.value.trim();
             var allowed = [];
             try {
                 var dataEl = document.getElementById('forecast-cities-data');
@@ -190,9 +187,9 @@
                 allowed = [];
             }
             if (allowed.length && allowed.indexOf(city) === -1) {
-                setInvalid(cityInput, 'Select a city from the list.');
+                setInvalid(cityField, 'Select a city from the list.');
                 ok = false;
-                cityInput.focus();
+                cityField.focus();
             }
         }
 

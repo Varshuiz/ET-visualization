@@ -55,7 +55,124 @@ tailwind.config = {
     }
     body.forecast-page > .container > .info-box,
     body.forecast-page > .container > .error-message { display: none; }
-    .period-selector .period-btn { border-radius: 9999px; }
+    .forecast-option-label {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #707978;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+    .forecast-field-group {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+    .forecast-field-select {
+        width: 100%;
+        height: 3rem;
+        background: #ffffff;
+        border: 1px solid #bfc8c8;
+        border-radius: 0.5rem;
+        padding: 0 1rem;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #191c1c;
+        box-sizing: border-box;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .forecast-field-select:focus {
+        outline: none;
+        border-color: #0c5252;
+        box-shadow: 0 0 0 2px rgba(12, 82, 82, 0.2);
+    }
+    .forecast-options-card {
+        background: #ffffff;
+        border-radius: 0.75rem;
+        border: 1px solid #eceeed;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        padding: 1.5rem;
+    }
+    @media (min-width: 768px) {
+        .forecast-options-card { padding: 2rem; }
+    }
+    .forecast-submit-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.25rem;
+        width: 100%;
+        min-height: 3rem;
+        padding: 0 1.5rem;
+        background: #0c5252;
+        color: #ffffff;
+        border: none;
+        border-radius: 0.5rem;
+        font-size: 0.9375rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 4px 12px rgba(12, 82, 82, 0.2);
+    }
+    .forecast-submit-btn:hover {
+        background: #2d6a6a;
+    }
+    .forecast-submit-btn .material-symbols-outlined {
+        font-size: 1.25rem;
+    }
+    .period-selector-card {
+        background: #ffffff;
+        border-radius: 0.75rem;
+        border: 1px solid #eceeed;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        padding: 1.5rem;
+    }
+    @media (min-width: 768px) {
+        .period-selector-card { padding: 2rem; }
+    }
+    .period-selector-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .period-duration-label {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #707978;
+        margin: 0;
+        white-space: nowrap;
+    }
+    .period-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.625rem;
+    }
+    .period-btn {
+        padding: 0.625rem 1.125rem;
+        background: #ffffff;
+        border: 1px solid #bfc8c8;
+        border-radius: 9999px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: #3f4848;
+        line-height: 1.25;
+    }
+    .period-btn:hover {
+        border-color: #0c5252;
+        color: #0c5252;
+    }
+    .period-btn.selected {
+        background: #0c5252;
+        border-color: #0c5252;
+        color: #ffffff;
+    }
 
     .forecast-loading-overlay {
         position: fixed;
@@ -97,7 +214,7 @@ tailwind.config = {
     @keyframes forecast-spin {
         to { transform: rotate(360deg); }
     }
-    .submit-btn-small.is-loading,
+    .forecast-submit-btn.is-loading,
     .period-btn.is-loading {
         opacity: 0.65;
         pointer-events: none;
@@ -241,53 +358,7 @@ tailwind.config = {
         margin-bottom: 22px;
     }
 
-    .period-selector {
-        background: white;
-        padding: clamp(14px, 3vw, 20px);
-        border-radius: 12px;
-        box-shadow: 0 3px 10px rgba(9, 82, 86, 0.1);
-        margin-bottom: 22px;
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        flex-wrap: wrap;
-    }
-
-    .period-selector label {
-        font-weight: 600;
-        color: #095256;
-        font-size: clamp(0.88rem, 3vw, 1.05rem);
-    }
-
-    .period-buttons {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-
-    .period-btn {
-        padding: 8px 14px;
-        background: #e0f2f1;
-        border: 2px solid #087F8C;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-weight: 600;
-        font-size: 0.86rem;
-        color: #087F8C;
-    }
-
-    .period-btn:hover {
-        background: #087F8C;
-        color: white;
-    }
-
-    .period-btn.selected {
-        background: #087F8C;
-        color: white;
-    }
-
-    /* Dropdown/Autocomplete Styles */
+    /* Legacy city search styles (unused after select redesign) */
     .city-input-wrapper {
         position: relative;
     }
@@ -376,111 +447,11 @@ tailwind.config = {
         display: none;
     }
 
-    .form-controls {
-        display: flex;
-        gap: 15px;
-        align-items: flex-end;
-        flex-wrap: wrap;
-    }
-
-    .selection-group-city {
-        flex: 1 1 280px;
-        min-width: 0;
-        max-width: 100%;
-    }
-
-    .selection-group {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-        flex: 1 1 140px;
-    }
-
-    .selection-group label {
-        font-weight: 600;
-        color: #095256;
-        margin-bottom: 6px;
-        font-size: 0.9rem;
-    }
-
-    .selection-group select {
-        border: 2px solid #e0f2f1;
-        border-radius: 8px;
-        padding: 12px 12px;
-        font-size: 0.95rem;
-        color: #1f4f53;
-        background: #fff;
-        box-sizing: border-box;
-        min-height: 48px;
-        width: 100%;
-    }
-
-    .form-controls-submit {
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .form-controls-submit .form-controls-label-spacer {
-        font-size: 0.9rem;
-        font-weight: 600;
-        margin-bottom: 6px;
-        min-height: 1.2em;
-        line-height: 1.2;
-        visibility: hidden;
-    }
-
-    .submit-btn-small {
-        background: #0e6970;
-        color: white;
-        padding: 12px 20px;
-        border: none;
-        border-radius: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        box-shadow: none;
-        box-sizing: border-box;
-        min-height: 48px;
-        min-width: 150px;
-        width: auto;
-        max-width: 100%;
-        text-align: center;
-    }
-
-    .submit-btn-small:hover {
-        transform: none;
-        background: #0b5860;
-    }
-
     @media (max-width: 768px) {
-        .form-controls {
-            flex-direction: column;
-            align-items: stretch;
-        }
-
-        .submit-btn-small {
-            width: 100%;
-            min-width: 0;
-        }
-
-        .period-selector {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 12px;
-        }
-
-        .period-buttons {
-            justify-content: flex-start;
-            gap: 8px;
-        }
-
         .period-btn {
             flex: 1 1 calc(33.333% - 8px);
             min-width: 0;
-            padding: 10px 8px;
-            font-size: 0.88rem;
+            text-align: center;
         }
 
         .summary-box {
@@ -615,117 +586,83 @@ tailwind.config = {
             </section>
 
             <div class="grid grid-cols-1 gap-6">
-    <!-- City Selector with Dropdown -->
-            <section class="city-selector bg-surface-container-lowest rounded-xl shadow-sm border border-surface-container p-6">
-                <h3 class="text-lg font-semibold text-primary mb-4 flex items-center gap-2"><span class="material-symbols-outlined">map</span>Select location (<span id="cityCountLabel">{{ available_cities|length }}</span> cities in <span id="provinceLabel">{{ selected_province }}</span>)</h3>
-        
-        {{ cities_by_province|json_script:"forecast-cities-data" }}
-        {{ default_city_by_province|json_script:"forecast-default-city-data" }}
+            <section class="forecast-options-card">
+                <h3 class="text-lg font-semibold text-primary mb-6 flex items-center gap-2 m-0">
+                    <span class="material-symbols-outlined">map</span>
+                    Select location (<span id="cityCountLabel">{{ available_cities|length }}</span> cities in <span id="provinceLabel">{{ selected_province }}</span>)
+                </h3>
 
-        <form method="post" id="forecastForm" data-loading-text="Updating forecast and recommendations..." novalidate>
-            {% csrf_token %}
-            <input type="hidden" name="city_name" id="city_name_input" value="{{ city_name }}">
-            <input type="hidden" name="days" id="days_input" value="{{ selected_days }}">
-            
-            <div class="form-controls">
-                <div class="selection-group">
-                    <label for="province_select">Province</label>
-                    <select id="province_select" name="province" aria-label="Province">
-                        {% for p in province_options %}
-                        <option value="{{ p.value }}" {% if p.value == selected_province %}selected{% endif %}>{{ p.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="selection-group selection-group-city">
-                    <label for="citySearchInput">City</label>
-                    <div class="city-input-wrapper">
-                    <input 
-                        type="text" 
-                        class="city-input" 
-                        id="citySearchInput" 
-                        placeholder="Search or select a city..."
-                        value="{{ city_name }}"
-                        autocomplete="off"
-                        onfocus="showDropdown()"
-                    >
-                    
-                    <div class="city-dropdown" id="cityDropdown">
-                        {% for region, cities in cities_by_region.items %}
-                        <div class="city-dropdown-section">
-                            <div class="city-dropdown-header">{{ region }}</div>
-                            {% for city in cities %}
-                            <div class="city-dropdown-item {% if city == city_name %}selected{% endif %}" 
-                                 data-city="{{ city|escape }}"
-                                 data-region="{{ region|escape }}">
-                                {{ city }}
-                            </div>
-                            {% endfor %}
+                {{ cities_by_province|json_script:"forecast-cities-data" }}
+                {{ default_city_by_province|json_script:"forecast-default-city-data" }}
+
+                <form method="post" id="forecastForm" data-loading-text="Updating forecast and recommendations..." novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="days" id="days_input" value="{{ selected_days }}">
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        <div class="forecast-field-group">
+                            <label class="forecast-option-label" for="province_select">Province</label>
+                            <select id="province_select" name="province" class="forecast-field-select" aria-label="Province">
+                                {% for p in province_options %}
+                                <option value="{{ p.value }}" {% if p.value == selected_province %}selected{% endif %}>{{ p.label }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
-                        {% endfor %}
+                        <div class="forecast-field-group">
+                            <label class="forecast-option-label" for="city_select">City</label>
+                            <select id="city_select" name="city_name" class="forecast-field-select" aria-label="City" required>
+                                {% for city in available_cities %}
+                                <option value="{{ city }}" {% if city == city_name %}selected{% endif %}>{{ city }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% include 'et/partials/crop_select.html' with crop_field_name='crop_type' crop_field_id='crop_type' crop_category_id='forecast_crop_category' selected_crop_slug=crop_type widget_part='category' forecast_fields=True include_catalog_script=True %}
                     </div>
-                    </div>
-                </div>
-                <div class="selection-group">
-                    {% include 'et/partials/crop_select.html' with crop_field_name='crop_type' crop_field_id='crop_type' crop_category_id='forecast_crop_category' selected_crop_slug=crop_type %}
-                </div>
-                <div class="selection-group">
-                    <label for="soil_type">Soil type</label>
-                    <select id="soil_type" name="soil_type">
-                        {% for soil in soil_options %}
-                        <option value="{{ soil.value }}" {% if soil.value == soil_type %}selected{% endif %}>{{ soil.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
 
-                <div class="form-controls-submit">
-                    <span class="form-controls-label-spacer" aria-hidden="true">&nbsp;</span>
-                    <button type="submit" class="submit-btn-small" id="submitBtn">
-                        <span class="submit-btn-label">Get Forecast</span>
-                    </button>
-                </div>
-            </div>
-            {% if location_prefill_note and not df_forecast %}
-            <p class="text-[11px] text-[#707978] mt-3">
-                Pre-filled from your primary location. You can change these for this run.
-            </p>
-            {% endif %}
-        </form>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                        {% include 'et/partials/crop_select.html' with crop_field_name='crop_type' crop_field_id='crop_type' crop_category_id='forecast_crop_category' selected_crop_slug=crop_type widget_part='type' forecast_fields=True include_catalog_script=False %}
+                        <div class="forecast-field-group">
+                            <label class="forecast-option-label" for="soil_type">Soil type</label>
+                            <select id="soil_type" name="soil_type" class="forecast-field-select" aria-label="Soil type" required>
+                                {% for soil in soil_options %}
+                                <option value="{{ soil.value }}" {% if soil.value == soil_type %}selected{% endif %}>{{ soil.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="forecast-field-group">
+                            <button type="submit" class="forecast-submit-btn" id="submitBtn">
+                                <span class="submit-btn-label">Get Forecast</span>
+                                <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {% if location_prefill_note and not df_forecast %}
+                    <p class="flex items-center gap-2 text-xs text-outline mt-6 mb-0">
+                        <span class="material-symbols-outlined text-base">info</span>
+                        Pre-filled from your primary location. You can change these for this run.
+                    </p>
+                    {% endif %}
+                </form>
             </section>
 
-    <!-- Period Selector -->
-            <section class="period-selector bg-surface-container-lowest rounded-xl shadow-sm border border-surface-container p-6">
-                <h3 class="text-lg font-semibold text-primary mb-4 flex items-center gap-2"><span class="material-symbols-outlined">calendar_today</span>Forecast Period</h3>
-                <label class="sr-only">Forecast Period</label>
-        <div class="period-buttons">
-            <button type="button" class="period-btn {% if selected_days == 3 %}selected{% endif %}" 
-                    onclick="selectPeriod(3, this)">
-                3 Days
-            </button>
-            <button type="button" class="period-btn {% if selected_days == 5 %}selected{% endif %}" 
-                    onclick="selectPeriod(5, this)">
-                5 Days
-            </button>
-            <button type="button" class="period-btn {% if selected_days == 7 %}selected{% endif %}" 
-                    onclick="selectPeriod(7, this)">
-                7 Days
-            </button>
-            <button type="button" class="period-btn {% if selected_days == 10 %}selected{% endif %}" 
-                    onclick="selectPeriod(10, this)">
-                10 Days
-            </button>
-            <button type="button" class="period-btn {% if selected_days == 14 %}selected{% endif %}" 
-                    onclick="selectPeriod(14, this)">
-                14 Days
-            </button>
-            <button type="button" class="period-btn {% if selected_days == 21 %}selected{% endif %}" 
-                    onclick="selectPeriod(21, this)">
-                21 Days
-            </button>
-            <button type="button" class="period-btn {% if selected_days == 30 %}selected{% endif %}" 
-                    onclick="selectPeriod(30, this)">
-                30 Days
-            </button>
-        </div>
+            <section class="period-selector-card">
+                <div class="period-selector-header">
+                    <h3 class="text-lg font-semibold text-primary m-0 flex items-center gap-2">
+                        <span class="material-symbols-outlined">calendar_today</span>
+                        Forecast Period
+                    </h3>
+                    <span class="period-duration-label">Select duration</span>
+                </div>
+                <div class="period-buttons">
+                    <button type="button" class="period-btn {% if selected_days == 3 %}selected{% endif %}" onclick="selectPeriod(3, this)">3 Days</button>
+                    <button type="button" class="period-btn {% if selected_days == 5 %}selected{% endif %}" onclick="selectPeriod(5, this)">5 Days</button>
+                    <button type="button" class="period-btn {% if selected_days == 7 %}selected{% endif %}" onclick="selectPeriod(7, this)">7 Days</button>
+                    <button type="button" class="period-btn {% if selected_days == 10 %}selected{% endif %}" onclick="selectPeriod(10, this)">10 Days</button>
+                    <button type="button" class="period-btn {% if selected_days == 14 %}selected{% endif %}" onclick="selectPeriod(14, this)">14 Days</button>
+                    <button type="button" class="period-btn {% if selected_days == 21 %}selected{% endif %}" onclick="selectPeriod(21, this)">21 Days</button>
+                    <button type="button" class="period-btn {% if selected_days == 30 %}selected{% endif %}" onclick="selectPeriod(30, this)">30 Days</button>
+                </div>
             </section>
             </div>
             </div>
@@ -1095,9 +1032,7 @@ if (forecastForm) {
     });
 }
 
-const cityInput = document.getElementById('citySearchInput');
-const cityDropdown = document.getElementById('cityDropdown');
-const cityNameInput = document.getElementById('city_name_input');
+const citySelect = document.getElementById('city_select');
 const provinceSelect = document.getElementById('province_select');
 const cityCountLabel = document.getElementById('cityCountLabel');
 const provinceLabel = document.getElementById('provinceLabel');
@@ -1111,148 +1046,44 @@ function parseJsonScript(id) {
 const FORECAST_CITIES_BY_PROVINCE = parseJsonScript('forecast-cities-data') || {};
 const DEFAULT_CITY_BY_PROVINCE = parseJsonScript('forecast-default-city-data') || {};
 
-function escapeHtml(str) {
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-function attrEscape(str) {
-    return escapeHtml(str).replace(/'/g, '&#39;');
-}
-
-function countCities(regionMap) {
-    let n = 0;
-    Object.keys(regionMap || {}).forEach(function(r) {
-        n += (regionMap[r] || []).length;
-    });
-    return n;
-}
-
-function rebuildCityDropdown(province) {
+function flattenCitiesForProvince(province) {
     const data = FORECAST_CITIES_BY_PROVINCE[province] || {};
-    let html = '';
-    Object.keys(data).sort().forEach(function(region) {
-        const cities = data[region] || [];
-        html += '<div class="city-dropdown-section"><div class="city-dropdown-header">' + escapeHtml(region) + '</div>';
-        cities.forEach(function(city) {
-            html += '<div class="city-dropdown-item" data-city="' + attrEscape(city) + '" data-region="' + attrEscape(region) + '">' + escapeHtml(city) + '</div>';
+    const cities = [];
+    Object.keys(data).forEach(function(region) {
+        (data[region] || []).forEach(function(city) {
+            cities.push(city);
         });
-        html += '</div>';
     });
-    cityDropdown.innerHTML = html;
-    if (cityCountLabel) cityCountLabel.textContent = String(countCities(data));
+    return cities.sort();
+}
+
+function rebuildCitySelect(province, preferredCity) {
+    if (!citySelect) return;
+    const cities = flattenCitiesForProvince(province);
+    const keep = preferredCity || citySelect.value;
+    citySelect.innerHTML = '';
+    cities.forEach(function(city) {
+        const opt = document.createElement('option');
+        opt.value = city;
+        opt.textContent = city;
+        if (city === keep) opt.selected = true;
+        citySelect.appendChild(opt);
+    });
+    if (keep && cities.indexOf(keep) === -1 && cities.length) {
+        citySelect.value = cities[0];
+    } else if (!keep && cities.length) {
+        citySelect.value = cities[0];
+    }
+    if (cityCountLabel) cityCountLabel.textContent = String(cities.length);
     if (provinceLabel) provinceLabel.textContent = province;
-}
-
-function showDropdown() {
-    cityDropdown.classList.add('active');
-    filterCities();
-}
-
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('.city-input-wrapper')) {
-        cityDropdown.classList.remove('active');
-    }
-});
-
-if (cityInput) {
-cityInput.addEventListener('input', function() {
-    filterCities();
-    cityDropdown.classList.add('active');
-});
-}
-
-function filterCities() {
-    if (!cityInput) return;
-    const searchValue = cityInput.value.toLowerCase();
-    const sections = cityDropdown.querySelectorAll('.city-dropdown-section');
-    sections.forEach(section => {
-        const items = section.querySelectorAll('.city-dropdown-item');
-        let visibleCount = 0;
-        items.forEach(item => {
-            const cityName = (item.getAttribute('data-city') || '').toLowerCase();
-            if (cityName.includes(searchValue)) {
-                item.classList.remove('hidden');
-                visibleCount++;
-            } else {
-                item.classList.add('hidden');
-            }
-        });
-        section.style.display = visibleCount === 0 ? 'none' : 'block';
-    });
-}
-
-function selectCity(cityName, itemEl) {
-    if (!cityName || !cityInput || !cityNameInput) return;
-    cityInput.value = cityName;
-    cityNameInput.value = cityName;
-    cityDropdown.classList.remove('active');
-    document.querySelectorAll('.city-dropdown-item').forEach(item => {
-        item.classList.remove('selected');
-    });
-    if (itemEl) itemEl.classList.add('selected');
-    if (forecastForm) {
-        if (window.FormFieldValidation && !window.FormFieldValidation.runForecastValidation()) {
-            return;
-        }
-        showForecastLoading('Updating forecast for ' + cityName + '...');
-        forecastForm.submit();
-    }
-}
-
-if (cityDropdown) {
-    cityDropdown.addEventListener('click', function(e) {
-        const item = e.target.closest('.city-dropdown-item');
-        if (!item) return;
-        const cityName = item.getAttribute('data-city');
-        if (cityName) selectCity(cityName, item);
-    });
 }
 
 if (provinceSelect) {
     provinceSelect.addEventListener('change', function() {
         const prov = provinceSelect.value;
-        rebuildCityDropdown(prov);
         const def = DEFAULT_CITY_BY_PROVINCE[prov] || '';
-        if (cityInput) cityInput.value = def;
-        if (cityNameInput) cityNameInput.value = def;
-        document.querySelectorAll('.city-dropdown-item').forEach(function(el) {
-            el.classList.toggle('selected', el.getAttribute('data-city') === def);
-        });
-        filterCities();
+        rebuildCitySelect(prov, def);
     });
-}
-
-if (cityInput) {
-cityInput.addEventListener('keydown', function(e) {
-    const visibleItems = Array.from(document.querySelectorAll('.city-dropdown-item:not(.hidden)'));
-    const currentIndex = visibleItems.findIndex(item => item.classList.contains('selected'));
-    if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (currentIndex < visibleItems.length - 1) {
-            if (currentIndex >= 0) visibleItems[currentIndex].classList.remove('selected');
-            visibleItems[currentIndex + 1].classList.add('selected');
-            visibleItems[currentIndex + 1].scrollIntoView({ block: 'nearest' });
-        }
-    } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (currentIndex > 0) {
-            visibleItems[currentIndex].classList.remove('selected');
-            visibleItems[currentIndex - 1].classList.add('selected');
-            visibleItems[currentIndex - 1].scrollIntoView({ block: 'nearest' });
-        }
-    } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (currentIndex >= 0) {
-            const item = visibleItems[currentIndex];
-            const cityName = item.getAttribute('data-city');
-            selectCity(cityName, item);
-        }
-    }
-});
 }
 
 function selectPeriod(days, btn) {
@@ -1305,11 +1136,8 @@ function downloadForecastCSV() {
     window.URL.revokeObjectURL(url);
 }
 
-window.showDropdown = showDropdown;
-window.selectCity = selectCity;
 window.selectPeriod = selectPeriod;
 window.downloadForecastCSV = downloadForecastCSV;
-window.filterCities = filterCities;
 })();
 </script>
 {% endblock %}
