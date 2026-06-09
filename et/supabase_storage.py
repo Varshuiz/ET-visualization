@@ -101,9 +101,9 @@ def _insert(table: str, row: dict) -> dict | None:
 
 
 # Slim column lists for dashboard history tables (omit heavy result_data JSON).
-DASHBOARD_ET_COLUMNS = "id,created_at,city,province,et_method,date_range_start,date_range_end"
-DASHBOARD_AQUACROP_COLUMNS = "id,created_at,crop_type,mode,start_date,end_date"
-DASHBOARD_FORECAST_COLUMNS = "id,created_at,city,province,forecast_days"
+DASHBOARD_ET_COLUMNS = "id,created_at,city,province,et_method,date_range_start,date_range_end,note"
+DASHBOARD_AQUACROP_COLUMNS = "id,created_at,crop_type,mode,start_date,end_date,note"
+DASHBOARD_FORECAST_COLUMNS = "id,created_at,city,province,forecast_days,note"
 
 
 def _select(
@@ -225,6 +225,39 @@ def get_aquacrop_run_by_id(user_id: str, run_id: str) -> dict | None:
     return get_run_for_user("aquacrop_runs", user_id, run_id)
 
 
+def patch_aquacrop_run_context(user_id: str, run_id: str, context_patch: dict) -> bool:
+    """Merge keys into result_data.context for a saved AquaCrop run."""
+    uid = normalize_user_id(user_id)
+    rid = str(run_id).strip() if run_id else ""
+    if not uid or not rid or not supabase_configured():
+        return False
+    row = get_aquacrop_run_by_id(uid, rid)
+    if not row:
+        return False
+    raw = row.get("result_data") or {}
+    if isinstance(raw, str):
+        try:
+            import json as _json
+
+            raw = _json.loads(raw)
+        except (TypeError, ValueError):
+            raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
+    ctx = raw.get("context") if isinstance(raw.get("context"), dict) else {}
+    ctx.update(_json_safe(context_patch or {}))
+    raw["context"] = ctx
+    try:
+        tbl = _service_table("aquacrop_runs")
+        if tbl is None:
+            return False
+        tbl.update({"result_data": _json_safe(raw)}).eq("user_id", uid).eq("id", rid).execute()
+        return True
+    except Exception as exc:
+        logger.error("patch_aquacrop_run_context failed: %s", exc, exc_info=True)
+        return False
+
+
 def get_forecast_run_by_id(user_id: str, run_id: str) -> dict | None:
     return get_run_for_user("forecast_runs", user_id, run_id)
 
@@ -248,7 +281,57 @@ def invalidate_farm_cache(user_id: str | None = None) -> None:
             _farm_cache.pop(key, None)
 
 
+def list_locations_for_user(user_id: str) -> list[dict]:
+    """All saved locations for a user (primary first)."""
+    uid = normalize_user_id(user_id)
+    if not uid or not supabase_configured():
+        return []
+    try:
+        tbl = _service_table("farms")
+        if tbl is None:
+            return []
+        resp = tbl.select("*").eq("user_id", uid).order("is_primary", desc=True).order("created_at", desc=True).execute()
+        return _rows_from_response(resp)
+    except Exception as exc:
+        logger.error("Supabase list locations failed: %s", exc, exc_info=True)
+        return []
+
+
+def get_primary_location_for_user(user_id: str) -> dict | None:
+    uid = normalize_user_id(user_id)
+    if not uid or not supabase_configured():
+        return None
+    cache_key = _farm_cache_key(uid, "__primary__")
+    now = time.monotonic()
+    cached = _farm_cache.get(cache_key)
+    if cached and (now - cached[0]) < _FARM_CACHE_TTL_SECONDS:
+        return cached[1]
+    try:
+        tbl = _service_table("farms")
+        if tbl is None:
+            return None
+        resp = (
+            tbl.select("*")
+            .eq("user_id", uid)
+            .eq("is_primary", True)
+            .limit(1)
+            .execute()
+        )
+        rows = _rows_from_response(resp)
+        row = rows[0] if rows else None
+        if not row:
+            resp = tbl.select("*").eq("user_id", uid).order("created_at", desc=True).limit(1).execute()
+            rows = _rows_from_response(resp)
+            row = rows[0] if rows else None
+        _farm_cache[cache_key] = (now, row)
+        return row
+    except Exception as exc:
+        logger.error("Supabase get primary location failed: %s", exc, exc_info=True)
+        return None
+
+
 def get_farm_for_user(user_id: str, farm_id: str | None = None) -> dict | None:
+    """Return a specific location or the primary location for pre-fill."""
     uid = normalize_user_id(user_id)
     if not uid or not supabase_configured():
         return None
@@ -261,17 +344,100 @@ def get_farm_for_user(user_id: str, farm_id: str | None = None) -> dict | None:
         tbl = _service_table("farms")
         if tbl is None:
             return None
-        q = tbl.select("*").eq("user_id", uid)
         if farm_id:
-            q = q.eq("id", str(farm_id))
-        resp = q.order("created_at", desc=True).limit(1).execute()
+            resp = tbl.select("*").eq("user_id", uid).eq("id", str(farm_id)).limit(1).execute()
+        else:
+            return get_primary_location_for_user(uid)
         rows = _rows_from_response(resp)
         row = rows[0] if rows else None
         _farm_cache[cache_key] = (now, row)
         return row
     except Exception as exc:
-        logger.error("Supabase get farm failed: %s", exc, exc_info=True)
+        logger.error("Supabase get location failed: %s", exc, exc_info=True)
         return None
+
+
+def set_primary_location(user_id: str, location_id: str) -> bool:
+    uid = normalize_user_id(user_id)
+    lid = str(location_id).strip() if location_id else ""
+    if not uid or not lid or not supabase_configured():
+        return False
+    try:
+        tbl = _service_table("farms")
+        if tbl is None:
+            return False
+        tbl.update({"is_primary": False}).eq("user_id", uid).execute()
+        tbl.update({"is_primary": True}).eq("user_id", uid).eq("id", lid).execute()
+        invalidate_farm_cache(uid)
+        return True
+    except Exception as exc:
+        logger.error("Supabase set primary location failed: %s", exc, exc_info=True)
+        return False
+
+
+def delete_location_for_user(user_id: str, location_id: str) -> bool:
+    uid = normalize_user_id(user_id)
+    lid = str(location_id).strip() if location_id else ""
+    if not uid or not lid or not supabase_configured():
+        return False
+    try:
+        tbl = _service_table("farms")
+        if tbl is None:
+            return False
+        tbl.delete().eq("user_id", uid).eq("id", lid).execute()
+        invalidate_farm_cache(uid)
+        return True
+    except Exception as exc:
+        logger.error("Supabase delete location failed: %s", exc, exc_info=True)
+        return False
+
+
+def save_location_season_table(user_id: str, location_id: str, season_data: dict) -> bool:
+    uid = normalize_user_id(user_id)
+    lid = str(location_id).strip() if location_id else ""
+    if not uid or not lid or not supabase_configured():
+        return False
+    try:
+        tbl = _service_table("farms")
+        if tbl is None:
+            return False
+        existing_row = get_farm_for_user(uid, lid)
+        merged = dict(season_data or {})
+        if existing_row:
+            prev = existing_row.get("season_table_data") or {}
+            if isinstance(prev, str):
+                try:
+                    import json as _json
+
+                    prev = _json.loads(prev)
+                except (TypeError, ValueError):
+                    prev = {}
+            if isinstance(prev, dict):
+                merged = {**prev, **merged}
+        tbl.update({"season_table_data": _json_safe(merged)}).eq("user_id", uid).eq("id", lid).execute()
+        invalidate_farm_cache(uid)
+        return True
+    except Exception as exc:
+        logger.error("Supabase save season table failed: %s", exc, exc_info=True)
+        return False
+
+
+def update_run_note(table: str, user_id: str, run_id: str, note: str) -> bool:
+    uid = normalize_user_id(user_id)
+    rid = str(run_id).strip() if run_id else ""
+    if not uid or not rid or not supabase_configured():
+        return False
+    if table not in ("et_calculations", "aquacrop_runs", "forecast_runs"):
+        return False
+    try:
+        tbl = _service_table(table)
+        if tbl is None:
+            return False
+        tbl.update({"note": (note or "").strip()[:2000]}).eq("user_id", uid).eq("id", rid).execute()
+        return True
+    except Exception as exc:
+        logger.error("Supabase update run note failed: %s", exc, exc_info=True)
+        return False
 
 
 def save_farm(
@@ -284,6 +450,9 @@ def save_farm(
     crop_type: str,
     irrigation_type: str,
     farm_id: str | None = None,
+    is_primary: bool | None = None,
+    crop_condition: str | None = None,
+    soil_type: str | None = None,
 ) -> dict | None:
     uid = normalize_user_id(user_id)
     if not uid or not supabase_configured():
@@ -299,11 +468,25 @@ def save_farm(
         "crop_type": crop_type or "",
         "irrigation_type": irrigation_type or "",
     }
+    if soil_type is not None:
+        payload["soil_type"] = soil_type or ""
+    if crop_condition is not None:
+        payload["crop_condition"] = crop_condition or ""
 
     try:
         tbl = _service_table("farms")
         if tbl is None:
             return None
+
+        if is_primary:
+            tbl.update({"is_primary": False}).eq("user_id", uid).execute()
+            payload["is_primary"] = True
+        elif is_primary is False:
+            payload["is_primary"] = False
+
+        existing = list_locations_for_user(uid)
+        if not existing and is_primary is None:
+            payload["is_primary"] = True
 
         if farm_id:
             fid = str(farm_id)
@@ -338,11 +521,11 @@ def resolve_farm_id(request, user_id: str) -> str | None:
     fid = request.session.get(SESSION_ACTIVE_FARM_ID)
     if fid:
         return str(fid)
-    farm = get_farm_for_user(uid)
-    if farm and farm.get("id"):
-        request.session[SESSION_ACTIVE_FARM_ID] = str(farm["id"])
+    loc = get_primary_location_for_user(uid)
+    if loc and loc.get("id"):
+        request.session[SESSION_ACTIVE_FARM_ID] = str(loc["id"])
         request.session.modified = True
-        return str(farm["id"])
+        return str(loc["id"])
     return None
 
 

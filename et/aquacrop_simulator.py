@@ -62,9 +62,6 @@ class AquaCropSimulator:
     AVAILABLE_CROPS = {
         'Wheat': 'Wheat',
         'Maize': 'Maize',
-        'Rice': 'Rice',
-        'Cotton': 'Cotton',
-        'Tomato': 'Tomato',
         'Potato': 'Potato',
         'Sunflower': 'Sunflower',
         'Soybean': 'Soybean',
@@ -454,12 +451,16 @@ class AquaCropSimulator:
             if isinstance(wf, pd.DataFrame) and 'Wr' in wf.columns
             else []
         )
+        tr = pd.to_numeric(wf.get('Tr', pd.Series(0, index=wf.index)), errors='coerce').fillna(0.0)
+        es = pd.to_numeric(wf.get('Es', pd.Series(0, index=wf.index)), errors='coerce').fillna(0.0)
+        et_daily = (tr + es).tolist() if len(wf) else []
 
         return {
             'dates': dates,
             'canopy_cover': output['canopy_cover'].tolist() if 'canopy_cover' in output else [],
             'biomass': output['biomass'].tolist() if 'biomass' in output else [],
             'soil_water': soil_series,
+            'et_daily': et_daily,
         }
     
     def get_water_balance_data(self):

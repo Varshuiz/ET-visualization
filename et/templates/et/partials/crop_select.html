@@ -1,0 +1,58 @@
+{# Two-level crop selector: category then specific crop. Expects crop_categories_json and selected_crop_slug in context. #}
+{{ crop_categories_json|json_script:"crop-catalog-data" }}
+<div class="crop-select-widget {% if split_columns %}contents{% else %}space-y-2{% endif %}" data-selected="{{ selected_crop_slug|default:'spring_wheat' }}">
+    <div class="{% if split_columns %}form-group space-y-2{% endif %}">
+        <label class="{% if split_columns %}region-field-label block{% else %}text-xs font-bold uppercase tracking-wider text-outline block{% endif %}" for="{{ crop_category_id|default:'crop_category' }}">Crop category</label>
+        <select id="{{ crop_category_id|default:'crop_category' }}" class="crop-category-select w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary" aria-label="Crop category">
+            <option value="">Select category</option>
+        </select>
+    </div>
+    <div class="{% if split_columns %}form-group space-y-2{% endif %}">
+        <label class="{% if split_columns %}region-field-label block{% else %}text-xs font-bold uppercase tracking-wider text-outline block mt-2{% endif %}" for="{{ crop_field_id|default:'crop' }}">Crop type</label>
+        <select name="{{ crop_field_name|default:'crop' }}" id="{{ crop_field_id|default:'crop' }}" class="crop-slug-select w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary" aria-label="Crop" required>
+            <option value="" disabled>Select crop</option>
+        </select>
+    </div>
+</div>
+<script>
+(function() {
+    const root = document.currentScript && document.currentScript.previousElementSibling;
+    if (!root || !root.classList.contains('crop-select-widget')) return;
+    const dataEl = document.getElementById('crop-catalog-data');
+    if (!dataEl) return;
+    let catalog;
+    try { catalog = JSON.parse(dataEl.textContent); } catch (e) { return; }
+    const catSelect = root.querySelector('.crop-category-select');
+    const cropSelect = root.querySelector('.crop-slug-select');
+    const selected = root.getAttribute('data-selected') || 'spring_wheat';
+    (catalog.categories || []).forEach(function(cat) {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.textContent = cat;
+        catSelect.appendChild(opt);
+    });
+    function fillCrops(category) {
+        cropSelect.innerHTML = '<option value="" disabled>Select crop</option>';
+        (catalog.by_category[category] || []).forEach(function(c) {
+            const opt = document.createElement('option');
+            opt.value = c.value;
+            opt.textContent = c.label;
+            if (c.value === selected) opt.selected = true;
+            cropSelect.appendChild(opt);
+        });
+    }
+    let initCat = '';
+    Object.keys(catalog.by_category || {}).forEach(function(cat) {
+        (catalog.by_category[cat] || []).forEach(function(c) {
+            if (c.value === selected) initCat = cat;
+        });
+    });
+    if (initCat) {
+        catSelect.value = initCat;
+        fillCrops(initCat);
+    }
+    catSelect.addEventListener('change', function() {
+        fillCrops(catSelect.value);
+    });
+})();
+</script>

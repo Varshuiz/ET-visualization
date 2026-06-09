@@ -67,6 +67,13 @@ tailwind.config = {
         </header>
 
         <div class="p-8 max-w-[1600px] w-full flex-1">
+            {% if run.note %}
+            <div class="bg-[#f0f9f8] p-5 rounded-xl border-l-4 border-[#087F8C] mb-6">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-[#0c5252] mb-2">Note</h2>
+                <p class="text-sm text-[#3f4848] m-0 whitespace-pre-wrap">{{ run.note }}</p>
+            </div>
+            {% endif %}
+
             <div class="bg-white p-6 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-[#bfc8c8]/30 mb-8">
                 <h2 class="text-lg font-semibold text-[#191c1c] mb-4">Summary</h2>
                 <table class="w-full max-w-xl text-sm">

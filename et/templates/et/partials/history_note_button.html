@@ -1,0 +1,10 @@
+<button type="button"
+        class="history-note-btn inline-flex items-center justify-center w-8 h-8 rounded-lg text-[#707978] hover:bg-[#eceeed] hover:text-[#0c5252] transition-colors"
+        title="{% if row.note %}Edit note{% else %}Add note{% endif %}"
+        data-run-type="{{ run_type }}"
+        data-run-id="{{ run_id }}"
+        data-note-url="{% url 'et:update_run_note' run_type run_id %}"
+        data-current-note="{{ row.note|default:''|escape }}"
+        onclick="event.stopPropagation(); window.openRunNoteEditor && window.openRunNoteEditor(this);">
+    <span class="material-symbols-outlined text-base">{% if row.note %}sticky_note_2{% else %}edit_note{% endif %}</span>
+</button>

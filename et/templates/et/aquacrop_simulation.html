@@ -6,6 +6,8 @@
 {% block body_class %}aquacrop-page{% endblock %}
 
 {% block head_assets %}
+<link rel="stylesheet" href="{% static 'et/css/form_validation.css' %}">
+<script src="{% static 'et/js/form_validation.js' %}"></script>
 <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -80,6 +82,10 @@ document.addEventListener('DOMContentLoaded', function () {
     @media (max-width: 768px) {
         canvas { height: 260px !important; }
     }
+    .mgmt-num-placeholder::placeholder { color: #bfc8c8; opacity: 1; }
+    .mgmt-num-placeholder.sm-auto-filled { color: #707978; background-color: #f8faf9; }
+    .yield-pct-bar { height: 8px; border-radius: 999px; background: #eceeed; overflow: hidden; }
+    .yield-pct-bar > span { display: block; height: 100%; background: linear-gradient(90deg, #087F8C, #5AAA95); }
 </style>
 {% endblock %}
 {% block content %}
@@ -113,6 +119,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 </a>
             </div>
             {% endif %}
+            {% if messages %}
+            <div class="space-y-2">
+                {% for message in messages %}
+                <div class="rounded-lg border px-4 py-3 text-sm {% if message.tags == 'error' %}border-red-200 bg-red-50 text-red-800{% else %}border-primary/30 bg-primary/5 text-on-surface-variant{% endif %}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
             {% if error_message %}
             <div class="error-message rounded-lg border border-red-200 bg-red-50 text-red-800 px-4 py-3">{{ error_message }}</div>
             {% endif %}
@@ -141,7 +154,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             About AquaCrop
                         </h3>
                         <p class="text-sm text-on-surface-variant mb-6 leading-relaxed">
-                            AquaCrop is FAO's crop water productivity model that simulates yield response to water. It helps farmers and researchers:
+                            AquaCrop is FAO's crop water productivity model that simulates yield response to water. It helps growers and researchers:
                         </p>
                         <ul class="space-y-3 text-sm text-on-surface">
                             <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>Predict crop yields under different water conditions</li>
@@ -164,7 +177,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         Simulation Parameters
                     </h3>
 
-                    <form method="post" enctype="multipart/form-data" id="simulationForm" data-loading-text="Running crop simulation..." class="space-y-6">
+                    <form method="post" enctype="multipart/form-data" id="simulationForm" data-loading-text="Running crop simulation..." class="space-y-6" novalidate>
                         {% csrf_token %}
                         <div id="maturityWarning" class="warning-box rounded-lg border-l-4 border-amber-500 bg-amber-50 text-amber-900 px-4 py-3 text-sm" {% if not maturity_warning %}style="display: none;"{% endif %}>{{ maturity_warning|default:'' }}</div>
 
@@ -232,18 +245,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         </div>
 
                         <div class="form-grid">
-                            <div class="form-group space-y-2">
-                                <label class="text-xs font-bold uppercase tracking-wider text-outline">Select Crop</label>
-                                <select name="crop" id="crop" required class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
-                                    <option value="" {% if not selected_crop %}selected{% endif %} disabled>Select crop</option>
-                                    {% for crop in crops %}
-                                    <option value="{{ crop }}" {% if selected_crop == crop %}selected{% endif %}>{{ crop }}</option>
-                                    {% endfor %}
-                                </select>
+                            <div class="form-group">
+                                {% include 'et/partials/crop_select.html' with selected_crop_slug=selected_crop_slug crop_category_id='aquacrop_crop_category' %}
                             </div>
                             <div class="form-group space-y-2">
                                 <label class="text-xs font-bold uppercase tracking-wider text-outline">Analysis Timestep</label>
-                                <select name="timestep" id="timestep" required class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                                <select name="timestep" id="timestep" class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
                                     <option value="" {% if not timestep %}selected{% endif %} disabled>Select timestep</option>
                                     <option value="weekly" {% if timestep == 'weekly' %}selected{% endif %}>Weekly (7-day)</option>
                                     <option value="biweekly" {% if timestep == 'biweekly' %}selected{% endif %}>Biweekly (14-day)</option>
@@ -251,7 +258,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             </div>
                             <div class="form-group space-y-2">
                                 <label class="text-xs font-bold uppercase tracking-wider text-outline">Soil Type</label>
-                                <select name="soil" id="soil" required class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                                <select name="soil" id="soil" class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
                                     <option value="" {% if not selected_soil %}selected{% endif %} disabled>Select soil type</option>
                                     {% for soil in soil_types %}
                                     <option value="{{ soil }}" {% if selected_soil == soil %}selected{% endif %}>{{ soil }}</option>
@@ -260,7 +267,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             </div>
                             <div class="form-group space-y-2">
                                 <label class="text-xs font-bold uppercase tracking-wider text-outline">City (ECCC Weather Source)</label>
-                                <select name="city_name" id="city_name" required class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
+                                <select name="city_name" id="city_name" class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
                                     <option value="" {% if not selected_city %}selected{% endif %} disabled>Select city</option>
                                     {% for city in available_cities %}
                                     <option value="{{ city }}" {% if selected_city == city %}selected{% endif %}>{{ city }}</option>
@@ -278,19 +285,19 @@ document.addEventListener('DOMContentLoaded', function () {
                             <div class="form-group space-y-2" id="panelCustomDates">
                                 <label class="text-xs font-bold uppercase tracking-wider text-outline">Start Date</label>
                                 <input type="text" name="start_date" id="start_date_input" value="{{ start_date|default:'' }}"
-                                       placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}" required
+                                       placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}"
                                        class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
                             </div>
                             <div class="form-group space-y-2" id="panelCustomDatesEnd">
                                 <label class="text-xs font-bold uppercase tracking-wider text-outline">End Date</label>
                                 <input type="text" name="end_date" id="end_date_input" value="{{ end_date|default:'' }}"
-                                       placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}" required
+                                       placeholder="YYYY/MM/DD" pattern="\d{4}/\d{2}/\d{2}"
                                        class="w-full border-outline-variant rounded-lg text-sm py-2.5 focus:ring-2 focus:ring-primary focus:border-primary">
                             </div>
                         </div>
-                        {% if farm_prefill_note and not has_results %}
+                        {% if location_prefill_note and not has_results %}
                         <p class="text-[11px] text-[#707978]">
-                            Pre-filled from your farm profile. You can change these for this run.
+                            Pre-filled from your primary location. You can change these for this run.
                         </p>
                         {% endif %}
 
@@ -320,6 +327,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
             {% if has_results %}
             <div class="space-y-6">
+                {% if is_saved_run and saved_run.note %}
+                <div class="rounded-lg border-l-4 border-primary bg-primary/5 px-4 py-3">
+                    <p class="text-xs font-bold uppercase tracking-wider text-primary mb-1">Note</p>
+                    <p class="text-sm text-on-surface-variant m-0 whitespace-pre-wrap">{{ saved_run.note }}</p>
+                </div>
+                {% endif %}
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <h2 class="text-xl font-semibold text-primary">Simulation Results</h2>
                     <div class="flex flex-wrap gap-2">
@@ -371,10 +384,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
 
                     <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-primary mb-2">Biomass by week</h3>
-                        <p class="text-sm text-on-surface-variant mb-4">
-                            Side-by-side peak weekly biomass (t/ha): <strong>Optimal Irrigation Biomass</strong> (AquaCrop with model irrigation strategy) vs
-                            <strong>Your Irrigation Biomass</strong> (AquaCrop re-run using your effective irrigation schedule).
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                            <h3 class="text-lg font-semibold text-primary mb-0">Biomass or yield by week</h3>
+                            <div class="inline-flex rounded-lg border border-outline-variant/60 p-1 bg-surface-container-low text-sm" role="group" aria-label="Biomass or yield comparison">
+                                <label class="px-3 py-1.5 rounded-md cursor-pointer has-[:checked]:bg-primary has-[:checked]:text-white font-medium">
+                                    <input type="radio" name="avo_biomass_yield_mode" value="biomass" class="sr-only" checked> Biomass
+                                </label>
+                                <label class="px-3 py-1.5 rounded-md cursor-pointer has-[:checked]:bg-primary has-[:checked]:text-white font-medium">
+                                    <input type="radio" name="avo_biomass_yield_mode" value="yield" class="sr-only"> Yield
+                                </label>
+                            </div>
+                        </div>
+                        <p class="text-sm text-on-surface-variant mb-4" id="avoBiomassYieldDesc">
+                            Side-by-side peak weekly biomass (t/ha): <strong>Optimal Irrigation Biomass</strong> vs <strong>Your Irrigation Biomass</strong>.
                         </p>
                         <div class="relative h-[340px]">
                             <canvas id="avoBiomassChart"></canvas>
@@ -404,6 +426,10 @@ document.addEventListener('DOMContentLoaded', function () {
                                     <td class="p-3 font-semibold">Final Biomass — Your irrigation</td>
                                     <td class="p-3 text-right font-bold text-primary">{{ actual_vs_optimal.water_balance.final_biomass_actual_tha }} t/ha</td>
                                 </tr>
+                                {% if actual_vs_optimal.water_balance.final_yield_optimal_tha %}
+                                <tr><td class="p-3">Simulated Yield — Optimal (t/ha)</td><td class="p-3 text-right font-medium">{{ actual_vs_optimal.water_balance.final_yield_optimal_tha }} t/ha</td></tr>
+                                <tr><td class="p-3">Simulated Yield — Your irrigation (t/ha)</td><td class="p-3 text-right font-medium">{{ actual_vs_optimal.water_balance.final_yield_actual_tha }} t/ha</td></tr>
+                                {% endif %}
                             </tbody>
                         </table>
                     </div>
@@ -441,11 +467,20 @@ document.addEventListener('DOMContentLoaded', function () {
                         <h3 class="text-2xl font-bold m-0">{{ yield_tha|floatformat:2 }}</h3>
                         <p class="text-sm m-0 opacity-90">t/ha</p>
                         {% endif %}
-                        <p class="mt-2 text-sm font-semibold">Marketable Yield</p>
+                        <p class="mt-2 text-sm font-semibold">Simulated Yield (t/ha)</p>
                         {% if results.partial_results and yield_tha == 0 %}
                         <p class="mt-1 text-xs opacity-95">Requires full season to maturity</p>
                         {% endif %}
                     </div>
+                    {% if yield_pct_of_optimal %}
+                    <div class="result-card rounded-xl p-5 text-center text-white shadow-md col-span-2 md:col-span-1" style="background: linear-gradient(135deg, #5AAA95, #86A873);">
+                        <h3 class="text-2xl font-bold m-0">{{ yield_pct_of_optimal }}%</h3>
+                        <p class="text-sm m-0 opacity-90">of optimal yield</p>
+                        <p class="mt-2 text-sm font-semibold">Yield as % of Optimal</p>
+                        <div class="yield-pct-bar mt-3 mx-auto max-w-[140px]"><span style="width: {{ yield_pct_of_optimal }}%;"></span></div>
+                        {% if optimal_yield_tha %}<p class="mt-2 text-xs opacity-90">Optimal: {{ optimal_yield_tha }} t/ha</p>{% endif %}
+                    </div>
+                    {% endif %}
                     <div class="result-card secondary rounded-xl p-5 text-center text-white shadow-md" style="background: linear-gradient(135deg, #5AAA95, #86A873);">
                         <h3 class="text-2xl font-bold m-0">{{ results.total_et|floatformat:0 }}</h3>
                         <p class="text-sm m-0 opacity-90">mm</p>
@@ -479,8 +514,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
 
                 <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm">
-                    <h3 class="text-lg font-semibold text-primary mb-4">Crop Growth Over Time</h3>
-                    <canvas id="growthChart"></canvas>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                        <h3 class="text-lg font-semibold text-primary mb-0">Crop Growth Over Time</h3>
+                        <div class="inline-flex flex-wrap rounded-lg border border-outline-variant/60 p-1 bg-surface-container-low text-sm" role="group" aria-label="Results chart metric">
+                            <label class="px-3 py-1.5 rounded-md cursor-pointer has-[:checked]:bg-primary has-[:checked]:text-white font-medium">
+                                <input type="radio" name="growth_chart_mode" value="biomass" class="sr-only" checked> Optimal Biomass
+                            </label>
+                            <label class="px-3 py-1.5 rounded-md cursor-pointer has-[:checked]:bg-primary has-[:checked]:text-white font-medium">
+                                <input type="radio" name="growth_chart_mode" value="et" class="sr-only"> ET
+                            </label>
+                            <label class="px-3 py-1.5 rounded-md cursor-pointer has-[:checked]:bg-primary has-[:checked]:text-white font-medium">
+                                <input type="radio" name="growth_chart_mode" value="soil" class="sr-only"> Soil Moisture
+                            </label>
+                            <label class="px-3 py-1.5 rounded-md cursor-pointer has-[:checked]:bg-primary has-[:checked]:text-white font-medium">
+                                <input type="radio" name="growth_chart_mode" value="canopy" class="sr-only"> Canopy Cover (%)
+                            </label>
+                        </div>
+                    </div>
+                    <div class="relative h-[400px]">
+                        <canvas id="growthChart"></canvas>
+                    </div>
                 </div>
 
                 {% if resampled_chart %}
@@ -643,12 +696,70 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
 
                 <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm">
-                    <h3 class="text-lg font-semibold text-primary mb-2">Weekly water fluxes (ET, precipitation, irrigation)</h3>
+                    <h3 class="text-lg font-semibold text-primary mb-2">Optimal Water Flux (ET, precipitation, irrigation)</h3>
                     <p class="text-sm text-on-surface-variant mb-3">
                         Weekly sums (mm/week) after planting: actual ET (T<sub>r</sub>+E<sub>s</sub>), rain (model influx), and irrigation applied.
                     </p>
                     <canvas id="weeklyWaterChart"></canvas>
                 </div>
+
+                {% if soil_moisture_comparison %}
+                <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-primary/20">
+                    <h3 class="text-lg font-semibold text-primary mb-1">Compare with Your Actual Data (Optional)</h3>
+                    <p class="text-sm text-on-surface-variant mb-4">
+                        AquaCrop soil moisture is shown for each week. Enter your field measurements to see the difference.
+                    </p>
+                    {% if soil_comparison_saved %}
+                    <div class="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-on-surface-variant mb-4">
+                        Your field soil moisture comparison has been saved.
+                    </div>
+                    {% endif %}
+                    <form method="post" id="soilComparisonForm" class="space-y-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_soil_comparison">
+                        <input type="hidden" name="aquacrop_run_id" value="{{ aquacrop_run_id|default:'' }}">
+                        <div class="overflow-x-auto rounded-lg border border-outline-variant/50">
+                            <table class="w-full text-sm border-collapse min-w-[640px]" id="soilComparisonTable">
+                                <thead>
+                                    <tr class="bg-primary-container text-white text-left">
+                                        <th class="p-3 font-semibold">Week</th>
+                                        <th class="p-3 font-semibold text-right">AquaCrop Soil Moisture (%)</th>
+                                        <th class="p-3 font-semibold text-right">Your Actual Soil Moisture (%)</th>
+                                        <th class="p-3 font-semibold text-right">Difference</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in soil_moisture_comparison %}
+                                    <tr class="border-b border-surface-variant compare-sm-row" data-week="{{ row.week_start }}">
+                                        <td class="p-2 px-3 text-on-surface-variant">{{ row.week_start }}</td>
+                                        <td class="p-2 px-3 text-right">
+                                            <input type="hidden" name="compare_week_start" value="{{ row.week_start }}">
+                                            <input type="hidden" name="compare_simulated_sm" value="{% if row.simulated_pct is not None %}{{ row.simulated_pct }}{% endif %}">
+                                            <span class="compare-sim-sm font-medium text-on-surface">{% if row.simulated_pct is not None %}{{ row.simulated_pct }}{% else %}—{% endif %}</span>
+                                        </td>
+                                        <td class="p-2 px-3 text-right">
+                                            <input type="number" step="0.1" min="0" max="100" name="compare_actual_sm"
+                                                   value="{% if row.actual_pct is not None %}{{ row.actual_pct }}{% endif %}"
+                                                   class="compare-actual-sm w-28 ml-auto border-outline-variant rounded px-2 py-1 text-sm text-right"
+                                                   placeholder="—">
+                                        </td>
+                                        <td class="p-2 px-3 text-right font-medium compare-sm-diff text-on-surface">
+                                            {% if row.difference_pct is not None %}{{ row.difference_pct }}{% else %}—{% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="submit" class="bg-primary hover:bg-primary-container text-white font-bold px-6 py-3 rounded-lg inline-flex items-center gap-2 shadow-lg">
+                                <span class="material-symbols-outlined text-base">save</span>
+                                Save field comparison
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                {% endif %}
 
                 <div class="text-center">
                     <button type="button" onclick="downloadResults()" class="submit-btn bg-primary hover:bg-primary-container text-white font-bold px-8 py-3 rounded-lg inline-flex items-center gap-2 shadow-lg">
@@ -750,98 +861,88 @@ const waterBalanceData = JSON.parse(document.getElementById('water-balance-data'
     });
     renderFlux('daily');
 
-    new Chart(biomassCanvas.getContext('2d'), {
-        type: 'bar',
+    const yieldChart = avo.yield_chart || {};
+    let avoBiomassChart = null;
+    function avoBarDatasets(mode) {
+        if (mode === 'yield') {
+            return [
+                { label: 'Optimal Irrigation Yield (t/ha)', data: yieldChart.optimal_yield || [], backgroundColor: 'rgba(8, 127, 140, 0.85)' },
+                { label: 'Your Irrigation Yield (t/ha)', data: yieldChart.actual_yield || [], backgroundColor: 'rgba(187, 159, 6, 0.85)' },
+            ];
+        }
+        return [
+            { label: 'Optimal Irrigation Biomass (t/ha)', data: biomass.optimal_biomass || [], backgroundColor: 'rgba(8, 127, 140, 0.85)' },
+            { label: 'Your Irrigation Biomass (t/ha)', data: biomass.actual_biomass || [], backgroundColor: 'rgba(187, 159, 6, 0.85)' },
+        ];
+    }
+    function renderAvoBiomassYield(mode) {
+        const desc = document.getElementById('avoBiomassYieldDesc');
+        if (desc) {
+            desc.innerHTML = mode === 'yield'
+                ? 'Side-by-side weekly marketable yield (t/ha): <strong>Optimal Irrigation Yield</strong> vs <strong>Your Irrigation Yield</strong>.'
+                : 'Side-by-side peak weekly biomass (t/ha): <strong>Optimal Irrigation Biomass</strong> vs <strong>Your Irrigation Biomass</strong>.';
+        }
+        if (avoBiomassChart) avoBiomassChart.destroy();
+        avoBiomassChart = new Chart(biomassCanvas.getContext('2d'), {
+            type: 'bar',
+            data: { labels: biomass.labels || yieldChart.labels || [], datasets: avoBarDatasets(mode) },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' } },
+                scales: {
+                    x: { title: { display: true, text: 'Week starting' } },
+                    y: { beginAtZero: true, title: { display: true, text: mode === 'yield' ? 'Yield (t/ha)' : 'Biomass (t/ha)' } },
+                },
+            },
+        });
+    }
+    document.querySelectorAll('input[name="avo_biomass_yield_mode"]').forEach((radio) => {
+        radio.addEventListener('change', () => { if (radio.checked) renderAvoBiomassYield(radio.value); });
+    });
+    renderAvoBiomassYield('biomass');
+})();
+
+// Growth Chart — single-metric toggle (default: biomass)
+const growthCtx = document.getElementById('growthChart').getContext('2d');
+let growthChart = null;
+const growthModes = {
+    biomass: { label: 'Biomass (tonnes/ha)', data: growthData.biomass || [], color: '#5AAA95', fill: 'rgba(90, 170, 149, 0.12)', yTitle: 'Biomass (tonnes/ha)' },
+    et: { label: 'ET (mm/day)', data: growthData.et_daily || [], color: '#087F8C', fill: 'rgba(8, 127, 140, 0.12)', yTitle: 'ET (mm/day)' },
+    soil: { label: 'Soil water (mm)', data: growthData.soil_water || [], color: '#8b5cf6', fill: 'rgba(139, 92, 246, 0.1)', yTitle: 'Root-zone water (mm)' },
+    canopy: { label: 'Canopy Cover (%)', data: growthData.canopy_cover || [], color: '#0c5252', fill: 'rgba(12, 82, 82, 0.1)', yTitle: 'Canopy Cover (%)' },
+};
+function renderGrowthChart(mode) {
+    const cfg = growthModes[mode] || growthModes.biomass;
+    if (growthChart) growthChart.destroy();
+    growthChart = new Chart(growthCtx, {
+        type: 'line',
         data: {
-            labels: biomass.labels || [],
-            datasets: [
-                {
-                    label: 'Optimal Irrigation Biomass (t/ha)',
-                    data: biomass.optimal_biomass || [],
-                    backgroundColor: 'rgba(8, 127, 140, 0.85)',
-                },
-                {
-                    label: 'Your Irrigation Biomass (t/ha)',
-                    data: biomass.actual_biomass || [],
-                    backgroundColor: 'rgba(187, 159, 6, 0.85)',
-                },
-            ],
+            labels: growthData.dates,
+            datasets: [{
+                label: cfg.label,
+                data: cfg.data,
+                borderColor: cfg.color,
+                backgroundColor: cfg.fill,
+                fill: mode === 'biomass',
+                tension: 0.35,
+            }],
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { position: 'top' } },
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { display: true, position: 'top' } },
             scales: {
-                x: { title: { display: true, text: 'Week starting' } },
-                y: { beginAtZero: true, title: { display: true, text: 'Biomass (t/ha)' } },
+                y: { beginAtZero: true, title: { display: true, text: cfg.yTitle } },
             },
         },
     });
-})();
-
-// Growth Chart
-const growthCtx = document.getElementById('growthChart').getContext('2d');
-new Chart(growthCtx, {
-    type: 'line',
-    data: {
-        labels: growthData.dates,
-        datasets: [
-            {
-                label: 'Canopy Cover (%)',
-                data: growthData.canopy_cover,
-                borderColor: '#087F8C',
-                backgroundColor: 'rgba(8, 127, 140, 0.1)',
-                yAxisID: 'y',
-                tension: 0.4
-            },
-            {
-                label: 'Biomass (tonnes/ha)',
-                data: growthData.biomass,
-                borderColor: '#5AAA95',
-                backgroundColor: 'rgba(90, 170, 149, 0.1)',
-                yAxisID: 'y1',
-                tension: 0.4
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: {
-            mode: 'index',
-            intersect: false,
-        },
-        plugins: {
-            legend: {
-                display: true,
-                position: 'top'
-            }
-        },
-        scales: {
-            y: {
-                type: 'linear',
-                display: true,
-                position: 'left',
-                title: {
-                    display: true,
-                    text: 'Canopy Cover (%)'
-                }
-            },
-            y1: {
-                type: 'linear',
-                display: true,
-                position: 'right',
-                title: {
-                    display: true,
-                    text: 'Biomass (tonnes/ha)'
-                },
-                grid: {
-                    drawOnChartArea: false,
-                }
-            }
-        }
-    }
+}
+document.querySelectorAll('input[name="growth_chart_mode"]').forEach((radio) => {
+    radio.addEventListener('change', () => { if (radio.checked) renderGrowthChart(radio.value); });
 });
+renderGrowthChart('biomass');
 
 // Water balance — weeks after planting (cumulative vs weekly actual ET)
 const weekLabels = waterBalanceData.week_labels || [];
@@ -1037,9 +1138,11 @@ function downloadResults() {
     const citySelect = document.getElementById('city_name');
     const startIn = document.getElementById('start_date_input');
     const endIn = document.getElementById('end_date_input');
-    const seasonStartIn = document.getElementById('season_period_start');
-    const seasonEndIn = document.getElementById('season_period_end');
     const plantingIn = document.getElementById('planting_date');
+    const cropConditionSelect = document.getElementById('crop_condition');
+    const importBtn = document.getElementById('btnImportTable2');
+    const importFile = document.getElementById('table2ImportFile');
+    const clearBtn = document.getElementById('btnClearSeasonTable');
     const refreshBtn = document.getElementById('btnRefreshSeasonRows');
     const weatherBody = document.getElementById('weatherSeasonBody');
     const mgmtBody = document.getElementById('mgmtSeasonBody');
@@ -1079,9 +1182,7 @@ function downloadResults() {
     function recalcMgmtRow(row) {
         const grossIn = row.querySelector('.mgmt-gross');
         const effOut = row.querySelector('.mgmt-effective');
-        const smIn = row.querySelector('.mgmt-sm');
         const runoffOut = row.querySelector('.mgmt-runoff');
-        const precipIn = row.closest('table') ? null : null;
         const week = row.dataset.week;
         let precip = 0;
         if (weatherBody && week) {
@@ -1097,7 +1198,7 @@ function downloadResults() {
         const gross = parseFloat(grossIn?.value) || 0;
         const effPct = parseFloat(effInput?.value) || 81;
         const eff = Math.round(gross * effPct) / 100;
-        const sm = smIn?.value !== '' ? parseFloat(smIn.value) : getFc() * 0.6;
+        const sm = getFc() * 0.6;
         if (effOut) effOut.value = eff.toFixed(2);
         if (runoffOut) runoffOut.value = aimmRunoff(precip, sm, getFc()).toFixed(2);
     }
@@ -1107,7 +1208,7 @@ function downloadResults() {
     }
 
     function bindMgmtListeners() {
-        mgmtBody?.querySelectorAll('.mgmt-gross, .mgmt-sm').forEach((el) => {
+        mgmtBody?.querySelectorAll('.mgmt-gross').forEach((el) => {
             el.removeEventListener('input', recalcAllMgmt);
             el.addEventListener('input', recalcAllMgmt);
         });
@@ -1129,41 +1230,131 @@ function downloadResults() {
                 <td class="p-1"><input type="number" step="0.1" name="weather_precip" value="${r.precipitation ?? ''}" class="season-weather-precip w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
                 <td class="p-1"><input type="number" step="0.01" name="weather_ref_et" value="${r.reference_et ?? ''}" class="w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
             </tr>`).join('');
-        mgmtBody.innerHTML = (mgmtRows || []).map((r) => `
+        mgmtBody.innerHTML = (mgmtRows || []).map((r) => {
+            const grossVal = (r.gross_irrigation !== undefined && r.gross_irrigation !== null && String(r.gross_irrigation) !== '') ? r.gross_irrigation : '';
+            return `
             <tr class="border-b border-surface-variant/60 hover:bg-surface-container-low" data-week="${r.week_start}">
                 <td class="p-1 px-2 text-xs text-on-surface-variant">${r.week_start}</td>
-                <td class="p-1"><input type="number" step="0.1" min="0" name="mgmt_gross_irr" value="${r.gross_irrigation ?? ''}" class="mgmt-gross w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
+                <td class="p-1"><input type="number" step="0.1" min="0" name="mgmt_gross_irr" value="${grossVal}" class="mgmt-gross mgmt-num-placeholder w-full border-outline-variant rounded px-2 py-1 text-sm" placeholder="0" data-placeholder="0"></td>
                 <td class="p-1"><input type="text" readonly tabindex="-1" class="mgmt-effective w-full border-outline-variant/50 bg-surface-container rounded px-2 py-1 text-sm text-on-surface-variant" value="${r.effective_irrigation ?? ''}"></td>
-                <td class="p-1"><input type="number" step="0.1" min="0" max="100" name="mgmt_soil_moisture" value="${r.soil_moisture ?? ''}" class="mgmt-sm w-full border-outline-variant rounded px-2 py-1 text-sm"></td>
                 <td class="p-1"><input type="text" readonly tabindex="-1" class="mgmt-runoff w-full border-outline-variant/50 bg-surface-container rounded px-2 py-1 text-sm text-on-surface-variant" value="${r.runoff ?? ''}"></td>
-            </tr>`).join('');
+            </tr>`;
+        }).join('');
         bindMgmtListeners();
+        setupPlaceholderInputs();
         recalcAllMgmt();
     }
 
     function seasonDateRange() {
         const y = new Date().getFullYear();
-        let start = seasonStartIn?.value?.trim() || startIn?.value?.trim() || `${y}/05/01`;
-        let end = seasonEndIn?.value?.trim() || endIn?.value?.trim() || `${y}/09/30`;
+        const start = startIn?.value?.trim() || `${y}/05/01`;
+        const end = endIn?.value?.trim() || `${y}/09/30`;
         return { start, end };
     }
 
-    function syncSeasonPeriodToSimulation() {
-        const { start, end } = seasonDateRange();
-        if (startIn) startIn.value = start;
-        if (endIn) endIn.value = end;
-        if (seasonStartIn) seasonStartIn.value = start;
-        if (seasonEndIn) seasonEndIn.value = end;
+    function setupPlaceholderInputs() {
+        document.querySelectorAll('.mgmt-num-placeholder').forEach((el) => {
+            el.addEventListener('focus', function onFocus() {
+                if (this.value === '0' && this.placeholder === '0') {
+                    this.value = '';
+                }
+            });
+        });
     }
 
-    function syncSimulationToSeasonPeriod() {
-        if (startIn && seasonStartIn) seasonStartIn.value = startIn.value;
-        if (endIn && seasonEndIn) seasonEndIn.value = endIn.value;
+    function normalizeWeekKey(value) {
+        if (!value) return '';
+        const parts = String(value).trim().replace(/\//g, '-').split('-');
+        if (parts.length === 3) {
+            const y = parts[0];
+            const m = parts[1].padStart(2, '0');
+            const d = parts[2].padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+        return String(value).trim();
+    }
+
+    function mergeMgmtRows(freshRows, savedRows) {
+        if (!savedRows?.length) return freshRows;
+        const byWeek = {};
+        savedRows.forEach((r) => {
+            const k = normalizeWeekKey(r.week_start);
+            if (k) byWeek[k] = r;
+        });
+        let matched = 0;
+        const merged = (freshRows || []).map((row) => {
+            const k = normalizeWeekKey(row.week_start);
+            const prev = byWeek[k];
+            if (!prev) return row;
+            matched += 1;
+            return {
+                ...row,
+                gross_irrigation: prev.gross_irrigation ?? row.gross_irrigation,
+                effective_irrigation: prev.effective_irrigation ?? row.effective_irrigation,
+                runoff: prev.runoff ?? row.runoff,
+            };
+        });
+        if (matched === 0) return savedRows;
+        return merged;
+    }
+
+    function mergeWeatherRows(freshRows, savedRows) {
+        if (!savedRows?.length) return freshRows;
+        const byWeek = {};
+        savedRows.forEach((r) => {
+            const k = normalizeWeekKey(r.week_start);
+            if (k) byWeek[k] = r;
+        });
+        return (freshRows || []).map((row) => {
+            const k = normalizeWeekKey(row.week_start);
+            const prev = byWeek[k];
+            if (!prev) return row;
+            return {
+                ...row,
+                tmax: prev.tmax ?? row.tmax,
+                tmin: prev.tmin ?? row.tmin,
+                precipitation: prev.precipitation ?? row.precipitation,
+                reference_et: prev.reference_et ?? row.reference_et,
+            };
+        });
+    }
+
+    function loadSavedSeasonPrefill() {
+        const savedEl = document.getElementById('saved-season-prefill-data');
+        if (!savedEl || !mgmtBody) return;
+        try {
+            const saved = JSON.parse(savedEl.textContent);
+            if (!saved.management_rows?.length && !saved.weather_rows?.length) return;
+            const currentMgmt = Array.from(mgmtBody.querySelectorAll('tr')).map((tr) => ({
+                week_start: tr.dataset.week,
+                gross_irrigation: tr.querySelector('.mgmt-gross')?.value ?? '',
+                effective_irrigation: tr.querySelector('.mgmt-effective')?.value ?? '',
+                runoff: tr.querySelector('.mgmt-runoff')?.value ?? '',
+            }));
+            const currentWeather = Array.from(weatherBody?.querySelectorAll('tr') || []).map((tr) => {
+                const hidden = tr.querySelector('input[name="weather_week_start"]');
+                return {
+                    week_start: hidden?.value,
+                    tmax: tr.querySelector('input[name="weather_tmax"]')?.value ?? '',
+                    tmin: tr.querySelector('input[name="weather_tmin"]')?.value ?? '',
+                    precipitation: tr.querySelector('.season-weather-precip')?.value ?? '',
+                    reference_et: tr.querySelector('input[name="weather_ref_et"]')?.value ?? '',
+                };
+            });
+            const mgmt = saved.management_rows?.length
+                ? mergeMgmtRows(currentMgmt, saved.management_rows)
+                : currentMgmt;
+            const weather = saved.weather_rows?.length
+                ? mergeWeatherRows(currentWeather, saved.weather_rows)
+                : currentWeather;
+            renderTables(weather, mgmt, saved.soil_field_capacity_pct || fcInput?.value);
+        } catch (err) {
+            console.warn('Could not apply saved season prefill', err);
+        }
     }
 
     async function fetchSeasonTables({ fetchEccc }) {
         const { start, end } = seasonDateRange();
-        syncSeasonPeriodToSimulation();
         const params = new URLSearchParams({
             start,
             end,
@@ -1185,7 +1376,17 @@ function downloadResults() {
         const resp = await fetch(`${prefillUrl}?${params.toString()}`, { credentials: 'same-origin' });
         const data = await resp.json();
         if (!data.success) throw new Error(data.error || 'Could not update season table');
-        renderTables(data.weather_rows, data.management_rows, data.soil_field_capacity_pct);
+        const savedEl = document.getElementById('saved-season-prefill-data');
+        let mgmtRows = data.management_rows;
+        let weatherRows = data.weather_rows;
+        if (savedEl) {
+            try {
+                const saved = JSON.parse(savedEl.textContent);
+                mgmtRows = mergeMgmtRows(mgmtRows, saved.management_rows);
+                weatherRows = mergeWeatherRows(weatherRows, saved.weather_rows);
+            } catch (e) { /* ignore */ }
+        }
+        renderTables(weatherRows, mgmtRows, data.soil_field_capacity_pct);
         if (madInput && data.allowable_mad_pct) madInput.value = data.allowable_mad_pct;
         return data;
     }
@@ -1228,18 +1429,81 @@ function downloadResults() {
         }
     }
 
+    function parseTable2Csv(text) {
+        const lines = text.trim().split(/\r?\n/).filter(Boolean);
+        if (lines.length < 2) return [];
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+            if (cols.length < 2) continue;
+            rows.push({
+                week_start: cols[0],
+                gross_irrigation: cols[1] || '',
+            });
+        }
+        return rows;
+    }
+
+    function mergeImportedTable2(imported) {
+        if (!mgmtBody || !imported.length) return;
+        const byWeek = {};
+        imported.forEach((r) => { if (r.week_start) byWeek[r.week_start] = r; });
+        mgmtBody.querySelectorAll('tr').forEach((tr) => {
+            const week = tr.dataset.week;
+            const data = byWeek[week];
+            if (!data) return;
+            const gross = tr.querySelector('.mgmt-gross');
+            if (gross && data.gross_irrigation !== '') gross.value = data.gross_irrigation;
+        });
+        recalcAllMgmt();
+    }
+
+    importBtn?.addEventListener('click', () => importFile?.click());
+    importFile?.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            if (file.name.match(/\.xlsx?$/i)) {
+                if (typeof XLSX === 'undefined') {
+                    await new Promise((resolve, reject) => {
+                        const s = document.createElement('script');
+                        s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                        s.onload = resolve;
+                        s.onerror = reject;
+                        document.head.appendChild(s);
+                    });
+                }
+                const buf = await file.arrayBuffer();
+                const wb = XLSX.read(buf, { type: 'array' });
+                const sheet = wb.Sheets[wb.SheetNames[0]];
+                const csv = XLSX.utils.sheet_to_csv(sheet);
+                mergeImportedTable2(parseTable2Csv(csv));
+            } else {
+                const text = await file.text();
+                mergeImportedTable2(parseTable2Csv(text));
+            }
+            if (statusEl) statusEl.textContent = `Imported ${file.name} into Table 2.`;
+        } catch (err) {
+            if (statusEl) statusEl.textContent = err.message || 'Import failed.';
+        }
+        e.target.value = '';
+    });
+
+    clearBtn?.addEventListener('click', async () => {
+        if (!window.confirm('Clear all Table 1 and Table 2 values?')) return;
+        try {
+            await fetchSeasonTables({ fetchEccc: false });
+            if (statusEl) statusEl.textContent = 'Season tables cleared. Enter new values.';
+        } catch (err) {
+            if (statusEl) statusEl.textContent = err.message || 'Could not clear tables.';
+        }
+    });
+
     if (panel && collapsedInput) {
         panel.addEventListener('toggle', () => {
             collapsedInput.value = panel.open ? '0' : '1';
         });
     }
-    syncSimulationToSeasonPeriod();
-    startIn?.addEventListener('change', syncSimulationToSeasonPeriod);
-    endIn?.addEventListener('change', syncSimulationToSeasonPeriod);
-    startIn?.addEventListener('input', syncSimulationToSeasonPeriod);
-    endIn?.addEventListener('input', syncSimulationToSeasonPeriod);
-    seasonStartIn?.addEventListener('change', syncSeasonPeriodToSimulation);
-    seasonEndIn?.addEventListener('change', syncSeasonPeriodToSimulation);
     refreshBtn?.addEventListener('click', refreshSeasonRows);
     loadBtn?.addEventListener('click', loadEcccPrefill);
     effInput?.addEventListener('input', recalcAllMgmt);
@@ -1257,11 +1521,40 @@ function downloadResults() {
     madTrigger?.addEventListener('click', () => madTooltip?.classList.toggle('hidden'));
 
     bindMgmtListeners();
+    setupPlaceholderInputs();
     recalcAllMgmt();
-
-    document.getElementById('simulationForm')?.addEventListener('submit', syncSeasonPeriodToSimulation);
+    loadSavedSeasonPrefill();
 })();
 </script>
+
+{% if has_results and soil_moisture_comparison %}
+<script>
+(function soilComparisonUi() {
+    function recalcRow(row) {
+        const simEl = row.querySelector('.compare-sim-sm');
+        const actualIn = row.querySelector('.compare-actual-sm');
+        const diffEl = row.querySelector('.compare-sm-diff');
+        const sim = parseFloat(simEl?.textContent);
+        const actualRaw = actualIn?.value;
+        if (!diffEl) return;
+        if (actualRaw === '' || actualRaw === undefined || Number.isNaN(parseFloat(actualRaw))) {
+            diffEl.textContent = '—';
+            return;
+        }
+        const actual = parseFloat(actualRaw);
+        if (Number.isNaN(sim)) {
+            diffEl.textContent = '—';
+            return;
+        }
+        diffEl.textContent = (actual - sim).toFixed(1);
+    }
+    document.querySelectorAll('.compare-sm-row').forEach((row) => {
+        row.querySelector('.compare-actual-sm')?.addEventListener('input', () => recalcRow(row));
+        recalcRow(row);
+    });
+})();
+</script>
+{% endif %}
 
 <script>
 (function simModeUi() {
@@ -1298,19 +1591,30 @@ function downloadResults() {
         if (startIn && endIn) {
             const needDates = (mode === 'historical_range' && ht === 'custom') || mode === 'forecast';
             if (needDates) {
-                startIn.setAttribute('required', 'required');
-                endIn.setAttribute('required', 'required');
                 const y = new Date().getFullYear();
                 if (!startIn.value.trim()) startIn.value = `${y}/05/01`;
                 if (!endIn.value.trim()) endIn.value = `${y}/09/30`;
-            } else {
-                startIn.removeAttribute('required');
-                endIn.removeAttribute('required');
             }
         }
     }
-    document.querySelectorAll('input[name="sim_mode"]').forEach((r) => r.addEventListener('change', update));
-    document.querySelectorAll('input[name="historical_range_type"]').forEach((r) => r.addEventListener('change', update));
+    function clearValidationOnModeChange() {
+        const form = document.getElementById('simulationForm');
+        if (form && window.FormFieldValidation) {
+            window.FormFieldValidation.clearAll(form);
+        }
+    }
+    document.querySelectorAll('input[name="sim_mode"]').forEach((r) => {
+        r.addEventListener('change', function () {
+            clearValidationOnModeChange();
+            update();
+        });
+    });
+    document.querySelectorAll('input[name="historical_range_type"]').forEach((r) => {
+        r.addEventListener('change', function () {
+            clearValidationOnModeChange();
+            update();
+        });
+    });
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', update);
     } else {

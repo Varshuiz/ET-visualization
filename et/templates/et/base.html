@@ -623,7 +623,7 @@
                     Dashboard
                 </a></li>
                 <li><a href="{% url 'et:farm_profile' %}" {% if request.resolver_match.url_name == 'farm_profile' %}class="active"{% endif %}>
-                    Farm
+                    Your Regions
                 </a></li>
                 <li><a href="{% url 'et:logout' %}">Sign out</a></li>
                 {% else %}
@@ -750,7 +750,8 @@
         const globalLoadingOverlay = document.getElementById('globalLoadingOverlay');
         const globalLoadingText = document.getElementById('globalLoadingText');
         document.querySelectorAll('form').forEach(function(form) {
-            form.addEventListener('submit', function() {
+            form.addEventListener('submit', function(e) {
+                if (e.defaultPrevented) return;
                 if (globalLoadingOverlay) {
                     const customText = form.getAttribute('data-loading-text');
                     globalLoadingText.textContent = customText || 'Processing data...';

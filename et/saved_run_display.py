@@ -8,7 +8,8 @@ from typing import Any
 import pandas as pd
 
 from .aquacrop_aggregation import compute_yield_tha
-from .forecast_recommendations import CROP_GDD_PROFILES, SOIL_IRRIGATION_FACTORS
+from .crop_catalog import CROP_ENTRIES, crop_catalog_context, crop_label, match_crop_slug
+from .forecast_recommendations import SOIL_IRRIGATION_FACTORS
 
 
 def _parse_result_data(row: dict) -> dict:
@@ -50,10 +51,10 @@ def _soil_label(soil_type: str) -> str:
 def forecast_context_from_saved_row(row: dict) -> dict[str, Any]:
     data = _parse_result_data(row)
     df_forecast = _normalize_forecast_records(data.get("df_forecast"))
-    crop_type = (data.get("crop_type") or "wheat").strip().lower()
+    crop_type = match_crop_slug(data.get("crop_type") or "spring_wheat")
     soil_type = (data.get("soil_type") or "loam").strip().lower()
-    if crop_type not in CROP_GDD_PROFILES:
-        crop_type = "wheat"
+    if crop_type not in CROP_ENTRIES:
+        crop_type = "spring_wheat"
     if soil_type not in SOIL_IRRIGATION_FACTORS:
         soil_type = "loam"
 
@@ -84,10 +85,7 @@ def forecast_context_from_saved_row(row: dict) -> dict[str, Any]:
         "crop_label": crop_label,
         "soil_label": soil_label,
         "soil_factor": soil_factor,
-        "crop_options": [
-            {"value": k, "label": k.replace("_", " ").title()}
-            for k in sorted(CROP_GDD_PROFILES.keys())
-        ],
+        **crop_catalog_context(crop_type),
         "soil_options": [
             {"value": k, "label": k.replace("_", " ").title()}
             for k in sorted(SOIL_IRRIGATION_FACTORS.keys())
@@ -187,6 +185,9 @@ def aquacrop_context_from_saved_row(row: dict) -> dict[str, Any]:
         "actual_vs_optimal": extra.get("actual_vs_optimal"),
         "has_actual_vs_optimal": bool(extra.get("actual_vs_optimal")),
         "actual_vs_optimal_error": None,
+        "soil_moisture_comparison": extra.get("soil_moisture_comparison") or [],
+        "soil_comparison_saved": bool(extra.get("soil_comparison_saved")),
+        "aquacrop_run_id": str(row.get("id") or ""),
         "irrigation_methods": [],
         "farm_prefill_note": False,
         "error_message": None,

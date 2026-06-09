@@ -16,6 +16,11 @@ urlpatterns = [
         views.delete_run_view,
         name="delete_run",
     ),
+    path(
+        "dashboard/runs/<str:run_type>/<uuid:run_id>/note/",
+        views.update_run_note_view,
+        name="update_run_note",
+    ),
     path("dashboard/et/<uuid:run_id>/", views.et_run_detail_view, name="et_run_detail"),
     path("dashboard/et/<uuid:run_id>/download-csv/", views.et_run_download_csv_view, name="et_run_download_csv"),
     path("et-calculation/<uuid:run_id>/", views.et_run_detail_view, name="et_calculation_detail"),

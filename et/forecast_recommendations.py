@@ -10,82 +10,9 @@ import numpy as np
 import pandas as pd
 import requests
 
+from .crop_catalog import CROP_GDD_PROFILES, resolve_gdd_key
 from .weather_ingestion import kmh_max_wind_to_u2_ms
 from .weather_ingestion import fetch_openmeteo_historical_data
-
-
-CROP_GDD_PROFILES = {
-    "wheat": [
-        (180, 0.65, "Early establishment"),
-        (550, 0.90, "Vegetative growth"),
-        (950, 1.08, "Mid-season growth"),
-        (1300, 1.18, "Peak water demand"),
-        (99999, 0.85, "Late season / maturity"),
-    ],
-    "canola": [
-        (160, 0.62, "Early establishment"),
-        (520, 0.92, "Vegetative growth"),
-        (900, 1.10, "Flowering and pod set"),
-        (1200, 1.16, "Peak water demand"),
-        (99999, 0.86, "Late season / maturity"),
-    ],
-    "corn": [
-        (200, 0.55, "Emergence and early growth"),
-        (650, 0.92, "Vegetative growth"),
-        (1100, 1.16, "Tasseling and silking"),
-        (1600, 1.22, "Peak water demand"),
-        (99999, 0.90, "Late season / maturity"),
-    ],
-    "barley": [
-        (170, 0.62, "Early establishment"),
-        (520, 0.88, "Vegetative growth"),
-        (900, 1.05, "Heading and grain fill"),
-        (1200, 1.12, "Peak water demand"),
-        (99999, 0.84, "Late season / maturity"),
-    ],
-    "oats": [
-        (170, 0.63, "Early establishment"),
-        (540, 0.89, "Vegetative growth"),
-        (930, 1.06, "Panicle and grain fill"),
-        (1220, 1.13, "Peak water demand"),
-        (99999, 0.85, "Late season / maturity"),
-    ],
-    "soybean": [
-        (190, 0.60, "Early establishment"),
-        (620, 0.90, "Vegetative growth"),
-        (1020, 1.12, "Flowering and pod fill"),
-        (1400, 1.18, "Peak water demand"),
-        (99999, 0.88, "Late season / maturity"),
-    ],
-    "potato": [
-        (180, 0.68, "Emergence"),
-        (520, 0.96, "Canopy development"),
-        (900, 1.18, "Tuber initiation and bulking"),
-        (1300, 1.24, "Peak water demand"),
-        (99999, 0.92, "Maturation"),
-    ],
-    "dry_bean": [
-        (180, 0.60, "Early establishment"),
-        (580, 0.92, "Vegetative growth"),
-        (980, 1.10, "Flowering and pod fill"),
-        (1320, 1.16, "Peak water demand"),
-        (99999, 0.86, "Late season / maturity"),
-    ],
-    "alfalfa": [
-        (150, 0.78, "Early regrowth"),
-        (450, 1.00, "Canopy build"),
-        (850, 1.12, "Active growth"),
-        (1200, 1.18, "Peak water demand"),
-        (99999, 0.98, "Late growth"),
-    ],
-    "sugar_beet": [
-        (170, 0.65, "Emergence"),
-        (520, 0.95, "Canopy development"),
-        (950, 1.16, "Root bulking"),
-        (1400, 1.22, "Peak water demand"),
-        (99999, 0.90, "Late season / maturity"),
-    ],
-}
 
 SOIL_IRRIGATION_FACTORS = {
     "loam": 1.00,
@@ -119,7 +46,7 @@ def calculate_daily_gdd(tmax, tmin, base_temp=5.0):
 
 
 def gdd_stage_factor(cumulative_gdd, crop_type):
-    profile = CROP_GDD_PROFILES.get(crop_type, CROP_GDD_PROFILES["wheat"])
+    profile = CROP_GDD_PROFILES.get(resolve_gdd_key(crop_type), CROP_GDD_PROFILES["wheat"])
     for threshold, factor, label in profile:
         if cumulative_gdd < threshold:
             return factor, label

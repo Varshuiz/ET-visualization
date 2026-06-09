@@ -1,4 +1,4 @@
-"""AIMM-style weekly season data for AquaCrop (farmer actuals vs optimal)."""
+"""AIMM-style weekly season data for AquaCrop (user actuals vs optimal)."""
 
 from __future__ import annotations
 
@@ -127,25 +127,22 @@ def build_management_rows(
     field_capacity_pct: float,
     weather_rows: list[dict[str, Any]] | None = None,
     gross_irrigation: list[str] | None = None,
-    soil_moisture: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    weather_by_week = {r["week_start"]: r for r in (weather_rows or [])}
+    weather_by_week = {_normalize_week_start(r["week_start"]): r for r in (weather_rows or [])}
     rows: list[dict[str, Any]] = []
     for i, ws in enumerate(week_starts):
         key = ws.strftime("%Y-%m-%d")
-        wk = weather_by_week.get(key, {})
+        wk = weather_by_week.get(key, weather_by_week.get(_normalize_week_start(key), {}))
         precip = _float_or_zero(wk.get("precipitation"))
         gross = _float_or_zero((gross_irrigation or [None] * len(week_starts))[i] if gross_irrigation else 0)
-        sm_raw = (soil_moisture or [None] * len(week_starts))[i] if soil_moisture else None
-        sm = _float_or_zero(sm_raw) if sm_raw not in (None, "") else field_capacity_pct * 0.6
+        sm_for_runoff = field_capacity_pct * 0.6
         eff = effective_irrigation_mm(gross, application_efficiency_pct)
-        runoff = aimm_weekly_runoff_mm(precip, sm, field_capacity_pct)
+        runoff = aimm_weekly_runoff_mm(precip, sm_for_runoff, field_capacity_pct)
         rows.append(
             {
                 "week_start": key,
                 "gross_irrigation": _fmt_num(gross) if gross else "",
                 "effective_irrigation": eff,
-                "soil_moisture": _fmt_num(sm) if sm_raw not in (None, "") else "",
                 "runoff": runoff,
             }
         )
@@ -267,7 +264,6 @@ def parse_season_data_from_post(
     precip_list = post.getlist("weather_precip")
     ref_et_list = post.getlist("weather_ref_et")
     gross_list = post.getlist("mgmt_gross_irr")
-    sm_list = post.getlist("mgmt_soil_moisture")
 
     fc = soil_field_capacity_pct(soil_type)
     weather_rows: list[dict[str, Any]] = []
@@ -290,12 +286,10 @@ def parse_season_data_from_post(
         field_capacity_pct=fc,
         weather_rows=weather_rows,
         gross_irrigation=gross_list,
-        soil_moisture=sm_list,
     )
 
     has_farmer_data = (
         sum(_float_or_zero(r.get("gross_irrigation")) for r in management_rows) > 0
-        or any((str(r.get("soil_moisture") or "")).strip() for r in management_rows)
         or sum(_float_or_zero(r.get("precipitation")) for r in weather_rows) > 0
         or sum(_float_or_zero(r.get("reference_et")) for r in weather_rows) > 0
     )
@@ -351,3 +345,212 @@ def _fmt_num(val: float) -> str:
     if val == int(val):
         return str(int(val))
     return f"{val:.2f}".rstrip("0").rstrip(".")
+
+
+def _normalize_week_start(value: Any) -> str:
+    """Canonical YYYY-MM-DD for matching saved vs built week rows."""
+    if value is None or value == "":
+        return ""
+    ts = pd.to_datetime(str(value).replace("/", "-"), errors="coerce")
+    if pd.isna(ts):
+        return str(value).strip()
+    return ts.strftime("%Y-%m-%d")
+
+
+def _has_display_value(val: Any) -> bool:
+    if val is None:
+        return False
+    if isinstance(val, str) and val.strip() == "":
+        return False
+    return True
+
+
+def merge_saved_season_table(
+    tables: dict[str, Any],
+    saved: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Overlay saved management/weather rows onto freshly built week rows when dates align."""
+    if not saved or not isinstance(saved, dict):
+        return tables
+    saved_mgmt = saved.get("management_rows") or []
+    saved_weather = saved.get("weather_rows") or []
+    if not saved_mgmt and not saved_weather:
+        return tables
+
+    mgmt_by_week = {
+        _normalize_week_start(r.get("week_start")): r
+        for r in saved_mgmt
+        if r.get("week_start")
+    }
+    weather_by_week = {
+        _normalize_week_start(r.get("week_start")): r
+        for r in saved_weather
+        if r.get("week_start")
+    }
+
+    mgmt_rows = tables.get("management_rows") or []
+    matched_mgmt = 0
+    for row in mgmt_rows:
+        key = _normalize_week_start(row.get("week_start", ""))
+        prev = mgmt_by_week.get(key)
+        if not prev:
+            continue
+        matched_mgmt += 1
+        for field in ("gross_irrigation", "effective_irrigation", "runoff"):
+            val = prev.get(field)
+            if _has_display_value(val):
+                row[field] = val
+
+    weather_rows = tables.get("weather_rows") or []
+    matched_weather = 0
+    for row in weather_rows:
+        key = _normalize_week_start(row.get("week_start", ""))
+        prev = weather_by_week.get(key)
+        if not prev:
+            continue
+        matched_weather += 1
+        for field in ("tmax", "tmin", "precipitation", "reference_et"):
+            val = prev.get(field)
+            if _has_display_value(val):
+                row[field] = val
+
+    if saved_mgmt and matched_mgmt == 0:
+        tables["management_rows"] = [
+            {
+                "week_start": _normalize_week_start(r.get("week_start")),
+                "gross_irrigation": r.get("gross_irrigation", ""),
+                "effective_irrigation": r.get("effective_irrigation", ""),
+                "runoff": r.get("runoff", ""),
+            }
+            for r in saved_mgmt
+            if r.get("week_start")
+        ]
+        matched_mgmt = len(tables["management_rows"])
+
+    if saved_weather and matched_weather == 0:
+        tables["weather_rows"] = [
+            {
+                "week_start": _normalize_week_start(r.get("week_start")),
+                "tmax": r.get("tmax", ""),
+                "tmin": r.get("tmin", ""),
+                "precipitation": r.get("precipitation", ""),
+                "reference_et": r.get("reference_et", ""),
+            }
+            for r in saved_weather
+            if r.get("week_start")
+        ]
+
+    if saved.get("start_date"):
+        tables["start_date"] = saved["start_date"]
+    if saved.get("end_date"):
+        tables["end_date"] = saved["end_date"]
+    if saved.get("planting_date"):
+        tables["planting_date"] = saved["planting_date"]
+    if saved.get("application_efficiency_pct") is not None:
+        tables["application_efficiency_pct"] = saved["application_efficiency_pct"]
+    if saved.get("crop_condition"):
+        tables["selected_crop_condition"] = saved.get("crop_condition")
+
+    tables["season_table_prefill_banner"] = bool(matched_mgmt or matched_weather)
+    tables["saved_season_prefill"] = {
+        "management_rows": tables.get("management_rows") or [],
+        "weather_rows": tables.get("weather_rows") or [],
+        "soil_field_capacity_pct": tables.get("soil_field_capacity_pct"),
+    }
+    return tables
+
+
+def _wr_mm_to_top_layer_pct(wr_mm: float, wr_fc_mm: float, fc_pct: float) -> float:
+    if wr_fc_mm <= 0 or pd.isna(wr_mm):
+        return round(fc_pct * 0.6, 1)
+    return round(min(100.0, max(0.0, (float(wr_mm) / wr_fc_mm) * fc_pct)), 1)
+
+
+def _simulated_sm_by_week_index(
+    results: dict,
+    start_date: str,
+    soil_type: str,
+) -> dict[int, float]:
+    from .aquacrop_aggregation import build_simulation_results_tables
+
+    _, weekly = build_simulation_results_tables(results, start_date)
+    if not weekly:
+        return {}
+
+    wf = results.get("water_flux")
+    wr_fc_mm = 1.0
+    if isinstance(wf, pd.DataFrame) and not wf.empty and "Wr" in wf.columns:
+        wr_series = pd.to_numeric(wf["Wr"], errors="coerce").dropna()
+        if len(wr_series):
+            wr_fc_mm = float(wr_series.quantile(0.95)) or float(wr_series.max()) or 1.0
+    fc_pct = soil_field_capacity_pct(soil_type)
+
+    sm_by_week_idx: dict[int, float] = {}
+    for i, wrow in enumerate(weekly):
+        sm_mm = wrow.get("soil_moisture")
+        if sm_mm is not None:
+            sm_by_week_idx[i] = _wr_mm_to_top_layer_pct(float(sm_mm), wr_fc_mm, fc_pct)
+    return sm_by_week_idx
+
+
+def build_soil_moisture_comparison_rows(
+    results: dict,
+    start_date: str,
+    soil_type: str,
+    week_starts: list[str] | None = None,
+    saved_actual_by_week: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Weekly AquaCrop soil moisture (%) vs optional user field measurements.
+    Shown on the results page after simulation.
+    """
+    sm_by_idx = _simulated_sm_by_week_index(results, start_date, soil_type)
+    if not sm_by_idx and not week_starts:
+        return []
+
+    start_dt = pd.to_datetime(str(start_date).replace("/", "-"), errors="coerce")
+    if pd.isna(start_dt):
+        start_dt = pd.Timestamp.today().normalize()
+
+    keys = week_starts or []
+    if not keys:
+        end_dt = start_dt + pd.Timedelta(days=max(0, (len(sm_by_idx) - 1) * 7))
+        keys = [
+            ws.strftime("%Y-%m-%d")
+            for ws in weekly_period_starts(start_dt, end_dt)
+        ]
+
+    actual_map = saved_actual_by_week or {}
+    rows: list[dict[str, Any]] = []
+    for i, raw_ws in enumerate(keys):
+        ws_norm = _normalize_week_start(raw_ws)
+        ws_ts = pd.to_datetime(ws_norm, errors="coerce")
+        if pd.notna(ws_ts) and pd.notna(start_dt):
+            wk_idx = int((ws_ts.normalize() - start_dt.normalize()).days // 7)
+        else:
+            wk_idx = i
+        simulated = sm_by_idx.get(wk_idx)
+        if simulated is None and sm_by_idx:
+            simulated = sm_by_idx.get(min(wk_idx, max(sm_by_idx.keys())))
+
+        actual_raw = actual_map.get(ws_norm)
+        actual_val = None
+        if actual_raw not in (None, ""):
+            try:
+                actual_val = round(float(actual_raw), 1)
+            except (TypeError, ValueError):
+                actual_val = None
+
+        difference = None
+        if simulated is not None and actual_val is not None:
+            difference = round(actual_val - simulated, 1)
+
+        rows.append(
+            {
+                "week_start": ws_norm,
+                "simulated_pct": simulated,
+                "actual_pct": actual_val,
+                "difference_pct": difference,
+            }
+        )
+    return rows

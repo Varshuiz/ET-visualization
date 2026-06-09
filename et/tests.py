@@ -96,6 +96,14 @@ class ETPlannerViewTests(TestCase):
         self.assertContains(response, "Province")
         self.assertContains(response, "British Columbia")
 
+    def test_form_validation_assets_on_setup_forecast_and_aquacrop(self):
+        for url_name in ("et:acis_fetch", "et:env_canada_forecast", "et:aquacrop_simulation"):
+            response = self.client.get(reverse(url_name))
+            self.assertEqual(response.status_code, 200, url_name)
+            self.assertContains(response, "form_validation.js")
+            self.assertContains(response, "form_validation.css")
+            self.assertContains(response, "novalidate")
+
     @patch("et.views.build_irrigation_confidence_plot", return_value="ZmFrZV9jaGFydA==")
     @patch(
         "et.views.build_historical_confidence",
@@ -130,16 +138,38 @@ class ETPlannerViewTests(TestCase):
             {
                 "city_name": "Calgary",
                 "days": "7",
-                "crop_type": "corn",
+                "crop_type": "grain_corn",
                 "soil_type": "sandy",
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["crop_type"], "corn")
+        self.assertEqual(response.context["crop_type"], "grain_corn")
         self.assertEqual(response.context["soil_type"], "sandy")
         self.assertContains(response, "Selected Crop")
         self.assertContains(response, "Selected Soil")
         self.assertContains(response, "ET flux")
+        self.assertContains(response, "Forecast Results")
+        self.assertContains(response, 'id="forecastResultsSection"')
+        html = response.content.decode()
+        marker_idx = html.find("<!-- forecast-results-start -->")
+        hidden_idx = html.find('class="hidden space-y-6"')
+        self.assertGreater(marker_idx, hidden_idx, "Results section must follow the setup form block")
+        between = html[hidden_idx:marker_idx]
+        self.assertGreaterEqual(
+            between.count("</div>"),
+            between.count("<div"),
+            "Setup form wrapper must close before forecast results render",
+        )
+
+    def test_forecast_post_empty_data_shows_error(self):
+        with patch("et.environment_canada_scraper.fetch_env_canada_forecast", return_value=pd.DataFrame()):
+            response = self.client.post(
+                reverse("et:env_canada_forecast"),
+                {"city_name": "Calgary", "days": "7", "crop_type": "wheat", "soil_type": "loam"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Forecast unavailable")
+        self.assertNotContains(response, "Forecast Results")
 
     def test_update_comparison_plot_requires_session_data(self):
         response = self.client.get(
@@ -256,6 +286,38 @@ class AquaCropSeasonDataTests(TestCase):
 
         self.assertEqual(effective_irrigation_mm(100, 81), 81.0)
 
+    def test_merge_saved_season_table_normalizes_week_keys(self):
+        from et.aquacrop_season_data import build_season_tables, merge_saved_season_table
+
+        base = build_season_tables(
+            start_date="2026/05/01",
+            end_date="2026/06/15",
+            fetch_eccc=False,
+        )
+        saved = {
+            "management_rows": [
+                {
+                    "week_start": "2026/05/01",
+                    "gross_irrigation": "25",
+                    "effective_irrigation": 20.25,
+                    "runoff": 0,
+                }
+            ],
+            "weather_rows": [
+                {
+                    "week_start": "2026/05/01",
+                    "tmax": "18",
+                    "tmin": "5",
+                    "precipitation": "10",
+                    "reference_et": "21",
+                }
+            ],
+        }
+        merged = merge_saved_season_table(base, saved)
+        self.assertTrue(merged.get("season_table_prefill_banner"))
+        self.assertEqual(merged["management_rows"][0]["gross_irrigation"], "25")
+        self.assertEqual(merged["weather_rows"][0]["tmax"], "18")
+
 
 class AquaCropActualVsOptimalTests(TestCase):
     def test_expand_season_to_daily(self):
@@ -353,3 +415,111 @@ class DashboardDeleteRunTests(TestCase):
         response = self.client.post(url)
         self.assertEqual(response.status_code, 302)
         self.assertIn("#recent-history", response.url)
+
+
+class AquacropSoilMatchTests(TestCase):
+    def test_match_aquacrop_soil_normalizes_labels(self):
+        from et.views import _match_aquacrop_soil
+
+        self.assertEqual(_match_aquacrop_soil("loam"), "Loam")
+        self.assertEqual(_match_aquacrop_soil("Sandy Loam"), "Sandy Loam")
+        self.assertEqual(_match_aquacrop_soil("unknown"), "")
+
+
+class AquacropRegionFieldsTests(TestCase):
+    def test_resolve_region_fields_uses_alberta_cities(self):
+        from et.location_services import resolve_aquacrop_region_fields, sorted_aquacrop_cities
+
+        province, city, choices = resolve_aquacrop_region_fields(
+            saved_province="Alberta",
+            saved_city="Lethbridge",
+        )
+        self.assertEqual(province, "Alberta")
+        self.assertEqual(city, "Lethbridge")
+        self.assertIn("Calgary", choices)
+        self.assertEqual(choices, sorted_aquacrop_cities())
+
+    def test_unknown_province_defaults_to_alberta(self):
+        from et.location_services import resolve_aquacrop_region_fields
+
+        province, _city, choices = resolve_aquacrop_region_fields(saved_province="Ontario", saved_city="")
+        self.assertEqual(province, "Alberta")
+        self.assertTrue(choices)
+
+
+class FarmProfileViewTests(TestCase):
+    user_id = "11111111-1111-1111-1111-111111111111"
+    loc_a = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    loc_b = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
+    def setUp(self):
+        session = self.client.session
+        session["supabase_user_id"] = self.user_id
+        session.save()
+
+    def _locations(self):
+        return [
+            {
+                "id": self.loc_a,
+                "farm_name": "North Field",
+                "province": "Alberta",
+                "city": "Calgary",
+                "area_hectares": 40,
+                "crop_type": "spring_wheat",
+                "irrigation_type": "",
+                "is_primary": True,
+            },
+        ]
+
+    @patch("et.views_dashboard.get_profile", return_value=None)
+    @patch("et.views_dashboard.list_locations_for_user")
+    def test_profile_with_locations_defaults_to_add_form(self, mock_list, _mock_profile):
+        mock_list.return_value = self._locations()
+        response = self.client.get(reverse("et:farm_profile"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Add location")
+        self.assertNotContains(response, 'value="North Field"', html=False)
+        self.assertTrue(response.context["adding_new"])
+
+    @patch("et.views_dashboard.get_profile", return_value=None)
+    @patch("et.views_dashboard.list_locations_for_user")
+    def test_profile_edit_location_prefills_form(self, mock_list, _mock_profile):
+        mock_list.return_value = self._locations()
+        response = self.client.get(reverse("et:farm_profile"), {"location": self.loc_a})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Edit location")
+        self.assertContains(response, "North Field")
+        self.assertEqual(response.context["edit_location_id"], self.loc_a)
+
+    @patch("et.views_dashboard.log_feature_usage")
+    @patch("et.views_dashboard.save_farm")
+    @patch("et.views_dashboard.get_profile", return_value=None)
+    @patch("et.views_dashboard.list_locations_for_user")
+    def test_profile_post_without_location_id_inserts(self, mock_list, _mock_profile, mock_save, _mock_log):
+        mock_list.return_value = self._locations()
+        mock_save.return_value = {
+            "id": self.loc_b,
+            "farm_name": "South Field",
+            "province": "Alberta",
+            "city": "Lethbridge",
+            "crop_type": "barley",
+            "is_primary": False,
+        }
+        response = self.client.post(
+            reverse("et:farm_profile"),
+            {
+                "action": "save",
+                "location_id": "",
+                "farm_name": "South Field",
+                "province": "Alberta",
+                "city": "Lethbridge",
+                "area_hectares": "25",
+                "crop_type": "barley",
+                "soil_type": "Loam",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(f"location={self.loc_b}", response.url)
+        mock_save.assert_called_once()
+        self.assertIsNone(mock_save.call_args.kwargs.get("farm_id"))
+        self.assertIsNone(mock_save.call_args.kwargs.get("is_primary"))

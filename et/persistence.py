@@ -70,10 +70,10 @@ def persist_aquacrop_run(
     end_date: str,
     results: dict,
     extra: dict | None = None,
-) -> None:
+) -> dict | None:
     user_id, farm_id = _user_and_farm(request)
     if not user_id:
-        return
+        return None
     try:
         payload = store.compact_aquacrop_result_data(results, extra=extra)
         saved = store.save_aquacrop_run(
@@ -93,8 +93,10 @@ def persist_aquacrop_run(
             "run",
             {"mode": mode, "crop": crop_type, "farm_id": farm_id},
         )
+        return saved
     except Exception as exc:
         logger.warning("persist_aquacrop_run failed: %s", exc)
+        return None
 
 
 def persist_forecast_run(

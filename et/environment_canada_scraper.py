@@ -205,6 +205,7 @@ class EnvironmentCanadaScraper:
 
         raise ValueError(
             f"Could not retrieve XML for site {site_code} ({prov}). "
+            "Environment Canada city forecast feeds did not respond. "
             "Both stable and timestamped URL strategies failed."
         )
 

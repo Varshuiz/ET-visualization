@@ -13,6 +13,13 @@
         <p class="subtitle">Saved {{ run.created_at|slice:":16" }}</p>
     </div>
 
+    {% if run.note %}
+    <div class="card" style="margin-bottom: 20px; border-left: 4px solid #087F8C; background: #f0f9f8;">
+        <h2 style="color: #095256; margin-bottom: 8px; font-size: 1rem;">Note</h2>
+        <p style="margin: 0; color: #3f4848; white-space: pre-wrap;">{{ run.note }}</p>
+    </div>
+    {% endif %}
+
     {% if display_warning %}
     <div class="card" style="margin-bottom: 20px; border-left: 4px solid #c9a227; background: #fff8e6;">
         <p style="margin: 0; color: #5a4a00;">{{ display_warning }}</p>

@@ -42,6 +42,7 @@ from .views_dashboard import (
     et_run_download_csv_view,
     farm_profile_view,
     forecast_run_detail_view,
+    update_run_note_view,
 )
 
 __all__ = [
@@ -84,6 +85,7 @@ __all__ = [
     "et_run_download_csv_view",
     "aquacrop_run_detail_view",
     "forecast_run_detail_view",
+    "update_run_note_view",
 ]
 from .persistence import log_feature_usage, persist_aquacrop_run, persist_et_run, persist_forecast_run
 import base64
@@ -107,6 +109,7 @@ import requests
 from django.core.cache import cache
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 
 from .et_growing_season import (
     calculate_growing_season_stats,
@@ -165,8 +168,14 @@ from .aquacrop_aggregation import (
     build_simulation_results_tables,
 )
 from .forms import UploadFileForm
+from .crop_catalog import (
+    CROP_ENTRIES,
+    crop_catalog_context,
+    crop_label,
+    match_crop_slug,
+    resolve_aquacrop_model,
+)
 from .forecast_recommendations import (
-    CROP_GDD_PROFILES,
     SOIL_IRRIGATION_FACTORS,
     build_historical_confidence,
     build_irrigation_confidence_plot,
@@ -1450,12 +1459,15 @@ def _acis_popular_location_suggestions(province_display):
 
 
 def _farm_defaults_for_request(request) -> dict:
-    """Best-effort farm defaults for logged-in users."""
+    """Best-effort active/primary location defaults for logged-in users."""
     try:
         user_id = get_current_user_id(request)
         if not user_id:
             return {}
-        farm = get_farm_for_user(user_id)
+        from .supabase_storage import resolve_farm_id
+
+        fid = resolve_farm_id(request, user_id)
+        farm = get_farm_for_user(user_id, fid) if fid else get_farm_for_user(user_id)
         if not farm:
             return {}
         return {
@@ -1463,6 +1475,7 @@ def _farm_defaults_for_request(request) -> dict:
             "city": (farm.get("city") or "").strip(),
             "crop_type": (farm.get("crop_type") or "").strip(),
             "irrigation_type": (farm.get("irrigation_type") or "").strip(),
+            "soil_type": (farm.get("soil_type") or "").strip(),
         }
     except Exception:
         return {}
@@ -1471,39 +1484,12 @@ def _farm_defaults_for_request(request) -> dict:
 def _match_forecast_crop_value(raw_crop: str) -> str | None:
     if not raw_crop:
         return None
-    normalized = raw_crop.strip().lower().replace("-", " ").replace("_", " ")
-    if "wheat" in normalized:
-        return "wheat"
-    if "canola" in normalized:
-        return "canola"
-    if "barley" in normalized:
-        return "barley"
-    if "pulse" in normalized:
-        return "pulse"
-    compact = normalized.replace(" ", "_")
-    return compact if compact in CROP_GDD_PROFILES else None
+    slug = match_crop_slug(raw_crop)
+    return slug if slug in CROP_ENTRIES else None
 
 
-def _match_aquacrop_crop(raw_crop: str, available_crops: list[str]) -> str:
-    if not raw_crop:
-        return ""
-    lowered = raw_crop.strip().lower()
-    for crop in available_crops:
-        if lowered == crop.lower():
-            return crop
-    if "wheat" in lowered:
-        for crop in available_crops:
-            if "wheat" in crop.lower():
-                return crop
-    if "canola" in lowered:
-        for crop in available_crops:
-            if "canola" in crop.lower():
-                return crop
-    if "maize" in lowered or "corn" in lowered:
-        for crop in available_crops:
-            if "maize" in crop.lower() or "corn" in crop.lower():
-                return crop
-    return ""
+def _match_aquacrop_crop(raw_crop: str, _available_crops: list[str] | None = None) -> str:
+    return match_crop_slug(raw_crop) if raw_crop else ""
 
 
 def _map_irrigation_to_aquacrop(raw_irrigation: str) -> str:
@@ -1515,6 +1501,16 @@ def _map_irrigation_to_aquacrop(raw_irrigation: str) -> str:
     if "deficit" in text:
         return "deficit"
     return "full"
+
+
+def _match_aquacrop_soil(raw_soil: str) -> str:
+    if not raw_soil:
+        return ""
+    soil = str(raw_soil).strip()
+    if soil in AquaCropSimulator.SOIL_TYPES:
+        return soil
+    by_lower = {key.lower(): key for key in AquaCropSimulator.SOIL_TYPES}
+    return by_lower.get(soil.lower(), "")
 
 
 def _validate_acis_coordinates(latitude, longitude, province_display):
@@ -1869,6 +1865,7 @@ def acis_data_view(request):
         'popular_locations_by_province': popular_locations_by_province,
         'selected_province': selected_province,
         'selected_place_name': selected_place_name,
+        'location_prefill_note': bool(farm_defaults),
         'farm_prefill_note': bool(farm_defaults),
         'province_options': province_options,
         'acis_map_default_center': ACIS_MAP_DEFAULT_CENTER,
@@ -2704,6 +2701,37 @@ def _pm_daily_et_from_temperature(tmax, tmin, latitude, day_of_year, rh=65.0, u2
     )
     return max(float(et0), 0.0) if not pd.isna(et0) else 0.0
 
+
+def _format_forecast_fetch_error(exc: Exception) -> str:
+    """User-facing message for Environment Canada forecast failures."""
+    msg = str(exc).strip().lower()
+    if not msg:
+        return "Environment Canada forecast data could not be loaded. Please try again."
+    if "could not retrieve xml" in msg or "both stable and timestamped" in msg:
+        return (
+            "Environment Canada forecast feeds are temporarily unavailable for this location. "
+            "Try again in a few minutes or pick a nearby major city."
+        )
+    if "no forecast periods" in msg or "forecastgroup" in msg:
+        return (
+            "Environment Canada returned a forecast page we could not read. "
+            "Try the nearest major city in your province."
+        )
+    if "no forecast periods returned" in msg:
+        return (
+            "No forecast days were returned for this city. "
+            "Try another location or a shorter forecast period."
+        )
+    if "timeout" in msg or "timed out" in msg or "connection" in msg:
+        return (
+            "Could not reach Environment Canada (network timeout). "
+            "Check your connection and try again."
+        )
+    if msg.startswith("failed to fetch forecast:"):
+        return str(exc).replace("Failed to fetch forecast:", "Forecast error:", 1).strip()
+    return f"Could not load forecast: {exc}"
+
+
 def env_canada_forecast_view(request):
     """
     Standalone view to display Environment Canada precipitation forecast
@@ -2718,12 +2746,9 @@ def env_canada_forecast_view(request):
         province_display = farm_defaults.get("province")
     city_name = farm_defaults.get("city") or FORECAST_DEFAULT_CITY[province_display]
     selected_days = 7  # Default
-    crop_type = _match_forecast_crop_value(farm_defaults.get("crop_type", "")) or "wheat"
+    crop_type = _match_forecast_crop_value(farm_defaults.get("crop_type", "")) or "spring_wheat"
     soil_type = "loam"
-    crop_options = [
-        {"value": key, "label": key.replace("_", " ").title()}
-        for key in sorted(CROP_GDD_PROFILES.keys())
-    ]
+    crop_catalog_ctx = crop_catalog_context(crop_type)
     soil_options = [
         {"value": key, "label": key.replace("_", " ").title()}
         for key in sorted(SOIL_IRRIGATION_FACTORS.keys())
@@ -2759,13 +2784,14 @@ def env_canada_forecast_view(request):
             "chart_available": False,
             "crop_type": crop_type,
             "soil_type": soil_type,
-            "crop_label": next((item["label"] for item in crop_options if item["value"] == crop_type), "Wheat"),
+            "crop_label": crop_catalog_ctx["crop_display_label"],
             "soil_label": next((item["label"] for item in soil_options if item["value"] == soil_type), "Loam"),
-            "crop_options": crop_options,
             "soil_options": soil_options,
             "available_cities": all_cities,
             "cities_by_region": cities_by_region,
+            "location_prefill_note": bool(farm_defaults),
             "farm_prefill_note": bool(farm_defaults),
+            **crop_catalog_ctx,
         }
         if extra:
             ctx.update(extra)
@@ -2778,10 +2804,11 @@ def env_canada_forecast_view(request):
         ecc = FORECAST_ECC_BY_DISPLAY[province_display]
 
         city_name = request.POST.get("city_name", "").strip()
-        crop_type = request.POST.get("crop_type", "wheat").strip().lower()
+        crop_type = match_crop_slug(request.POST.get("crop_type", "spring_wheat"))
         soil_type = request.POST.get("soil_type", "loam").strip().lower()
-        if crop_type not in CROP_GDD_PROFILES:
-            crop_type = "wheat"
+        if crop_type not in CROP_ENTRIES:
+            crop_type = "spring_wheat"
+        crop_catalog_ctx = crop_catalog_context(crop_type)
         if soil_type not in SOIL_IRRIGATION_FACTORS:
             soil_type = "loam"
         try:
@@ -2800,9 +2827,16 @@ def env_canada_forecast_view(request):
 
         try:
             df = fetch_env_canada_forecast(city_name, selected_days, province_code=ecc)
+            if df is None or df.empty:
+                raise ValueError(
+                    f"No forecast periods returned for {city_name}, {province_display}."
+                )
             lat, lon = _resolve_city_lat_lon(city_name, province_display)
             _ = lon
-            df = merge_openmeteo_forecast_drivers(df, lat, lon)
+            try:
+                df = merge_openmeteo_forecast_drivers(df, lat, lon)
+            except Exception as merge_exc:
+                print(f"[FORECAST] Open-Meteo enrichment skipped: {merge_exc}")
 
             # Convert to records + daily ET₀, crop-stage ET, and latent heat flux (W/m²)
             df_forecast = []
@@ -2880,20 +2914,26 @@ def env_canada_forecast_view(request):
                 else "high"
             )
 
-            resolve_for_hist = lambda c, p=province_display: _resolve_city_lat_lon(c, p)
-            historical_confidence = build_historical_confidence(
-                city_name,
-                selected_days,
-                crop_type,
-                resolve_for_hist,
-                _pm_daily_et_from_temperature,
-            )
-            forecast_curve_soil_adjusted = [v * soil_factor for v in forecast_irrig_curve]
-            rec_chart_url = build_irrigation_confidence_plot(
-                historical_confidence, forecast_curve_soil_adjusted
-            )
-            chart_available = bool(rec_chart_url)
-            crop_label = next((item["label"] for item in crop_options if item["value"] == crop_type), "Wheat")
+            historical_confidence = None
+            rec_chart_url = None
+            chart_available = False
+            try:
+                resolve_for_hist = lambda c, p=province_display: _resolve_city_lat_lon(c, p)
+                historical_confidence = build_historical_confidence(
+                    city_name,
+                    selected_days,
+                    crop_type,
+                    resolve_for_hist,
+                    _pm_daily_et_from_temperature,
+                )
+                forecast_curve_soil_adjusted = [v * soil_factor for v in forecast_irrig_curve]
+                rec_chart_url = build_irrigation_confidence_plot(
+                    historical_confidence, forecast_curve_soil_adjusted
+                )
+                chart_available = bool(rec_chart_url)
+            except Exception as chart_exc:
+                print(f"[FORECAST] irrigation chart generation failed: {chart_exc}")
+            crop_label = crop_catalog_ctx["crop_display_label"]
             soil_label = next((item["label"] for item in soil_options if item["value"] == soil_type), "Loam")
 
             context = base_context(
@@ -2917,31 +2957,34 @@ def env_canada_forecast_view(request):
                 }
             )
 
-            persist_forecast_run(
-                request,
-                province=province_display,
-                city=city_name,
-                forecast_days=selected_days,
-                et_method="FAO-PM + GDD crop stage",
-                result_data={
-                    "df_forecast": df_forecast,
-                    "total_precip": total_precip,
-                    "estimated_et_total": estimated_et_total,
-                    "net_water_balance": net_water_balance,
-                    "irrigation_needed": irrigation_needed,
-                    "recommendation_level": recommendation_level,
-                    "crop_type": crop_type,
-                    "soil_type": soil_type,
-                    "crop_label": crop_label,
-                    "soil_label": soil_label,
-                    "soil_factor": soil_factor,
-                    "gdd_total": cumulative_gdd,
-                    "gdd_stage": current_stage_label,
-                    "historical_confidence": historical_confidence,
-                    "rec_chart_url": rec_chart_url,
-                    "show_extended_horizon_caveat": selected_days > 7,
-                },
-            )
+            try:
+                persist_forecast_run(
+                    request,
+                    province=province_display,
+                    city=city_name,
+                    forecast_days=selected_days,
+                    et_method="FAO-PM + GDD crop stage",
+                    result_data={
+                        "df_forecast": df_forecast,
+                        "total_precip": total_precip,
+                        "estimated_et_total": estimated_et_total,
+                        "net_water_balance": net_water_balance,
+                        "irrigation_needed": irrigation_needed,
+                        "recommendation_level": recommendation_level,
+                        "crop_type": crop_type,
+                        "soil_type": soil_type,
+                        "crop_label": crop_label,
+                        "soil_label": soil_label,
+                        "soil_factor": soil_factor,
+                        "gdd_total": cumulative_gdd,
+                        "gdd_stage": current_stage_label,
+                        "historical_confidence": historical_confidence,
+                        "rec_chart_url": rec_chart_url,
+                        "show_extended_horizon_caveat": selected_days > 7,
+                    },
+                )
+            except Exception as persist_exc:
+                print(f"[FORECAST] could not save run: {persist_exc}")
 
             return render(request, "et/env_canada_forecast.html", context)
 
@@ -2952,7 +2995,7 @@ def env_canada_forecast_view(request):
             print("ERROR in env_canada_forecast_view:")
             print(traceback.format_exc())
             print(f"{'='*80}\n")
-            error_message = f"Error fetching forecast: {str(e)}"
+            error_message = _format_forecast_fetch_error(e)
 
     return render(request, "et/env_canada_forecast.html", base_context())
 
@@ -2976,28 +3019,106 @@ def _normalize_aquacrop_date_str(value: str) -> str:
     return ts.strftime("%Y/%m/%d")
 
 
+def _aquacrop_save_soil_comparison(request):
+    """Save optional field soil moisture entries after a simulation run."""
+    from django.contrib import messages
+
+    from .saved_run_display import aquacrop_context_from_saved_row
+    from .supabase_storage import (
+        get_aquacrop_run_by_id,
+        patch_aquacrop_run_context,
+        resolve_farm_id,
+        save_location_season_table,
+    )
+
+    user_id = get_current_user_id(request)
+    run_id = (request.POST.get("aquacrop_run_id") or "").strip()
+    if not user_id or not run_id:
+        messages.error(request, "Could not save comparison — missing run.")
+        return redirect(reverse("et:aquacrop_simulation"))
+
+    row = get_aquacrop_run_by_id(user_id, run_id)
+    if not row:
+        messages.error(request, "Simulation run not found.")
+        return redirect(reverse("et:aquacrop_simulation"))
+
+    comparison_rows = []
+    week_starts = request.POST.getlist("compare_week_start")
+    actual_list = request.POST.getlist("compare_actual_sm")
+    sim_list = request.POST.getlist("compare_simulated_sm")
+    for i, ws in enumerate(week_starts):
+        actual_raw = actual_list[i].strip() if i < len(actual_list) else ""
+        sim_raw = sim_list[i].strip() if i < len(sim_list) else ""
+        actual_val = None
+        if actual_raw not in ("", None):
+            try:
+                actual_val = round(float(actual_raw), 1)
+            except (TypeError, ValueError):
+                actual_val = None
+        sim_val = None
+        if sim_raw not in ("", None):
+            try:
+                sim_val = round(float(sim_raw), 1)
+            except (TypeError, ValueError):
+                sim_val = None
+        diff = None
+        if actual_val is not None and sim_val is not None:
+            diff = round(actual_val - sim_val, 1)
+        comparison_rows.append(
+            {
+                "week_start": ws,
+                "simulated_pct": sim_val,
+                "actual_pct": actual_val,
+                "difference_pct": diff,
+            }
+        )
+
+    patch_aquacrop_run_context(
+        user_id,
+        run_id,
+        {
+            "soil_moisture_comparison": comparison_rows,
+            "soil_comparison_saved": True,
+        },
+    )
+
+    fid = resolve_farm_id(request, user_id)
+    if fid:
+        season_payload = {"actual_soil_moisture_rows": comparison_rows}
+        save_location_season_table(user_id, fid, season_payload)
+
+    messages.success(request, "Your field soil moisture comparison has been saved.")
+    row = get_aquacrop_run_by_id(user_id, run_id)
+    ctx = aquacrop_context_from_saved_row(row)
+    ctx["soil_comparison_saved"] = True
+    return render(request, "et/aquacrop_simulation.html", ctx)
+
+
 def aquacrop_simulation(request):
     """
     View for AquaCrop crop growth simulation
     """
+    if request.method == "POST" and request.POST.get("action") == "save_soil_comparison":
+        return _aquacrop_save_soil_comparison(request)
 
     farm_defaults = _farm_defaults_for_request(request)
     default_city = farm_defaults.get("city", "").strip()
     available_cities = sorted(ALBERTA_LOCATIONS.keys())
     if default_city not in available_cities:
         default_city = ""
-    available_crops = list(AquaCropSimulator.AVAILABLE_CROPS.keys())
-    prefilled_crop = _match_aquacrop_crop(farm_defaults.get("crop_type", ""), available_crops)
+    prefilled_crop_slug = _match_aquacrop_crop(farm_defaults.get("crop_type", ""))
     prefilled_irrigation = _map_irrigation_to_aquacrop(farm_defaults.get("irrigation_type", ""))
+    prefilled_soil = _match_aquacrop_soil(farm_defaults.get("soil_type", ""))
     default_start, default_end = _aquacrop_default_season_dates()
+    crop_catalog_ctx = crop_catalog_context(prefilled_crop_slug or "spring_wheat")
 
     context = {
-        "crops": available_crops,
         "soil_types": list(AquaCropSimulator.SOIL_TYPES.keys()),
         "available_cities": available_cities,
         "selected_city": default_city,
-        "selected_crop": prefilled_crop,
-        "selected_soil": "",
+        "selected_crop": prefilled_crop_slug,
+        "selected_crop_slug": prefilled_crop_slug or "spring_wheat",
+        "selected_soil": prefilled_soil,
         "selected_irrigation": prefilled_irrigation,
         "timestep": "",
         "start_date": default_start,
@@ -3017,25 +3138,55 @@ def aquacrop_simulation(request):
             ("full", "Full Irrigation (80% SMT)"),
             ("deficit", "Deficit Irrigation (60% SMT)"),
         ],
+        "location_prefill_note": bool(farm_defaults),
         "farm_prefill_note": bool(farm_defaults),
+        **crop_catalog_ctx,
     }
 
-    from .aquacrop_season_data import build_season_tables
+    from .aquacrop_season_data import build_season_tables, merge_saved_season_table
+
+    saved_season = None
+    loc = None
+    user_id = get_current_user_id(request)
+    if user_id:
+        loc = get_farm_for_user(user_id)
+        if loc:
+            raw_saved = loc.get("season_table_data")
+            if isinstance(raw_saved, str):
+                try:
+                    saved_season = json.loads(raw_saved)
+                except (TypeError, ValueError):
+                    saved_season = None
+            elif isinstance(raw_saved, dict):
+                saved_season = raw_saved
+
+    table_start = default_start
+    table_end = default_end
+    if saved_season:
+        if saved_season.get("start_date"):
+            table_start = str(saved_season["start_date"])
+            context["start_date"] = table_start
+        if saved_season.get("end_date"):
+            table_end = str(saved_season["end_date"])
+            context["end_date"] = table_end
 
     _coords = ALBERTA_LOCATIONS.get(default_city) if default_city else None
-    context.update(
-        build_season_tables(
-            start_date=default_start,
-            end_date=default_end,
-            city_name=default_city or None,
-            latitude=_coords["lat"] if _coords else None,
-            longitude=_coords["lon"] if _coords else None,
-            soil_type=context.get("selected_soil") or "Loam",
-            crop=prefilled_crop or "Wheat",
-            irrigation=prefilled_irrigation,
-            fetch_eccc=False,
-        )
+    season_tables = build_season_tables(
+        start_date=table_start,
+        end_date=table_end,
+        city_name=default_city or None,
+        latitude=_coords["lat"] if _coords else None,
+        longitude=_coords["lon"] if _coords else None,
+        soil_type=context.get("selected_soil") or "Loam",
+        crop=resolve_aquacrop_model(prefilled_crop_slug or "spring_wheat"),
+        irrigation=prefilled_irrigation,
+        fetch_eccc=False,
+        planting_date=(saved_season or {}).get("planting_date"),
+        application_efficiency_pct=(saved_season or {}).get("application_efficiency_pct"),
     )
+    if user_id and loc and loc.get("crop_condition") and not season_tables.get("selected_crop_condition"):
+        season_tables["selected_crop_condition"] = loc.get("crop_condition")
+    context.update(merge_saved_season_table(season_tables, saved_season))
 
     def _maturity_warning(crop_name: str, end_date_str: str):
         thresholds = {"Wheat": "09-15", "Maize": "09-20"}
@@ -3059,7 +3210,8 @@ def aquacrop_simulation(request):
     if request.method == "POST":
         try:
             timestep = request.POST.get("timestep", "weekly")
-            crop = request.POST.get("crop", "Wheat")
+            crop_slug = match_crop_slug(request.POST.get("crop", "spring_wheat"))
+            crop = resolve_aquacrop_model(crop_slug)
             soil = request.POST.get("soil", "Loam")
             irrigation = request.POST.get("irrigation", "full")
             city_name = request.POST.get("city_name", default_city).strip()
@@ -3338,11 +3490,24 @@ def aquacrop_simulation(request):
                 dry_biomass = results.get("yield_dry", results.get("yield_fresh", 0))
                 context["yield_tha"] = compute_yield_tha(dry_biomass, crop)
                 context["timestep"] = timestep
+                optimal_yield_ref = None
+                if weekly_yield_projection:
+                    last_wk = weekly_yield_projection[-1]
+                    optimal_yield_ref = last_wk.get("optimal_yield_tha") or last_wk.get("yield_tha")
+                y_tha = context.get("yield_tha") or 0
+                if optimal_yield_ref and float(optimal_yield_ref) > 0 and y_tha:
+                    context["yield_pct_of_optimal"] = round(
+                        min(100.0, 100.0 * float(y_tha) / float(optimal_yield_ref)), 1
+                    )
+                    context["optimal_yield_tha"] = round(float(optimal_yield_ref), 2)
 
             context.update(
                 {
                     "results": results,
-                    "selected_crop": crop,
+                    "selected_crop": crop_slug,
+                    "selected_crop_slug": crop_slug,
+                    "crop_display_label": crop_label(crop_slug),
+                    **(crop_catalog_context(crop_slug)),
                     "selected_soil": soil,
                     "selected_irrigation": irrigation,
                     "selected_city": city_name,
@@ -3382,15 +3547,68 @@ def aquacrop_simulation(request):
                             "weekly_yield_comparison"
                         ]
                         context["weekly_yield_projection"] = context["weekly_yield_comparison"]
+                    wb = context["actual_vs_optimal"].get("water_balance") or {}
+                    opt_y = wb.get("final_yield_optimal_tha")
+                    act_y = wb.get("final_yield_actual_tha") or context.get("yield_tha")
+                    if opt_y and float(opt_y) > 0 and act_y:
+                        context["yield_pct_of_optimal"] = round(
+                            min(100.0, 100.0 * float(act_y) / float(opt_y)), 1
+                        )
+                        context["optimal_yield_tha"] = round(float(opt_y), 2)
                 except Exception as avo_exc:
                     print(f"[AQUACROP] actual vs optimal comparison failed: {avo_exc}")
                     context["actual_vs_optimal_error"] = str(avo_exc)
                     context["has_actual_vs_optimal"] = False
 
-            persist_aquacrop_run(
+            from .aquacrop_season_data import build_soil_moisture_comparison_rows
+
+            saved_actual_by_week: dict[str, Any] = {}
+            if saved_season and isinstance(saved_season.get("actual_soil_moisture_rows"), list):
+                from .aquacrop_season_data import _normalize_week_start
+
+                for r in saved_season["actual_soil_moisture_rows"]:
+                    ws = _normalize_week_start(r.get("week_start"))
+                    if ws and r.get("actual_pct") not in (None, ""):
+                        saved_actual_by_week[ws] = r.get("actual_pct")
+
+            week_starts_for_sm = [
+                str(r.get("week_start"))
+                for r in (season_post.get("management_rows") or [])
+                if r.get("week_start")
+            ]
+            context["soil_moisture_comparison"] = build_soil_moisture_comparison_rows(
+                results,
+                start_date,
+                soil,
+                week_starts_for_sm or None,
+                saved_actual_by_week,
+            )
+
+            try:
+                from .supabase_storage import resolve_farm_id, save_location_season_table
+
+                fid = resolve_farm_id(request, get_current_user_id(request) or "")
+                if fid:
+                    save_location_season_table(
+                        get_current_user_id(request) or "",
+                        fid,
+                        {
+                            "start_date": start_date,
+                            "end_date": end_date,
+                            "planting_date": season_post.get("planting_date"),
+                            "application_efficiency_pct": season_post.get("application_efficiency_pct"),
+                            "management_rows": season_post.get("management_rows"),
+                            "weather_rows": season_post.get("weather_rows"),
+                            "crop_condition": request.POST.get("crop_condition", ""),
+                        },
+                    )
+            except Exception as season_save_exc:
+                print(f"[AQUACROP] season table save skipped: {season_save_exc}")
+
+            saved_run_row = persist_aquacrop_run(
                 request,
                 mode=sim_mode,
-                crop_type=crop,
+                crop_type=crop_slug,
                 start_date=start_date,
                 end_date=end_date,
                 results=results,
@@ -3417,8 +3635,11 @@ def aquacrop_simulation(request):
                     "total_effective_irrigation_mm": season_post.get("total_effective_irrigation_mm"),
                     "total_runoff_mm": season_post.get("total_runoff_mm"),
                     "actual_vs_optimal": context.get("actual_vs_optimal"),
+                    "soil_moisture_comparison": context.get("soil_moisture_comparison"),
                 },
             )
+            if saved_run_row and saved_run_row.get("id"):
+                context["aquacrop_run_id"] = str(saved_run_row["id"])
 
         except Exception as e:
             print("[AQUACROP_DEBUG] aquacrop_simulation exception traceback:")

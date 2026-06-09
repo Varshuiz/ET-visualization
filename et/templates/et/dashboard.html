@@ -122,8 +122,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     <span class="text-sm font-medium">History</span>
                 </a>
                 <a class="dashboard-sidebar-nav-link dashboard-nav-inactive flex items-center gap-3 p-3 rounded-lg" href="{% url 'et:farm_profile' %}">
-                    <span class="material-symbols-outlined">agriculture</span>
-                    <span class="text-sm font-medium">Farm Profile</span>
+                    <span class="material-symbols-outlined">location_on</span>
+                    <span class="text-sm font-medium">Your Regions</span>
                 </a>
             </nav>
         </div>
@@ -141,6 +141,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     <!-- Main -->
     <main class="ml-[260px] min-h-screen flex-1 w-full">
+        <form id="dashboardCsrfForm" class="hidden" aria-hidden="true">{% csrf_token %}</form>
         {% if messages %}
         <div class="px-8 pt-4">
             {% for message in messages %}
@@ -159,15 +160,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         {% if first_name %}
                         <span class="text-3xl md:text-4xl font-bold text-white">Welcome back, {{ first_name }}!</span>
                         {% else %}
-                        <span class="text-3xl md:text-4xl font-bold text-white">Farmer dashboard</span>
+                        <span class="text-3xl md:text-4xl font-bold text-white">Dashboard</span>
                         {% endif %}
                     </div>
                     <p class="text-[#c2e4da]/90 text-base max-w-xl">
-                        {% if farm %}
-                        Monitoring crop water intelligence for {{ farm.farm_name }} — {{ farm.city }}, {{ farm.province }}.
-                        {% else %}
-                        Your farm profile and recent tool activity.
-                        {% endif %}
+                        Monitoring crop water intelligence.
                     </p>
                 </div>
                 <div class="flex gap-4 flex-wrap">
@@ -264,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         </a>
                     </div>
                     <p class="mt-4 text-sm">
-                        <a href="{% url 'et:farm_profile' %}" class="text-[#0c5252] font-semibold hover:underline">Edit farm profile →</a>
+                        <a href="{% url 'et:farm_profile' %}" class="text-[#0c5252] font-semibold hover:underline">Manage your regions →</a>
                     </p>
                 </section>
 
@@ -300,7 +297,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                             —
                                             {% if row.date_range_end %}{{ row.date_range_end }}{% else %}—{% endif %}
                                         </td>
-                                        <td class="p-4 w-12 text-right align-middle">
+                                        <td class="p-4 w-20 text-right align-middle whitespace-nowrap">
+                                            {% include 'et/partials/history_note_button.html' with run_type='et' run_id=row.id %}
                                             {% include 'et/partials/history_delete_button.html' with run_type='et' run_id=row.id confirm_message='Delete this ET calculation? This cannot be undone.' %}
                                         </td>
                                     </tr>
@@ -333,7 +331,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                         <td class="p-4">{{ row.created_at|slice:":16" }}</td>
                                         <td class="p-4">{{ row.crop_type }} ({{ row.mode|default:"—" }})</td>
                                         <td class="p-4">{{ row.start_date }} – {{ row.end_date }}</td>
-                                        <td class="p-4 w-12 text-right align-middle">
+                                        <td class="p-4 w-20 text-right align-middle whitespace-nowrap">
+                                            {% include 'et/partials/history_note_button.html' with run_type='aquacrop' run_id=row.id %}
                                             {% include 'et/partials/history_delete_button.html' with run_type='aquacrop' run_id=row.id confirm_message='Delete this AquaCrop run? This cannot be undone.' %}
                                         </td>
                                     </tr>
@@ -366,7 +365,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                         <td class="p-4">{{ row.created_at|slice:":16" }}</td>
                                         <td class="p-4">{{ row.city }}, {{ row.province }}</td>
                                         <td class="p-4">{{ row.forecast_days }} days</td>
-                                        <td class="p-4 w-12 text-right align-middle">
+                                        <td class="p-4 w-20 text-right align-middle whitespace-nowrap">
+                                            {% include 'et/partials/history_note_button.html' with run_type='forecast' run_id=row.id %}
                                             {% include 'et/partials/history_delete_button.html' with run_type='forecast' run_id=row.id confirm_message='Delete this forecast run? This cannot be undone.' %}
                                         </td>
                                     </tr>
@@ -384,7 +384,7 @@ document.addEventListener('DOMContentLoaded', function () {
             <!-- Right column -->
             <div class="col-span-12 lg:col-span-4 flex flex-col gap-8">
                 <section>
-                    <h2 class="text-xs font-bold tracking-widest uppercase text-[#707978] mb-4">Farm profile</h2>
+                    <h2 class="text-xs font-bold tracking-widest uppercase text-[#707978] mb-4">Your Regions</h2>
                     <div class="bg-white p-6 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-[#eceeed]">
                         {% if farm %}
                         <div class="flex items-center gap-4 mb-6">
@@ -406,9 +406,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <span class="text-sm font-bold text-[#191c1c]">{% if farm.area_hectares %}{{ farm.area_hectares }} ha{% else %}—{% endif %}</span>
                             </div>
                         </div>
-                        <p class="text-sm text-[#3f4848] mb-6">Irrigation: {{ farm.irrigation_type|default:"—" }}</p>
                         {% else %}
-                        <p class="text-sm text-[#707978] mb-6">No farm profile yet. <a href="{% url 'et:farm_profile' %}" class="text-[#0c5252] font-semibold hover:underline">Add your farm details</a>.</p>
+                        <p class="text-sm text-[#707978] mb-6">No locations saved yet. <a href="{% url 'et:farm_profile' %}" class="text-[#0c5252] font-semibold hover:underline">Add your location details</a>.</p>
                         {% endif %}
                         <a href="{% url 'et:farm_profile' %}" class="block w-full py-3 px-4 border border-[#bfc8c8] rounded-lg text-sm font-medium text-center text-[#191c1c] hover:bg-[#eceeed] transition-colors no-underline">
                             Edit Configuration
@@ -598,6 +597,24 @@ document.addEventListener('DOMContentLoaded', function () {
             }, 100);
         }
     }
+
+    window.openRunNoteEditor = function(btn) {
+        var note = window.prompt('Note for this run (leave blank to clear):', btn.getAttribute('data-current-note') || '');
+        if (note === null) return;
+        var body = new URLSearchParams();
+        body.set('note', note);
+        var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrf) body.set('csrfmiddlewaretoken', csrf.value);
+        fetch(btn.getAttribute('data-note-url'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrf ? csrf.value : '' },
+            body: body.toString(),
+            credentials: 'same-origin',
+        }).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.success) window.location.reload();
+            else alert(data.error || 'Could not save note.');
+        }).catch(function() { alert('Could not save note.'); });
+    };
 })();
 </script>
 {% endblock %}

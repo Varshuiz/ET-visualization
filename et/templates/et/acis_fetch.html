@@ -1,10 +1,13 @@
 {% extends 'et/base.html' %}
+{% load static %}
 
 {% block title %}Prepare ET Inputs | AqualET{% endblock %}
 
 {% block body_class %}acis-setup-page{% endblock %}
 
 {% block head_assets %}
+<link rel="stylesheet" href="{% static 'et/css/form_validation.css' %}">
+<script src="{% static 'et/js/form_validation.js' %}"></script>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <script>
@@ -147,7 +150,7 @@ tailwind.config = {
                         <ul class="space-y-4">
                             <li class="flex items-start gap-3">
                                 <span class="material-symbols-outlined text-[#0c5252] text-lg mt-0.5">check_circle</span>
-                                <span class="text-sm text-[#3f4848]">Pull recent and past weather conditions for your farm area</span>
+                                <span class="text-sm text-[#3f4848]">Pull recent and past weather conditions for your location</span>
                             </li>
                             <li class="flex items-start gap-3">
                                 <span class="material-symbols-outlined text-[#0c5252] text-lg mt-0.5">check_circle</span>
@@ -177,7 +180,7 @@ tailwind.config = {
                 <div class="col-span-12 {% if not df_preview %}lg:col-span-8{% endif %}">
                     {% if not df_preview %}
                     <div class="bg-white p-6 md:p-8 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.05)] border border-[#bfc8c8]/30">
-                        <form method="post" enctype="multipart/form-data" id="acisForm" class="space-y-6" data-loading-text="Fetching historical weather data...">
+                        <form method="post" enctype="multipart/form-data" id="acisForm" class="space-y-6" data-loading-text="Fetching historical weather data..." novalidate>
                             {% csrf_token %}
 
                             {{ popular_locations_by_province|json_script:"acis-popular-locations-data" }}
@@ -213,7 +216,7 @@ tailwind.config = {
 
                             <!-- Place Name Search -->
                             <div class="input-section active" id="place-section">
-                                <h3 class="text-base font-semibold text-[#191c1c] mb-3">Pick your farm area</h3>
+                                <h3 class="text-base font-semibold text-[#191c1c] mb-3">Pick your location area</h3>
                                 <div class="flex flex-col gap-2">
                                     <label for="place_name" class="text-sm font-medium text-[#191c1c]">Closest City or Town</label>
                                     <input type="text" id="place_name" name="place_name"
@@ -227,10 +230,10 @@ tailwind.config = {
                                         <option value="{{ location }}">
                                         {% endfor %}
                                     </datalist>
-                                    <p class="text-[11px] text-[#707978] italic"><strong>Tip:</strong> Use the closest community to your farm for a fast start.</p>
-                                    {% if farm_prefill_note and not request.POST %}
+                                    <p class="text-[11px] text-[#707978] italic"><strong>Tip:</strong> Use the closest community to your field for a fast start.</p>
+                                    {% if location_prefill_note and not request.POST %}
                                     <p class="text-[11px] text-[#707978]">
-                                        Pre-filled from your farm profile. You can change these for this run.
+                                        Pre-filled from your primary location. You can change these for this run.
                                     </p>
                                     {% endif %}
                                 </div>
@@ -323,7 +326,7 @@ tailwind.config = {
                                     <div class="flex flex-col gap-2">
                                         <label for="start_date" class="text-sm font-medium text-[#191c1c]">Start Date</label>
                                         <div class="relative">
-                                            <input type="date" id="start_date" name="start_date" required
+                                            <input type="date" id="start_date" name="start_date"
                                                    class="w-full bg-white border border-[#bfc8c8] rounded-lg p-3 text-sm pr-10 focus:ring-2 focus:ring-[#0c5252] focus:border-transparent">
                                             <span class="material-symbols-outlined absolute right-3 top-3 text-[#707978] pointer-events-none text-lg">calendar_today</span>
                                         </div>
@@ -331,7 +334,7 @@ tailwind.config = {
                                     <div class="flex flex-col gap-2">
                                         <label for="end_date" class="text-sm font-medium text-[#191c1c]">End Date</label>
                                         <div class="relative">
-                                            <input type="date" id="end_date" name="end_date" required
+                                            <input type="date" id="end_date" name="end_date"
                                                    class="w-full bg-white border border-[#bfc8c8] rounded-lg p-3 text-sm pr-10 focus:ring-2 focus:ring-[#0c5252] focus:border-transparent">
                                             <span class="material-symbols-outlined absolute right-3 top-3 text-[#707978] pointer-events-none text-lg">calendar_today</span>
                                         </div>
@@ -546,6 +549,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
             locationTypeInput.value = target;
 
+            if (window.FormFieldValidation && form) {
+                window.FormFieldValidation.clearAll(form);
+            }
+
             refreshMapSizeIfVisible();
         });
     });
@@ -554,7 +561,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const loading = document.getElementById('loading');
 
     if (form && loading) {
-        form.addEventListener('submit', function() {
+        form.addEventListener('submit', function(e) {
+            if (e.defaultPrevented) return;
             loading.style.display = 'block';
         });
     }

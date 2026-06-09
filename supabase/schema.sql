@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS public.farms (
     area_hectares NUMERIC(12, 4),
     crop_type TEXT,
     irrigation_type TEXT,
+    soil_type TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

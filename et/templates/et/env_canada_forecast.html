@@ -6,6 +6,8 @@
 {% block body_class %}forecast-page{% endblock %}
 
 {% block head_assets %}
+<link rel="stylesheet" href="{% static 'et/css/form_validation.css' %}">
+<script src="{% static 'et/js/form_validation.js' %}"></script>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <script>
@@ -54,6 +56,52 @@ tailwind.config = {
     body.forecast-page > .container > .info-box,
     body.forecast-page > .container > .error-message { display: none; }
     .period-selector .period-btn { border-radius: 9999px; }
+
+    .forecast-loading-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(10, 40, 43, 0.35);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 6000;
+    }
+    .forecast-loading-overlay.active {
+        display: flex;
+    }
+    .forecast-loading-card {
+        background: white;
+        border-radius: 12px;
+        padding: 18px 20px;
+        min-width: min(300px, calc(100vw - 32px));
+        max-width: calc(100vw - 32px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+        text-align: center;
+        border: 1px solid #e1ece9;
+    }
+    .forecast-loading-card p {
+        margin: 10px 0 0;
+        color: #335d60;
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+    .forecast-loading-spinner {
+        width: 36px;
+        height: 36px;
+        margin: 0 auto;
+        border: 3px solid #d0e3e3;
+        border-top-color: #0c5252;
+        border-radius: 50%;
+        animation: forecast-spin 0.8s linear infinite;
+    }
+    @keyframes forecast-spin {
+        to { transform: rotate(360deg); }
+    }
+    .submit-btn-small.is-loading,
+    .period-btn.is-loading {
+        opacity: 0.65;
+        pointer-events: none;
+    }
 
     .forecast-card {
         background: white;
@@ -519,6 +567,13 @@ tailwind.config = {
             </div>
         </header>
 
+        <div id="forecastLoadingOverlay" class="forecast-loading-overlay" aria-live="polite" aria-busy="true" aria-hidden="true">
+            <div class="forecast-loading-card">
+                <div class="forecast-loading-spinner" aria-hidden="true"></div>
+                <p id="forecastLoadingText">Fetching Environment Canada forecast...</p>
+            </div>
+        </div>
+
         <div class="px-8 py-8 max-w-7xl mx-auto space-y-6">
             {% if is_saved_run %}
             <div class="flex flex-wrap items-center gap-3 text-sm">
@@ -529,7 +584,13 @@ tailwind.config = {
             </div>
             {% endif %}
             {% if error_message %}
-            <div class="error-message rounded-lg border border-red-200 bg-red-50 text-red-800 px-4 py-3">{{ error_message }}</div>
+            <div class="forecast-error-banner rounded-lg border border-red-200 bg-red-50 text-red-800 px-4 py-3 flex items-start gap-2" role="alert">
+                <span class="material-symbols-outlined text-base shrink-0 mt-0.5">error</span>
+                <div>
+                    <p class="font-semibold m-0">Forecast unavailable</p>
+                    <p class="m-0 mt-1 text-sm">{{ error_message }}</p>
+                </div>
+            </div>
             {% endif %}
 
             <div class="{% if df_forecast %}hidden{% endif %} space-y-6">
@@ -561,7 +622,7 @@ tailwind.config = {
         {{ cities_by_province|json_script:"forecast-cities-data" }}
         {{ default_city_by_province|json_script:"forecast-default-city-data" }}
 
-        <form method="post" id="forecastForm" data-loading-text="Updating forecast and recommendations...">
+        <form method="post" id="forecastForm" data-loading-text="Updating forecast and recommendations..." novalidate>
             {% csrf_token %}
             <input type="hidden" name="city_name" id="city_name_input" value="{{ city_name }}">
             <input type="hidden" name="days" id="days_input" value="{{ selected_days }}">
@@ -605,12 +666,7 @@ tailwind.config = {
                     </div>
                 </div>
                 <div class="selection-group">
-                    <label for="crop_type">Crop type</label>
-                    <select id="crop_type" name="crop_type">
-                        {% for crop in crop_options %}
-                        <option value="{{ crop.value }}" {% if crop.value == crop_type %}selected{% endif %}>{{ crop.label }}</option>
-                        {% endfor %}
-                    </select>
+                    {% include 'et/partials/crop_select.html' with crop_field_name='crop_type' crop_field_id='crop_type' crop_category_id='forecast_crop_category' selected_crop_slug=crop_type %}
                 </div>
                 <div class="selection-group">
                     <label for="soil_type">Soil type</label>
@@ -623,12 +679,14 @@ tailwind.config = {
 
                 <div class="form-controls-submit">
                     <span class="form-controls-label-spacer" aria-hidden="true">&nbsp;</span>
-                    <button type="submit" class="submit-btn-small" id="submitBtn">Get Forecast</button>
+                    <button type="submit" class="submit-btn-small" id="submitBtn">
+                        <span class="submit-btn-label">Get Forecast</span>
+                    </button>
                 </div>
             </div>
-            {% if farm_prefill_note and not df_forecast %}
+            {% if location_prefill_note and not df_forecast %}
             <p class="text-[11px] text-[#707978] mt-3">
-                Pre-filled from your farm profile. You can change these for this run.
+                Pre-filled from your primary location. You can change these for this run.
             </p>
             {% endif %}
         </form>
@@ -670,8 +728,10 @@ tailwind.config = {
         </div>
             </section>
             </div>
+            </div>
 
-            <div class="space-y-6">
+            <!-- forecast-results-start -->
+            <div class="space-y-6" id="forecastResultsSection">
                 {% if df_forecast %}
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <h2 class="text-xl font-semibold text-primary">Forecast Results</h2>
@@ -1002,6 +1062,39 @@ tailwind.config = {
 
 <script>
 (function() {
+const forecastForm = document.getElementById('forecastForm');
+const forecastLoadingOverlay = document.getElementById('forecastLoadingOverlay');
+const forecastLoadingText = document.getElementById('forecastLoadingText');
+const submitBtn = document.getElementById('submitBtn');
+
+function showForecastLoading(message) {
+    const text = message || 'Fetching Environment Canada forecast...';
+    if (forecastLoadingText) forecastLoadingText.textContent = text;
+    if (forecastLoadingOverlay) {
+        forecastLoadingOverlay.classList.add('active');
+        forecastLoadingOverlay.setAttribute('aria-hidden', 'false');
+    }
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.classList.add('is-loading');
+        const label = submitBtn.querySelector('.submit-btn-label');
+        if (label) label.textContent = 'Loading...';
+    }
+    document.querySelectorAll('.period-btn').forEach(function(btn) {
+        btn.classList.add('is-loading');
+        btn.disabled = true;
+    });
+}
+
+if (forecastForm) {
+    forecastForm.addEventListener('submit', function(e) {
+        if (e.defaultPrevented) return;
+        const customText = forecastForm.getAttribute('data-loading-text')
+            || 'Fetching Environment Canada forecast...';
+        showForecastLoading(customText);
+    });
+}
+
 const cityInput = document.getElementById('citySearchInput');
 const cityDropdown = document.getElementById('cityDropdown');
 const cityNameInput = document.getElementById('city_name_input');
@@ -1101,8 +1194,13 @@ function selectCity(cityName, itemEl) {
         item.classList.remove('selected');
     });
     if (itemEl) itemEl.classList.add('selected');
-    const form = document.getElementById('forecastForm');
-    if (form) form.submit();
+    if (forecastForm) {
+        if (window.FormFieldValidation && !window.FormFieldValidation.runForecastValidation()) {
+            return;
+        }
+        showForecastLoading('Updating forecast for ' + cityName + '...');
+        forecastForm.submit();
+    }
 }
 
 if (cityDropdown) {
@@ -1163,7 +1261,11 @@ function selectPeriod(days, btn) {
         b.classList.remove('selected');
     });
     if (btn) btn.classList.add('selected');
-    document.getElementById('forecastForm').submit();
+    if (window.FormFieldValidation && !window.FormFieldValidation.runForecastValidation()) {
+        return;
+    }
+    showForecastLoading('Loading ' + days + '-day forecast...');
+    if (forecastForm) forecastForm.submit();
 }
 
 function downloadForecastCSV() {

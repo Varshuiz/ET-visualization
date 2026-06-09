@@ -155,3 +155,53 @@ def get_coordinates_from_township(township, range_val, meridian="4th"):
     latitude = base_lat + lat_offset
     longitude = base_lon - lon_offset
     return (latitude, longitude)
+
+
+AQUACROP_DEFAULT_PROVINCE = "Alberta"
+AQUACROP_DEFAULT_CITY = "Calgary"
+
+
+def aquacrop_province_choices() -> list[tuple[str, str]]:
+    """Provinces supported for AquaCrop ECCC weather cities."""
+    return [(AQUACROP_DEFAULT_PROVINCE, AQUACROP_DEFAULT_PROVINCE)]
+
+
+def normalize_aquacrop_province(province: str | None) -> str:
+    allowed = {value for value, _ in aquacrop_province_choices()}
+    candidate = (province or "").strip()
+    return candidate if candidate in allowed else AQUACROP_DEFAULT_PROVINCE
+
+
+def sorted_aquacrop_cities() -> list[str]:
+    return sorted(ALBERTA_LOCATIONS.keys())
+
+
+def aquacrop_cities_for_province(province: str | None) -> list[str]:
+    if normalize_aquacrop_province(province) == AQUACROP_DEFAULT_PROVINCE:
+        return sorted_aquacrop_cities()
+    return []
+
+
+def aquacrop_cities_by_province() -> dict[str, list[str]]:
+    return {AQUACROP_DEFAULT_PROVINCE: sorted_aquacrop_cities()}
+
+
+def resolve_aquacrop_region_fields(
+    *,
+    saved_province: str | None = None,
+    saved_city: str | None = None,
+    post_province: str | None = None,
+    post_city: str | None = None,
+) -> tuple[str, str, list[str]]:
+    """Province, city, and city dropdown choices (includes legacy saved city if needed)."""
+    if post_province is not None:
+        province = normalize_aquacrop_province(post_province)
+        city = (post_city or "").strip()
+    else:
+        province = normalize_aquacrop_province(saved_province)
+        city = (saved_city or "").strip()
+
+    cities = aquacrop_cities_for_province(province)
+    if city and city not in cities:
+        cities = sorted(set(cities) | {city})
+    return province, city, cities

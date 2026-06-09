@@ -275,9 +275,25 @@ def build_actual_vs_optimal_payload(
         actual_daily_df=actual_results.get("daily_output") if actual_results else None,
     )
 
+    yield_labels = [r.get("period_label") or "" for r in weekly_yield_comparison]
+    yield_optimal = [
+        float(r.get("optimal_yield_tha") or r.get("yield_tha") or 0)
+        for r in weekly_yield_comparison
+    ]
+    yield_actual = [
+        float(r.get("your_yield_tha") or 0) if r.get("your_yield_tha") is not None else 0.0
+        for r in weekly_yield_comparison
+    ]
+    yield_chart = {
+        "labels": yield_labels,
+        "optimal_yield": yield_optimal,
+        "actual_yield": yield_actual,
+    }
+
     return {
         "flux_chart": flux_chart,
         "biomass_chart": biomass_chart,
+        "yield_chart": yield_chart,
         "weekly_yield_comparison": weekly_yield_comparison,
         "water_balance": {
             "total_precipitation_mm": round(total_precip, 1),

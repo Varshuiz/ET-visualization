@@ -1,0 +1,28 @@
+.field-invalid,
+input.field-invalid,
+select.field-invalid,
+textarea.field-invalid {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 1px #dc2626;
+}
+
+.field-error-msg {
+    color: #dc2626;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    margin: 0.25rem 0 0;
+}
+
+.form-validation-summary {
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #991b1b;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+.form-validation-summary[hidden] {
+    display: none;
+}
