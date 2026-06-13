@@ -17,8 +17,9 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from django.views.generic import RedirectView
 from django.conf import settings
+
+from et.views_auth import root_redirect_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -26,8 +27,7 @@ urlpatterns = [
     # ET Calculator app URLs
     path('et/', include('et.urls')),
     
-    # Redirect root to farmer dashboard (or login flow via protected ET Setup)
-    path('', RedirectView.as_view(url='/et/dashboard/', permanent=False)),
+    path('', root_redirect_view),
     
     # Alternative direct access routes
     path('calculator/', include('et.urls')),  # Alternative path

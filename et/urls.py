@@ -2,6 +2,7 @@ from django.urls import path
 
 from . import views
 from .auth_supabase import login_required_if_supabase_configured as protect
+from .views_auth import root_redirect_view
 
 app_name = "et"
 
@@ -32,7 +33,7 @@ urlpatterns = [
     path("help/", views.help_guide, name="help"),
     path("about/", views.about, name="about"),
     # ET calculator & tools (login required when Supabase is configured)
-    path("", protect(views.index), name="index"),
+    path("", root_redirect_view, name="index"),
     path("comparison/", protect(views.enhanced_comparison_calculator), name="comparison"),
     path("priestley-taylor/", protect(views.priestley_taylor_only), name="priestley_taylor"),
     path("penman-monteith/", protect(views.penman_monteith_only), name="penman_monteith"),

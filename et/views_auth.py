@@ -27,6 +27,13 @@ def _safe_next(request):
     return reverse("et:dashboard")
 
 
+def root_redirect_view(request):
+    """Send site root to dashboard when signed in, otherwise to login."""
+    if is_authenticated(request):
+        return redirect(reverse("et:dashboard"))
+    return redirect(reverse("et:login"))
+
+
 def _upsert_profile_background(*, user_id: str, email: str, full_name: str | None = None) -> None:
     try:
         upsert_profile(user_id=user_id, email=email, full_name=full_name)

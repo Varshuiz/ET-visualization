@@ -18,6 +18,36 @@ from .supabase_client import get_service_client, supabase_configured
 logger = logging.getLogger(__name__)
 
 
+def _supabase_error_detail(exc: BaseException) -> str:
+    """Extract Postgres/PostgREST fields for server logs (e.g. missing column)."""
+    parts: list[str] = []
+
+    if hasattr(exc, "json") and callable(exc.json):
+        try:
+            body = exc.json()
+            if isinstance(body, dict):
+                for key in ("message", "code", "details", "hint"):
+                    val = body.get(key)
+                    if val not in (None, ""):
+                        parts.append(f"{key}={val}")
+        except Exception:
+            pass
+
+    for arg in getattr(exc, "args", ()) or ():
+        if isinstance(arg, dict):
+            for key in ("message", "code", "details", "hint"):
+                val = arg.get(key)
+                if val not in (None, ""):
+                    entry = f"{key}={val}"
+                    if entry not in parts:
+                        parts.append(entry)
+
+    if parts:
+        return "; ".join(parts)
+    text = str(exc).strip()
+    return text or repr(exc)
+
+
 def _json_safe(obj: Any) -> Any:
     """Recursively convert values to JSON-serializable types (NaN/Inf → null)."""
     if obj is None:
@@ -453,11 +483,12 @@ def save_farm(
     is_primary: bool | None = None,
     crop_condition: str | None = None,
     soil_type: str | None = None,
-) -> dict | None:
+) -> tuple[dict | None, str | None]:
     uid = normalize_user_id(user_id)
     if not uid or not supabase_configured():
-        logger.error("save_farm: missing user_id or Supabase not configured")
-        return None
+        detail = "missing user_id or Supabase not configured"
+        logger.error("save_farm: %s", detail)
+        return None, detail
 
     payload = {
         "user_id": uid,
@@ -473,10 +504,14 @@ def save_farm(
     if crop_condition is not None:
         payload["crop_condition"] = crop_condition or ""
 
+    operation = "update" if farm_id else "insert"
+
     try:
         tbl = _service_table("farms")
         if tbl is None:
-            return None
+            detail = "Supabase service client unavailable"
+            logger.error("save_farm: %s (user_id=%s operation=%s)", detail, uid, operation)
+            return None, detail
 
         if is_primary:
             tbl.update({"is_primary": False}).eq("user_id", uid).execute()
@@ -500,18 +535,50 @@ def save_farm(
             rows = _rows_from_response(resp)
             if rows:
                 invalidate_farm_cache(uid)
-                return rows[0]
-            return get_farm_for_user(uid, fid)
+                return rows[0], None
+            fallback = get_farm_for_user(uid, fid)
+            if fallback:
+                return fallback, None
+            detail = f"{operation} returned no rows for farm_id={fid}"
+            logger.error(
+                "save_farm failed user_id=%s operation=%s farm_id=%s postgres_error=%s payload_keys=%s",
+                uid,
+                operation,
+                fid,
+                detail,
+                list(payload.keys()),
+            )
+            return None, detail
 
         resp = tbl.insert(payload).select("*").execute()
         rows = _rows_from_response(resp)
         if rows:
             invalidate_farm_cache(uid)
-            return rows[0]
-        return get_farm_for_user(uid)
+            return rows[0], None
+        fallback = get_farm_for_user(uid)
+        if fallback and fallback.get("farm_name") == farm_name:
+            return fallback, None
+        detail = f"{operation} returned no rows"
+        logger.error(
+            "save_farm failed user_id=%s operation=%s postgres_error=%s payload_keys=%s",
+            uid,
+            operation,
+            detail,
+            list(payload.keys()),
+        )
+        return None, detail
     except Exception as exc:
-        logger.error("Supabase save farm failed for user %s: %s", uid, exc, exc_info=True)
-        return None
+        detail = _supabase_error_detail(exc)
+        logger.error(
+            "save_farm failed user_id=%s operation=%s farm_id=%s postgres_error=%s payload_keys=%s",
+            uid,
+            operation,
+            farm_id,
+            detail,
+            list(payload.keys()),
+            exc_info=True,
+        )
+        return None, detail
 
 
 def resolve_farm_id(request, user_id: str) -> str | None:

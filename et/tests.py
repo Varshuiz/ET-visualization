@@ -417,6 +417,45 @@ class DashboardDeleteRunTests(TestCase):
         self.assertIn("#recent-history", response.url)
 
 
+class SupabaseErrorDetailTests(TestCase):
+    def test_supabase_error_detail_extracts_postgres_message(self):
+        from postgrest.exceptions import APIError
+
+        from et.supabase_storage import _supabase_error_detail
+
+        exc = APIError(
+            {
+                "message": 'column "soil_type" of relation "farms" does not exist',
+                "code": "42703",
+                "details": None,
+                "hint": None,
+            }
+        )
+        detail = _supabase_error_detail(exc)
+        self.assertIn("42703", detail)
+        self.assertIn("soil_type", detail)
+
+
+class RootRedirectTests(TestCase):
+    def test_root_redirects_anonymous_to_login(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("et:login"), response.url)
+
+    def test_root_redirects_authenticated_to_dashboard(self):
+        session = self.client.session
+        session["supabase_user_id"] = "11111111-1111-1111-1111-111111111111"
+        session.save()
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("et:dashboard"), response.url)
+
+    def test_et_index_redirects_anonymous_to_login(self):
+        response = self.client.get("/et/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("et:login"), response.url)
+
+
 class AquacropSoilMatchTests(TestCase):
     def test_match_aquacrop_soil_normalizes_labels(self):
         from et.views import _match_aquacrop_soil
@@ -497,14 +536,17 @@ class FarmProfileViewTests(TestCase):
     @patch("et.views_dashboard.list_locations_for_user")
     def test_profile_post_without_location_id_inserts(self, mock_list, _mock_profile, mock_save, _mock_log):
         mock_list.return_value = self._locations()
-        mock_save.return_value = {
-            "id": self.loc_b,
-            "farm_name": "South Field",
-            "province": "Alberta",
-            "city": "Lethbridge",
-            "crop_type": "barley",
-            "is_primary": False,
-        }
+        mock_save.return_value = (
+            {
+                "id": self.loc_b,
+                "farm_name": "South Field",
+                "province": "Alberta",
+                "city": "Lethbridge",
+                "crop_type": "barley",
+                "is_primary": False,
+            },
+            None,
+        )
         response = self.client.post(
             reverse("et:farm_profile"),
             {

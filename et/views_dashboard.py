@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -18,11 +19,6 @@ from .et_results_display import comparison_context_from_saved_row, parse_run_res
 from .saved_run_display import aquacrop_context_from_saved_row, forecast_context_from_saved_row
 from .persistence import log_feature_usage
 from .crop_catalog import crop_catalog_context, crop_label, match_crop_slug
-from .location_services import (
-    AQUACROP_DEFAULT_PROVINCE,
-    aquacrop_cities_by_province,
-    resolve_aquacrop_region_fields,
-)
 from .supabase_storage import (
     DASHBOARD_AQUACROP_COLUMNS,
     DASHBOARD_ET_COLUMNS,
@@ -44,6 +40,14 @@ from .supabase_storage import (
     set_primary_location,
     update_run_note,
 )
+
+from .location_services import (
+    AQUACROP_DEFAULT_PROVINCE,
+    aquacrop_cities_by_province,
+    resolve_aquacrop_region_fields,
+)
+
+logger = logging.getLogger(__name__)
 
 DASHBOARD_RUN_LIMIT = 5
 
@@ -359,7 +363,7 @@ def farm_profile_view(request):
                 None,
             )
         is_new = not update_row
-        saved = save_farm(
+        saved, save_error = save_farm(
             user_id=normalize_user_id(user_id),
             farm_id=str(update_row["id"]) if update_row and update_row.get("id") else None,
             farm_name=form.cleaned_data["farm_name"],
@@ -381,6 +385,18 @@ def farm_profile_view(request):
             log_feature_usage(request, "location_profile", "run")
             return redirect(f"{reverse('et:farm_profile')}?location={saved['id']}")
 
+        logger.error(
+            "farm_profile_view location save failed user_id=%s is_new=%s location_id=%s "
+            "farm_name=%r province=%r city=%r soil_type=%r postgres_error=%s",
+            user_id,
+            is_new,
+            post_location_id or None,
+            form.cleaned_data.get("farm_name"),
+            form.cleaned_data.get("province"),
+            form.cleaned_data.get("city"),
+            (form.cleaned_data.get("soil_type") or "").strip(),
+            save_error or "unknown",
+        )
         messages.error(
             request,
             "Could not save location profile. Confirm Supabase tables exist and run migrations 004–005 if needed.",
