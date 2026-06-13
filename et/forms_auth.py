@@ -35,10 +35,32 @@ class LoginForm(forms.Form):
 _REGION_SELECT_ATTRS = {"class": "region-form-select"}
 
 
+_REGION_NUMBER_ATTRS = {"class": "region-form-select", "step": "0.0001"}
+
+
 class FarmProfileForm(forms.Form):
     farm_name = forms.CharField(max_length=200, label="Location name")
+    location_input_mode = forms.ChoiceField(
+        choices=[("city", "City/Town"), ("coordinates", "Coordinates")],
+        initial="city",
+        widget=forms.HiddenInput(attrs={"id": "location_input_mode"}),
+    )
     province = forms.ChoiceField(choices=[], widget=forms.Select(attrs=_REGION_SELECT_ATTRS))
-    city = forms.ChoiceField(choices=[], widget=forms.Select(attrs=_REGION_SELECT_ATTRS))
+    city = forms.ChoiceField(choices=[], required=False, widget=forms.Select(attrs=_REGION_SELECT_ATTRS))
+    latitude = forms.DecimalField(
+        max_digits=10,
+        decimal_places=7,
+        required=False,
+        label="Latitude",
+        widget=forms.NumberInput(attrs=_REGION_NUMBER_ATTRS),
+    )
+    longitude = forms.DecimalField(
+        max_digits=10,
+        decimal_places=7,
+        required=False,
+        label="Longitude",
+        widget=forms.NumberInput(attrs=_REGION_NUMBER_ATTRS),
+    )
     area_hectares = forms.DecimalField(
         max_digits=12,
         decimal_places=4,
@@ -66,6 +88,9 @@ class FarmProfileForm(forms.Form):
         self.fields["soil_type"].choices = [("", "Select soil type")] + [(name, name) for name in soils]
 
     def clean_city(self):
+        mode = (self.data.get("location_input_mode") or "city").strip().lower()
+        if mode == "coordinates":
+            return (self.cleaned_data.get("city") or "").strip()
         city = (self.cleaned_data.get("city") or "").strip()
         if not city:
             raise forms.ValidationError("Select a city.")
@@ -73,7 +98,21 @@ class FarmProfileForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
+        mode = (cleaned.get("location_input_mode") or "city").strip().lower()
         province = cleaned.get("province")
+        if mode == "coordinates":
+            lat = cleaned.get("latitude")
+            lon = cleaned.get("longitude")
+            if lat is None or lon is None:
+                raise forms.ValidationError("Enter both latitude and longitude, or pick a point on the map.")
+            from .location_services import validate_coordinates_in_province
+
+            try:
+                validate_coordinates_in_province(float(lat), float(lon), province or "")
+            except ValueError as exc:
+                raise forms.ValidationError(str(exc)) from exc
+            return cleaned
+
         city = cleaned.get("city")
         if not province or not city:
             return cleaned

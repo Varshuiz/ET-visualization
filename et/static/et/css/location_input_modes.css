@@ -1,0 +1,51 @@
+.location-input-modes .input-section {
+    display: none;
+}
+
+.location-input-modes .input-section.active {
+    display: block;
+}
+
+.location-input-modes .location-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    background: #eceeed;
+    border-radius: 0.5rem;
+    max-width: fit-content;
+}
+
+.location-input-modes .location-toggle button {
+    border: none;
+    background: transparent;
+    padding: 0.5rem 1.25rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    color: #3f4848;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.location-input-modes .location-toggle button.active {
+    background: #ffffff;
+    color: #0c5252;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.location-input-modes .location-map {
+    height: 320px;
+    min-height: 200px;
+    border-radius: 0.75rem;
+    border: 1px solid #bfc8c8;
+    margin-top: 0.75rem;
+    overflow: hidden;
+}
+
+@media (max-width: 768px) {
+    .location-input-modes .location-map {
+        height: 240px;
+    }
+}

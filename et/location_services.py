@@ -160,6 +160,68 @@ def get_coordinates_from_township(township, range_val, meridian="4th"):
 AQUACROP_DEFAULT_PROVINCE = "Alberta"
 AQUACROP_DEFAULT_CITY = "Calgary"
 
+PROVINCE_GEO_BOUNDS = {
+    "Alberta": (49.0, 60.0, -120.0, -110.0),
+    "British Columbia": (48.2, 60.1, -139.1, -114.0),
+    "Saskatchewan": (49.0, 60.0, -110.5, -101.3),
+    "Manitoba": (49.0, 60.0, -102.1, -89.0),
+}
+
+PROVINCE_MAP_CENTERS = {
+    "Alberta": (53.5, -114.0),
+    "British Columbia": (54.0, -125.0),
+    "Saskatchewan": (52.0, -106.0),
+    "Manitoba": (52.5, -98.0),
+}
+
+
+def validate_coordinates_in_province(latitude: float, longitude: float, province: str) -> None:
+    bounds = PROVINCE_GEO_BOUNDS.get(province, PROVINCE_GEO_BOUNDS[AQUACROP_DEFAULT_PROVINCE])
+    lat_min, lat_max, lon_min, lon_max = bounds
+    if not (lat_min <= latitude <= lat_max):
+        raise ValueError(f"Latitude must be between {lat_min} and {lat_max} for {province}")
+    if not (lon_min <= longitude <= lon_max):
+        raise ValueError(f"Longitude must be between {lon_min} and {lon_max} for {province}")
+
+
+def coordinates_for_city(city: str, province: str) -> tuple[float | None, float | None]:
+    if normalize_aquacrop_province(province) == AQUACROP_DEFAULT_PROVINCE and city in ALBERTA_LOCATIONS:
+        loc = ALBERTA_LOCATIONS[city]
+        return float(loc["lat"]), float(loc["lon"])
+    return None, None
+
+
+def format_coordinate_label(latitude: float, longitude: float) -> str:
+    lat = f"{latitude:.4f}°N" if latitude >= 0 else f"{abs(latitude):.4f}°S"
+    lon = f"{abs(longitude):.4f}°W" if longitude < 0 else f"{longitude:.4f}°E"
+    return f"{lat}, {lon}"
+
+
+def resolve_saved_location_fields(
+    *,
+    location_input_mode: str,
+    province: str,
+    city: str,
+    latitude: float | None,
+    longitude: float | None,
+) -> tuple[str, str, float | None, float | None]:
+    """Normalize city/province/lat/lon for persistence."""
+    mode = (location_input_mode or "city").strip().lower()
+    province = normalize_aquacrop_province(province)
+    if mode == "coordinates":
+        if latitude is None or longitude is None:
+            raise ValueError("Latitude and longitude are required for coordinate mode.")
+        validate_coordinates_in_province(float(latitude), float(longitude), province)
+        lat = float(latitude)
+        lon = float(longitude)
+        return province, format_coordinate_label(lat, lon), lat, lon
+
+    city = (city or "").strip()
+    if not city:
+        raise ValueError("Select a city.")
+    lat, lon = coordinates_for_city(city, province)
+    return province, city, lat, lon
+
 
 def aquacrop_province_choices() -> list[tuple[str, str]]:
     """Provinces supported for AquaCrop ECCC weather cities."""

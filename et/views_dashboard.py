@@ -43,8 +43,10 @@ from .supabase_storage import (
 
 from .location_services import (
     AQUACROP_DEFAULT_PROVINCE,
+    PROVINCE_MAP_CENTERS,
     aquacrop_cities_by_province,
     resolve_aquacrop_region_fields,
+    resolve_saved_location_fields,
 )
 
 logger = logging.getLogger(__name__)
@@ -317,7 +319,10 @@ def farm_profile_view(request):
             saved_city=(existing or {}).get("city"),
         )
 
-    initial = {"province": region_province}
+    initial = {
+        "province": region_province,
+        "location_input_mode": "city",
+    }
     if existing:
         initial.update(
             {
@@ -326,6 +331,9 @@ def farm_profile_view(request):
                 "area_hectares": existing.get("area_hectares"),
                 "crop_type": match_crop_slug(existing.get("crop_type", "")),
                 "soil_type": (existing.get("soil_type") or "").strip(),
+                "location_input_mode": (existing.get("location_input_mode") or "city").strip(),
+                "latitude": existing.get("latitude"),
+                "longitude": existing.get("longitude"),
             }
         )
     elif not locations:
@@ -363,18 +371,36 @@ def farm_profile_view(request):
                 None,
             )
         is_new = not update_row
-        saved, save_error = save_farm(
-            user_id=normalize_user_id(user_id),
-            farm_id=str(update_row["id"]) if update_row and update_row.get("id") else None,
-            farm_name=form.cleaned_data["farm_name"],
-            province=form.cleaned_data["province"],
-            city=form.cleaned_data["city"],
-            area_hectares=float(area) if area is not None else None,
-            crop_type=crop_slug,
-            irrigation_type=(update_row.get("irrigation_type") or "") if update_row else "",
-            soil_type=(form.cleaned_data.get("soil_type") or "").strip(),
-            is_primary=True if is_new and not locations else None,
-        )
+        try:
+            province, city, latitude, longitude = resolve_saved_location_fields(
+                location_input_mode=form.cleaned_data.get("location_input_mode") or "city",
+                province=form.cleaned_data["province"],
+                city=form.cleaned_data.get("city") or "",
+                latitude=form.cleaned_data.get("latitude"),
+                longitude=form.cleaned_data.get("longitude"),
+            )
+        except ValueError as exc:
+            form.add_error(None, str(exc))
+            province = city = latitude = longitude = None
+
+        if province and city:
+            saved, save_error = save_farm(
+                user_id=normalize_user_id(user_id),
+                farm_id=str(update_row["id"]) if update_row and update_row.get("id") else None,
+                farm_name=form.cleaned_data["farm_name"],
+                province=province,
+                city=city,
+                area_hectares=float(area) if area is not None else None,
+                crop_type=crop_slug,
+                irrigation_type=(update_row.get("irrigation_type") or "") if update_row else "",
+                soil_type=(form.cleaned_data.get("soil_type") or "").strip(),
+                location_input_mode=form.cleaned_data.get("location_input_mode") or "city",
+                latitude=latitude,
+                longitude=longitude,
+                is_primary=True if is_new and not locations else None,
+            )
+        else:
+            saved, save_error = None, "validation failed"
         if saved and saved.get("id"):
             request.session[SESSION_ACTIVE_FARM_ID] = str(saved["id"])
             request.session.modified = True
@@ -399,7 +425,7 @@ def farm_profile_view(request):
         )
         messages.error(
             request,
-            "Could not save location profile. Confirm Supabase tables exist and run migrations 004–005 if needed.",
+            "Could not save location profile. Confirm Supabase tables exist and run migrations 004–006 if needed.",
         )
 
     numbered_locations = []
@@ -420,7 +446,9 @@ def farm_profile_view(request):
         "edit_location_id": str(existing.get("id")) if existing and existing.get("id") else "",
         "adding_new": adding_new and not existing,
         "cities_by_province": aquacrop_cities_by_province(),
+        "map_centers_by_province": PROVINCE_MAP_CENTERS,
         "selected_province": region_province,
+        "location_input_mode": (initial.get("location_input_mode") if not is_save_post else request.POST.get("location_input_mode")) or "city",
         **crop_catalog_context(
             match_crop_slug(
                 (request.POST.get("crop_type") if is_save_post else initial.get("crop_type")) or "spring_wheat"

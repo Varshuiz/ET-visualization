@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS public.farms (
     crop_type TEXT,
     irrigation_type TEXT,
     soil_type TEXT,
+    latitude NUMERIC(10, 7),
+    longitude NUMERIC(10, 7),
+    location_input_mode TEXT NOT NULL DEFAULT 'city',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

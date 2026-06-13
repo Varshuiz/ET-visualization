@@ -8,6 +8,8 @@
 {% block head_assets %}
 <link rel="stylesheet" href="{% static 'et/css/form_validation.css' %}">
 <script src="{% static 'et/js/form_validation.js' %}"></script>
+<link rel="stylesheet" href="{% static 'et/css/location_input_modes.css' %}">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -103,6 +105,8 @@ document.addEventListener('DOMContentLoaded', function () {
     .location-profile-page .region-form-select,
     .location-profile-page #id_area_hectares,
     .location-profile-page #id_soil_type,
+    .location-profile-page #id_latitude,
+    .location-profile-page #id_longitude,
     .location-profile-page .crop-category-select,
     .location-profile-page .crop-slug-select {
         width: 100%;
@@ -123,6 +127,8 @@ document.addEventListener('DOMContentLoaded', function () {
     .location-profile-page .region-form-select:focus,
     .location-profile-page #id_area_hectares:focus,
     .location-profile-page #id_soil_type:focus,
+    .location-profile-page #id_latitude:focus,
+    .location-profile-page #id_longitude:focus,
     .location-profile-page .crop-category-select:focus,
     .location-profile-page .crop-slug-select:focus {
         outline: none;
@@ -209,7 +215,13 @@ document.addEventListener('DOMContentLoaded', function () {
                                         <span class="px-2 py-0.5 bg-secondary-container text-on-secondary-container text-[10px] font-bold rounded-full uppercase tracking-tighter">Primary</span>
                                         {% endif %}
                                     </div>
-                                    <p class="text-sm text-on-surface-variant">{{ loc.city }}{% if loc.city and loc.province %}, {% endif %}{{ loc.province }}</p>
+                                    <p class="text-sm text-on-surface-variant">
+                                        {% if loc.location_input_mode == 'coordinates' and loc.latitude and loc.longitude %}
+                                        {{ loc.latitude|floatformat:4 }}°, {{ loc.longitude|floatformat:4 }}° — {{ loc.province }}
+                                        {% else %}
+                                        {{ loc.city }}{% if loc.city and loc.province %}, {% endif %}{{ loc.province }}
+                                        {% endif %}
+                                    </p>
                                 </div>
                             </div>
                             <div class="flex flex-wrap items-center gap-4 sm:gap-6 pl-16 sm:pl-0">
@@ -268,23 +280,15 @@ document.addEventListener('DOMContentLoaded', function () {
                             <input type="hidden" name="action" value="save">
                             <input type="hidden" name="location_id" value="{{ edit_location_id }}">
 
-                            <!-- Grid 1: name + province/city -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <!-- Location name + specification -->
+                            <div class="grid grid-cols-1 gap-8">
                                 <div class="form-group space-y-2">
                                     <label for="id_farm_name" class="region-field-label block">Location name</label>
                                     {{ form.farm_name }}
                                 </div>
-                                <div class="grid grid-cols-2 gap-4">
-                                    {{ cities_by_province|json_script:"region-cities-data" }}
-                                    <div class="form-group space-y-2">
-                                        <label for="id_province" class="region-field-label block">Province</label>
-                                        {{ form.province }}
-                                    </div>
-                                    <div class="form-group space-y-2">
-                                        <label for="id_city" class="region-field-label block">City</label>
-                                        {{ form.city }}
-                                    </div>
-                                </div>
+                                {{ cities_by_province|json_script:"region-cities-data" }}
+                                {{ map_centers_by_province|json_script:"region-map-centers-data" }}
+                                {% include 'et/partials/location_input_modes.html' with location_input_mode=location_input_mode label_class='region-field-label block' %}
                             </div>
 
                             <!-- Grid 2: area + soil + crop -->
@@ -321,6 +325,8 @@ document.addEventListener('DOMContentLoaded', function () {
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{% static 'et/js/location_input_modes.js' %}"></script>
 <script>
 (function regionProfileUi() {
     function parseJsonScript(id) {
@@ -363,6 +369,20 @@ document.addEventListener('DOMContentLoaded', function () {
     if (provinceSelect && citySelect) {
         provinceSelect.addEventListener('change', function () {
             rebuildCitySelect(provinceSelect.value, '');
+        });
+    }
+
+    if (typeof initLocationInputModes === 'function') {
+        initLocationInputModes({
+            root: document.getElementById('locationInputModes'),
+            formId: 'locationProfileForm',
+            locationTypeInputId: 'location_input_mode',
+            mapElementId: 'regionLocationMap',
+            latInputId: 'id_latitude',
+            lonInputId: 'id_longitude',
+            provinceSelectId: 'id_province',
+            mapCentersScriptId: 'region-map-centers-data',
+            initialMode: document.getElementById('location_input_mode')?.value || 'city',
         });
     }
 

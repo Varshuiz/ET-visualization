@@ -1,0 +1,53 @@
+{# City/Town vs Coordinates location input (shared with ET Setup). #}
+{% load static %}
+<div class="location-input-modes space-y-4" id="{{ wrapper_id|default:'locationInputModes' }}">
+    <div>
+        <span class="{% if label_class %}{{ label_class }}{% else %}text-xs font-bold tracking-widest uppercase text-on-surface-variant{% endif %} block mb-3">
+            Location specification
+        </span>
+        <div class="location-toggle">
+            <button type="button" class="{% if location_input_mode != 'coordinates' %}active{% endif %}" data-target="place">
+                City / Town
+            </button>
+            <button type="button" class="{% if location_input_mode == 'coordinates' %}active{% endif %}" data-target="coordinates">
+                Coordinates
+            </button>
+        </div>
+    </div>
+
+    {{ form.location_input_mode }}
+
+    <div class="input-section {% if location_input_mode != 'coordinates' %}active{% endif %}" id="place-section">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="form-group space-y-2">
+                <label for="{{ province_field_id|default:'id_province' }}" class="{% if label_class %}{{ label_class }}{% else %}region-field-label block{% endif %}">Province</label>
+                {{ form.province }}
+            </div>
+            <div class="form-group space-y-2">
+                <label for="{{ city_field_id|default:'id_city' }}" class="{% if label_class %}{{ label_class }}{% else %}region-field-label block{% endif %}">City</label>
+                {{ form.city }}
+            </div>
+        </div>
+    </div>
+
+    <div class="input-section {% if location_input_mode == 'coordinates' %}active{% endif %}" id="coordinates-section">
+        <p class="text-sm text-on-surface-variant m-0 mb-3">
+            Enter decimal degrees or click the map to set latitude and longitude.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="form-group space-y-2">
+                <label for="{{ lat_field_id|default:'id_latitude' }}" class="{% if label_class %}{{ label_class }}{% else %}region-field-label block{% endif %}">Latitude</label>
+                {{ form.latitude }}
+            </div>
+            <div class="form-group space-y-2">
+                <label for="{{ lon_field_id|default:'id_longitude' }}" class="{% if label_class %}{{ label_class }}{% else %}region-field-label block{% endif %}">Longitude</label>
+                {{ form.longitude }}
+            </div>
+        </div>
+        <div class="mt-4">
+            <strong class="block text-sm font-semibold text-primary">Map picker</strong>
+            <small class="block text-xs text-on-surface-variant mt-1">Tap the map to set latitude and longitude.</small>
+            <div id="{{ map_element_id|default:'regionLocationMap' }}" class="location-map"></div>
+        </div>
+    </div>
+</div>

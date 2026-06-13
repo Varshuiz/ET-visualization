@@ -483,6 +483,9 @@ def save_farm(
     is_primary: bool | None = None,
     crop_condition: str | None = None,
     soil_type: str | None = None,
+    location_input_mode: str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
 ) -> tuple[dict | None, str | None]:
     uid = normalize_user_id(user_id)
     if not uid or not supabase_configured():
@@ -501,6 +504,12 @@ def save_farm(
     }
     if soil_type is not None:
         payload["soil_type"] = soil_type or ""
+    if location_input_mode is not None:
+        payload["location_input_mode"] = location_input_mode or "city"
+    if latitude is not None:
+        payload["latitude"] = latitude
+    if longitude is not None:
+        payload["longitude"] = longitude
     if crop_condition is not None:
         payload["crop_condition"] = crop_condition or ""
 

@@ -417,6 +417,36 @@ class DashboardDeleteRunTests(TestCase):
         self.assertIn("#recent-history", response.url)
 
 
+class LocationFieldResolutionTests(TestCase):
+    def test_city_mode_resolves_alberta_coordinates(self):
+        from et.location_services import resolve_saved_location_fields
+
+        province, city, lat, lon = resolve_saved_location_fields(
+            location_input_mode="city",
+            province="Alberta",
+            city="Calgary",
+            latitude=None,
+            longitude=None,
+        )
+        self.assertEqual(city, "Calgary")
+        self.assertAlmostEqual(lat, 51.0447, places=3)
+        self.assertAlmostEqual(lon, -114.0719, places=3)
+
+    def test_coordinates_mode_formats_city_label(self):
+        from et.location_services import resolve_saved_location_fields
+
+        province, city, lat, lon = resolve_saved_location_fields(
+            location_input_mode="coordinates",
+            province="Alberta",
+            city="",
+            latitude=50.5644,
+            longitude=-111.8986,
+        )
+        self.assertIn("50.5644", city)
+        self.assertEqual(lat, 50.5644)
+        self.assertEqual(lon, -111.8986)
+
+
 class SupabaseErrorDetailTests(TestCase):
     def test_supabase_error_detail_extracts_postgres_message(self):
         from postgrest.exceptions import APIError
@@ -558,6 +588,7 @@ class FarmProfileViewTests(TestCase):
                 "area_hectares": "25",
                 "crop_type": "barley",
                 "soil_type": "Loam",
+                "location_input_mode": "city",
             },
         )
         self.assertEqual(response.status_code, 302)
