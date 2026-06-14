@@ -149,6 +149,17 @@ def aquacrop_context_from_saved_row(row: dict) -> dict[str, Any]:
 
     has_charts = bool(results.get("growth_chart") and results.get("water_balance_chart"))
 
+    prior_runs: list[dict] = []
+    uid = row.get("user_id")
+    if uid:
+        from .aquacrop_run_comparison import build_aquacrop_previous_runs_payload
+        from .supabase_storage import list_recent_aquacrop_runs
+
+        prior_runs = build_aquacrop_previous_runs_payload(
+            list_recent_aquacrop_runs(str(uid), limit=30),
+            exclude_run_id=str(row.get("id") or ""),
+        )
+
     return {
         "crops": [crop] if crop else [],
         "soil_types": [extra.get("soil")] if extra.get("soil") else [],
@@ -185,9 +196,8 @@ def aquacrop_context_from_saved_row(row: dict) -> dict[str, Any]:
         "actual_vs_optimal": extra.get("actual_vs_optimal"),
         "has_actual_vs_optimal": bool(extra.get("actual_vs_optimal")),
         "actual_vs_optimal_error": None,
-        "soil_moisture_comparison": extra.get("soil_moisture_comparison") or [],
-        "soil_comparison_saved": bool(extra.get("soil_comparison_saved")),
         "aquacrop_run_id": str(row.get("id") or ""),
+        "aquacrop_previous_runs": prior_runs,
         "irrigation_methods": [],
         "farm_prefill_note": False,
         "error_message": None,

@@ -598,23 +598,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    window.openRunNoteEditor = function(btn) {
-        var note = window.prompt('Note for this run (leave blank to clear):', btn.getAttribute('data-current-note') || '');
-        if (note === null) return;
-        var body = new URLSearchParams();
-        body.set('note', note);
-        var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
-        if (csrf) body.set('csrfmiddlewaretoken', csrf.value);
-        fetch(btn.getAttribute('data-note-url'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrf ? csrf.value : '' },
-            body: body.toString(),
-            credentials: 'same-origin',
-        }).then(function(r) { return r.json(); }).then(function(data) {
-            if (data.success) window.location.reload();
-            else alert(data.error || 'Could not save note.');
-        }).catch(function() { alert('Could not save note.'); });
-    };
 })();
 </script>
 {% endblock %}

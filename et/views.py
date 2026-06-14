@@ -109,7 +109,6 @@ import requests
 from django.core.cache import cache
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
-from django.urls import reverse
 
 from .et_growing_season import (
     calculate_growing_season_stats,
@@ -3019,88 +3018,10 @@ def _normalize_aquacrop_date_str(value: str) -> str:
     return ts.strftime("%Y/%m/%d")
 
 
-def _aquacrop_save_soil_comparison(request):
-    """Save optional field soil moisture entries after a simulation run."""
-    from django.contrib import messages
-
-    from .saved_run_display import aquacrop_context_from_saved_row
-    from .supabase_storage import (
-        get_aquacrop_run_by_id,
-        patch_aquacrop_run_context,
-        resolve_farm_id,
-        save_location_season_table,
-    )
-
-    user_id = get_current_user_id(request)
-    run_id = (request.POST.get("aquacrop_run_id") or "").strip()
-    if not user_id or not run_id:
-        messages.error(request, "Could not save comparison — missing run.")
-        return redirect(reverse("et:aquacrop_simulation"))
-
-    row = get_aquacrop_run_by_id(user_id, run_id)
-    if not row:
-        messages.error(request, "Simulation run not found.")
-        return redirect(reverse("et:aquacrop_simulation"))
-
-    comparison_rows = []
-    week_starts = request.POST.getlist("compare_week_start")
-    actual_list = request.POST.getlist("compare_actual_sm")
-    sim_list = request.POST.getlist("compare_simulated_sm")
-    for i, ws in enumerate(week_starts):
-        actual_raw = actual_list[i].strip() if i < len(actual_list) else ""
-        sim_raw = sim_list[i].strip() if i < len(sim_list) else ""
-        actual_val = None
-        if actual_raw not in ("", None):
-            try:
-                actual_val = round(float(actual_raw), 1)
-            except (TypeError, ValueError):
-                actual_val = None
-        sim_val = None
-        if sim_raw not in ("", None):
-            try:
-                sim_val = round(float(sim_raw), 1)
-            except (TypeError, ValueError):
-                sim_val = None
-        diff = None
-        if actual_val is not None and sim_val is not None:
-            diff = round(actual_val - sim_val, 1)
-        comparison_rows.append(
-            {
-                "week_start": ws,
-                "simulated_pct": sim_val,
-                "actual_pct": actual_val,
-                "difference_pct": diff,
-            }
-        )
-
-    patch_aquacrop_run_context(
-        user_id,
-        run_id,
-        {
-            "soil_moisture_comparison": comparison_rows,
-            "soil_comparison_saved": True,
-        },
-    )
-
-    fid = resolve_farm_id(request, user_id)
-    if fid:
-        season_payload = {"actual_soil_moisture_rows": comparison_rows}
-        save_location_season_table(user_id, fid, season_payload)
-
-    messages.success(request, "Your field soil moisture comparison has been saved.")
-    row = get_aquacrop_run_by_id(user_id, run_id)
-    ctx = aquacrop_context_from_saved_row(row)
-    ctx["soil_comparison_saved"] = True
-    return render(request, "et/aquacrop_simulation.html", ctx)
-
-
 def aquacrop_simulation(request):
     """
     View for AquaCrop crop growth simulation
     """
-    if request.method == "POST" and request.POST.get("action") == "save_soil_comparison":
-        return _aquacrop_save_soil_comparison(request)
-
     farm_defaults = _farm_defaults_for_request(request)
     default_city = farm_defaults.get("city", "").strip()
     available_cities = sorted(ALBERTA_LOCATIONS.keys())
@@ -3131,6 +3052,8 @@ def aquacrop_simulation(request):
         "historical_results_rows": [],
         "weekly_yield_projection": [],
         "weekly_yield_comparison": [],
+        "aquacrop_previous_runs": [],
+        "aquacrop_run_id": "",
         "forecast_mode_caveat": None,
         "multi_year_mode": False,
         "irrigation_methods": [
@@ -3560,30 +3483,6 @@ def aquacrop_simulation(request):
                     context["actual_vs_optimal_error"] = str(avo_exc)
                     context["has_actual_vs_optimal"] = False
 
-            from .aquacrop_season_data import build_soil_moisture_comparison_rows
-
-            saved_actual_by_week: dict[str, Any] = {}
-            if saved_season and isinstance(saved_season.get("actual_soil_moisture_rows"), list):
-                from .aquacrop_season_data import _normalize_week_start
-
-                for r in saved_season["actual_soil_moisture_rows"]:
-                    ws = _normalize_week_start(r.get("week_start"))
-                    if ws and r.get("actual_pct") not in (None, ""):
-                        saved_actual_by_week[ws] = r.get("actual_pct")
-
-            week_starts_for_sm = [
-                str(r.get("week_start"))
-                for r in (season_post.get("management_rows") or [])
-                if r.get("week_start")
-            ]
-            context["soil_moisture_comparison"] = build_soil_moisture_comparison_rows(
-                results,
-                start_date,
-                soil,
-                week_starts_for_sm or None,
-                saved_actual_by_week,
-            )
-
             try:
                 from .supabase_storage import resolve_farm_id, save_location_season_table
 
@@ -3635,11 +3534,20 @@ def aquacrop_simulation(request):
                     "total_effective_irrigation_mm": season_post.get("total_effective_irrigation_mm"),
                     "total_runoff_mm": season_post.get("total_runoff_mm"),
                     "actual_vs_optimal": context.get("actual_vs_optimal"),
-                    "soil_moisture_comparison": context.get("soil_moisture_comparison"),
                 },
             )
             if saved_run_row and saved_run_row.get("id"):
                 context["aquacrop_run_id"] = str(saved_run_row["id"])
+
+            compare_uid = get_current_user_id(request)
+            if compare_uid and context.get("has_results"):
+                from .aquacrop_run_comparison import build_aquacrop_previous_runs_payload
+                from .supabase_storage import list_recent_aquacrop_runs
+
+                context["aquacrop_previous_runs"] = build_aquacrop_previous_runs_payload(
+                    list_recent_aquacrop_runs(compare_uid, limit=30),
+                    exclude_run_id=context.get("aquacrop_run_id"),
+                )
 
         except Exception as e:
             print("[AQUACROP_DEBUG] aquacrop_simulation exception traceback:")

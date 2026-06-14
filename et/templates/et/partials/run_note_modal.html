@@ -1,0 +1,32 @@
+{% load static %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'et/css/run_note_modal.css' %}">
+<div id="runNoteModal"
+     class="run-note-modal"
+     aria-hidden="true"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="runNoteModalTitle">
+    <div class="run-note-modal__backdrop" data-run-note-dismiss aria-hidden="true"></div>
+    <div class="run-note-modal__dialog">
+        <h2 id="runNoteModalTitle" class="run-note-modal__title">Add Note</h2>
+        <p class="run-note-modal__subtitle">Add a note to this run for your records.</p>
+        <textarea id="runNoteModalTextarea"
+                  class="run-note-modal__textarea"
+                  rows="4"
+                  placeholder="e.g. Low irrigation test, drought year baseline..."></textarea>
+        <p id="runNoteModalError" class="run-note-modal__error" hidden role="alert"></p>
+        <div class="run-note-modal__actions">
+            <button type="button"
+                    id="runNoteModalCancel"
+                    class="run-note-modal__cancel"
+                    data-run-note-dismiss>Cancel</button>
+            <button type="button"
+                    id="runNoteModalSave"
+                    class="run-note-modal__save">Save Note</button>
+        </div>
+    </div>
+</div>
+<script defer src="{% static 'et/js/run_note_modal.js' %}"></script>

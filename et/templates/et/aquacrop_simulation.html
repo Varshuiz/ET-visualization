@@ -346,6 +346,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         </a>
                     </div>
                 </div>
+                {% if aquacrop_run_id and not is_saved_run %}
+                <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 flex items-start gap-2">
+                    <span class="material-symbols-outlined text-base shrink-0">cloud_done</span>
+                    <span>This run was saved to your history automatically. View it on the <a href="{% url 'et:dashboard' %}#recent-history" class="font-semibold text-primary hover:underline no-underline">dashboard History</a> section.</span>
+                </div>
+                {% endif %}
                 {% if results.partial_results %}
                 <div class="warning-box rounded-lg border-l-4 border-amber-500 bg-amber-50 text-amber-900 px-4 py-3 text-sm">{{ results.result_note }}</div>
                 {% endif %}
@@ -649,32 +655,52 @@ document.addEventListener('DOMContentLoaded', function () {
                 {% endif %}
 
                 {% if weekly_yield_comparison or weekly_yield_projection %}
-                <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm overflow-x-auto">
-                    <h3 class="text-lg font-semibold text-primary mb-2">Weekly yield comparison</h3>
-                    <p class="text-sm text-on-surface-variant mb-4">
-                        Marketable yield (t/ha) from peak weekly biomass × crop harvest index.
-                        {% if has_actual_vs_optimal %}
-                        <strong>Optimal Irrigation Yield</strong> uses the model irrigation strategy; <strong>Your Irrigation Yield</strong> uses your effective irrigation from season data.
-                        {% else %}
-                        Enter season irrigation data and re-run to compare optimal vs your irrigation yield.
+                <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm overflow-x-auto" id="weeklyYieldComparisonBlock">
+                    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-primary mb-2">Weekly yield comparison</h3>
+                            <p class="text-sm text-on-surface-variant mb-0">
+                                Marketable yield (t/ha) from peak weekly biomass × crop harvest index.
+                                {% if has_actual_vs_optimal %}
+                                <strong>Optimal Irrigation Yield</strong> uses the model irrigation strategy; <strong>Your Irrigation Yield</strong> uses your effective irrigation from season data.
+                                {% else %}
+                                Enter season irrigation data and re-run to compare optimal vs your irrigation yield.
+                                {% endif %}
+                            </p>
+                        </div>
+                        {% if aquacrop_previous_runs %}
+                        <div class="form-group space-y-2 min-w-[240px] lg:max-w-sm shrink-0">
+                            <label for="previousRunSelect" class="text-xs font-bold uppercase tracking-wider text-outline block">Compare with a previous run</label>
+                            <select id="previousRunSelect" class="w-full border-outline-variant rounded-lg text-sm py-2.5 px-3 focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                                <option value="">— Select a saved run —</option>
+                                {% for run in aquacrop_previous_runs %}
+                                <option value="{{ run.id }}">{{ run.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         {% endif %}
-                    </p>
-                    <table class="w-full border-collapse text-sm min-w-[520px]">
+                    </div>
+                    {% if aquacrop_previous_runs %}
+                    {{ aquacrop_previous_runs|json_script:"aquacrop-previous-runs-data" }}
+                    {% endif %}
+                    <table class="w-full border-collapse text-sm min-w-[640px]" id="weeklyYieldComparisonTable">
                         <thead>
                             <tr class="bg-primary-container text-white">
                                 <th class="p-3 text-left">Week after planting</th>
                                 <th class="p-3 text-right">Optimal Irrigation Yield (t/ha)</th>
                                 <th class="p-3 text-right">Your Irrigation Yield (t/ha)</th>
+                                <th class="p-3 text-right prev-run-col {% if not aquacrop_previous_runs %}hidden{% endif %}">Previous Run Yield (t/ha)</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for row in weekly_yield_comparison|default:weekly_yield_projection %}
-                            <tr class="border-b border-surface-variant">
+                            <tr class="border-b border-surface-variant" data-week="{{ row.week_after_planting|default:forloop.counter }}">
                                 <td class="p-3">{{ row.period_label }}</td>
                                 <td class="p-3 text-right font-medium">{% if row.optimal_yield_tha is not None %}{{ row.optimal_yield_tha|floatformat:3 }}{% else %}{{ row.yield_tha|floatformat:3 }}{% endif %}</td>
                                 <td class="p-3 text-right font-medium">
                                     {% if row.your_yield_tha is not None %}{{ row.your_yield_tha|floatformat:3 }}{% else %}<span class="text-on-surface-variant">—</span>{% endif %}
                                 </td>
+                                <td class="p-3 text-right font-medium prev-run-col text-on-surface-variant {% if not aquacrop_previous_runs %}hidden{% endif %}">—</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -702,64 +728,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     </p>
                     <canvas id="weeklyWaterChart"></canvas>
                 </div>
-
-                {% if soil_moisture_comparison %}
-                <div class="chart-container bg-surface-container-lowest rounded-xl p-6 shadow-sm border border-primary/20">
-                    <h3 class="text-lg font-semibold text-primary mb-1">Compare with Your Actual Data (Optional)</h3>
-                    <p class="text-sm text-on-surface-variant mb-4">
-                        AquaCrop soil moisture is shown for each week. Enter your field measurements to see the difference.
-                    </p>
-                    {% if soil_comparison_saved %}
-                    <div class="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-on-surface-variant mb-4">
-                        Your field soil moisture comparison has been saved.
-                    </div>
-                    {% endif %}
-                    <form method="post" id="soilComparisonForm" class="space-y-4">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="save_soil_comparison">
-                        <input type="hidden" name="aquacrop_run_id" value="{{ aquacrop_run_id|default:'' }}">
-                        <div class="overflow-x-auto rounded-lg border border-outline-variant/50">
-                            <table class="w-full text-sm border-collapse min-w-[640px]" id="soilComparisonTable">
-                                <thead>
-                                    <tr class="bg-primary-container text-white text-left">
-                                        <th class="p-3 font-semibold">Week</th>
-                                        <th class="p-3 font-semibold text-right">AquaCrop Soil Moisture (%)</th>
-                                        <th class="p-3 font-semibold text-right">Your Actual Soil Moisture (%)</th>
-                                        <th class="p-3 font-semibold text-right">Difference</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for row in soil_moisture_comparison %}
-                                    <tr class="border-b border-surface-variant compare-sm-row" data-week="{{ row.week_start }}">
-                                        <td class="p-2 px-3 text-on-surface-variant">{{ row.week_start }}</td>
-                                        <td class="p-2 px-3 text-right">
-                                            <input type="hidden" name="compare_week_start" value="{{ row.week_start }}">
-                                            <input type="hidden" name="compare_simulated_sm" value="{% if row.simulated_pct is not None %}{{ row.simulated_pct }}{% endif %}">
-                                            <span class="compare-sim-sm font-medium text-on-surface">{% if row.simulated_pct is not None %}{{ row.simulated_pct }}{% else %}—{% endif %}</span>
-                                        </td>
-                                        <td class="p-2 px-3 text-right">
-                                            <input type="number" step="0.1" min="0" max="100" name="compare_actual_sm"
-                                                   value="{% if row.actual_pct is not None %}{{ row.actual_pct }}{% endif %}"
-                                                   class="compare-actual-sm w-28 ml-auto border-outline-variant rounded px-2 py-1 text-sm text-right"
-                                                   placeholder="—">
-                                        </td>
-                                        <td class="p-2 px-3 text-right font-medium compare-sm-diff text-on-surface">
-                                            {% if row.difference_pct is not None %}{{ row.difference_pct }}{% else %}—{% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="flex justify-end">
-                            <button type="submit" class="bg-primary hover:bg-primary-container text-white font-bold px-6 py-3 rounded-lg inline-flex items-center gap-2 shadow-lg">
-                                <span class="material-symbols-outlined text-base">save</span>
-                                Save field comparison
-                            </button>
-                        </div>
-                    </form>
-                </div>
-                {% endif %}
 
                 <div class="text-center">
                     <button type="button" onclick="downloadResults()" class="submit-btn bg-primary hover:bg-primary-container text-white font-bold px-8 py-3 rounded-lg inline-flex items-center gap-2 shadow-lg">
@@ -915,18 +883,32 @@ const growthModes = {
 function renderGrowthChart(mode) {
     const cfg = growthModes[mode] || growthModes.biomass;
     if (growthChart) growthChart.destroy();
+    const datasets = [{
+        label: cfg.label,
+        data: cfg.data,
+        borderColor: cfg.color,
+        backgroundColor: cfg.fill,
+        fill: mode === 'biomass',
+        tension: 0.35,
+    }];
+    if (mode === 'biomass' && window._previousRunBiomassLine) {
+        datasets.push({
+            label: 'Previous run biomass (t/ha)',
+            data: window._previousRunBiomassLine,
+            borderColor: '#9333ea',
+            backgroundColor: 'transparent',
+            fill: false,
+            tension: 0.35,
+            borderDash: [6, 4],
+            pointRadius: 0,
+            spanGaps: true,
+        });
+    }
     growthChart = new Chart(growthCtx, {
         type: 'line',
         data: {
             labels: growthData.dates,
-            datasets: [{
-                label: cfg.label,
-                data: cfg.data,
-                borderColor: cfg.color,
-                backgroundColor: cfg.fill,
-                fill: mode === 'biomass',
-                tension: 0.35,
-            }],
+            datasets: datasets,
         },
         options: {
             responsive: true,
@@ -943,6 +925,77 @@ document.querySelectorAll('input[name="growth_chart_mode"]').forEach((radio) => 
     radio.addEventListener('change', () => { if (radio.checked) renderGrowthChart(radio.value); });
 });
 renderGrowthChart('biomass');
+
+(function initPreviousRunComparison() {
+    const selectEl = document.getElementById('previousRunSelect');
+    const dataEl = document.getElementById('aquacrop-previous-runs-data');
+    if (!selectEl || !dataEl) return;
+
+    let previousRuns = [];
+    try { previousRuns = JSON.parse(dataEl.textContent); } catch (e) { return; }
+    const runsById = {};
+    previousRuns.forEach(function (run) { runsById[run.id] = run; });
+
+    function formatYield(val) {
+        if (val === null || val === undefined || Number.isNaN(Number(val))) return '—';
+        return Number(val).toFixed(3);
+    }
+
+    function alignBiomassLine(prevRun) {
+        const series = prevRun.biomass_series || {};
+        const prevDates = series.dates || [];
+        const prevBio = series.biomass || [];
+        if (!prevBio.length || !growthData.dates || !growthData.dates.length) {
+            return null;
+        }
+        const startPrev = new Date(prevDates[0] || growthData.dates[0]);
+        if (Number.isNaN(startPrev.getTime())) {
+            return prevBio.slice(0, growthData.dates.length);
+        }
+        return growthData.dates.map(function (dateStr) {
+            const currDate = new Date(dateStr);
+            if (Number.isNaN(currDate.getTime())) return null;
+            const dayOffset = Math.round((currDate - startPrev) / 86400000);
+            if (dayOffset >= 0 && dayOffset < prevBio.length) {
+                return prevBio[dayOffset];
+            }
+            return null;
+        });
+    }
+
+    function applyPreviousRun(runId) {
+        const table = document.getElementById('weeklyYieldComparisonTable');
+        const rows = table ? table.querySelectorAll('tbody tr[data-week]') : [];
+        window._previousRunBiomassLine = null;
+
+        if (!runId || !runsById[runId]) {
+            rows.forEach(function (row) {
+                const cell = row.querySelector('.prev-run-col');
+                if (cell) cell.textContent = '—';
+            });
+            const activeMode = document.querySelector('input[name="growth_chart_mode"]:checked')?.value || 'biomass';
+            renderGrowthChart(activeMode);
+            return;
+        }
+
+        const run = runsById[runId];
+        const yields = run.weekly_yields_by_week || {};
+        rows.forEach(function (row) {
+            const weekKey = String(row.getAttribute('data-week') || '');
+            const cell = row.querySelector('.prev-run-col');
+            if (!cell) return;
+            cell.textContent = formatYield(yields[weekKey]);
+        });
+
+        window._previousRunBiomassLine = alignBiomassLine(run);
+        const activeMode = document.querySelector('input[name="growth_chart_mode"]:checked')?.value || 'biomass';
+        renderGrowthChart(activeMode);
+    }
+
+    selectEl.addEventListener('change', function () {
+        applyPreviousRun(selectEl.value);
+    });
+})();
 
 // Water balance — weeks after planting (cumulative vs weekly actual ET)
 const weekLabels = waterBalanceData.week_labels || [];
@@ -1526,35 +1579,6 @@ function downloadResults() {
     loadSavedSeasonPrefill();
 })();
 </script>
-
-{% if has_results and soil_moisture_comparison %}
-<script>
-(function soilComparisonUi() {
-    function recalcRow(row) {
-        const simEl = row.querySelector('.compare-sim-sm');
-        const actualIn = row.querySelector('.compare-actual-sm');
-        const diffEl = row.querySelector('.compare-sm-diff');
-        const sim = parseFloat(simEl?.textContent);
-        const actualRaw = actualIn?.value;
-        if (!diffEl) return;
-        if (actualRaw === '' || actualRaw === undefined || Number.isNaN(parseFloat(actualRaw))) {
-            diffEl.textContent = '—';
-            return;
-        }
-        const actual = parseFloat(actualRaw);
-        if (Number.isNaN(sim)) {
-            diffEl.textContent = '—';
-            return;
-        }
-        diffEl.textContent = (actual - sim).toFixed(1);
-    }
-    document.querySelectorAll('.compare-sm-row').forEach((row) => {
-        row.querySelector('.compare-actual-sm')?.addEventListener('input', () => recalcRow(row));
-        recalcRow(row);
-    });
-})();
-</script>
-{% endif %}
 
 <script>
 (function simModeUi() {
