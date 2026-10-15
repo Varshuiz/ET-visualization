@@ -46,6 +46,12 @@ def get_anon_client():
     return _anon_client
 
 
+def create_anon_client():
+    """A new anon client. Use this when the call stores a session on the client."""
+    key = getattr(settings, "SUPABASE_ANON_KEY", "") or ""
+    return _create_client(key)
+
+
 def supabase_configured() -> bool:
     return bool(
         (getattr(settings, "SUPABASE_URL", "") or "").strip()

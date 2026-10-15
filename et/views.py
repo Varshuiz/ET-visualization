@@ -33,7 +33,13 @@ from .views_forecast import (
 from .views_ingestion import acis_data_view
 from .views_legacy import location_search_api
 from .views_pages import about, help_guide, method_comparison_info
-from .views_auth import login_view, logout_view, register_view
+from .views_auth import (
+    forgot_password_view,
+    login_view,
+    logout_view,
+    register_view,
+    reset_password_view,
+)
 from .views_dashboard import (
     aquacrop_run_detail_view,
     dashboard_view,
@@ -79,6 +85,8 @@ __all__ = [
     "register_view",
     "login_view",
     "logout_view",
+    "forgot_password_view",
+    "reset_password_view",
     "dashboard_view",
     "farm_profile_view",
     "et_run_detail_view",

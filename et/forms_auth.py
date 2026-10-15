@@ -32,6 +32,42 @@ class LoginForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput)
 
 
+class ForgotPasswordForm(forms.Form):
+    email = forms.EmailField()
+
+
+class ResetPasswordForm(forms.Form):
+    password = forms.CharField(widget=forms.PasswordInput, min_length=8)
+    password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm password")
+    access_token = forms.CharField(required=False, max_length=4096, widget=forms.HiddenInput)
+    refresh_token = forms.CharField(required=False, max_length=4096, widget=forms.HiddenInput)
+    token_hash = forms.CharField(required=False, max_length=512, widget=forms.HiddenInput)
+
+    def clean(self):
+        cleaned = super().clean()
+        p1 = cleaned.get("password")
+        p2 = cleaned.get("password_confirm")
+        if p1 and p2 and p1 != p2:
+            raise forms.ValidationError("Passwords do not match.")
+
+        access = (cleaned.get("access_token") or "").strip()
+        refresh = (cleaned.get("refresh_token") or "").strip()
+        token_hash = (cleaned.get("token_hash") or "").strip()
+        cleaned["access_token"] = access
+        cleaned["refresh_token"] = refresh
+        cleaned["token_hash"] = token_hash
+
+        if not p1:
+            return cleaned
+        if token_hash:
+            return cleaned
+        if access and refresh and access.count(".") == 2:
+            return cleaned
+        raise forms.ValidationError(
+            "This reset link is invalid or has expired. Request a new one."
+        )
+
+
 _REGION_SELECT_ATTRS = {"class": "region-form-select"}
 
 

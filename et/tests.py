@@ -596,3 +596,96 @@ class FarmProfileViewTests(TestCase):
         mock_save.assert_called_once()
         self.assertIsNone(mock_save.call_args.kwargs.get("farm_id"))
         self.assertIsNone(mock_save.call_args.kwargs.get("is_primary"))
+
+
+class PasswordResetTests(TestCase):
+    def test_login_page_links_to_forgot_password(self):
+        response = self.client.get(reverse("et:login"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("et:forgot_password"))
+
+    def test_forgot_password_page_renders(self):
+        response = self.client.get(reverse("et:forgot_password"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Send reset link")
+
+    def test_reset_password_page_renders(self):
+        response = self.client.get(reverse("et:reset_password"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Choose a new password")
+        self.assertContains(response, "id_access_token")
+
+    @patch("et.views_auth.supabase_configured", return_value=True)
+    @patch("et.views_auth.get_anon_client")
+    def test_forgot_password_requests_recovery_email(self, mock_get_client, _configured):
+        response = self.client.post(
+            reverse("et:forgot_password"),
+            {"email": "Farmer@Example.com"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "If an account exists for that email")
+        mock_get_client.return_value.auth.reset_password_for_email.assert_called_once()
+        email, options = mock_get_client.return_value.auth.reset_password_for_email.call_args.args
+        self.assertEqual(email, "farmer@example.com")
+        self.assertIn("/et/auth/reset-password/", options["redirect_to"])
+
+    @patch("et.views_auth.supabase_configured", return_value=True)
+    @patch("et.views_auth.get_anon_client")
+    def test_forgot_password_hides_send_failures(self, mock_get_client, _configured):
+        mock_get_client.return_value.auth.reset_password_for_email.side_effect = RuntimeError("down")
+        response = self.client.post(
+            reverse("et:forgot_password"),
+            {"email": "farmer@example.com"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "send a reset email right now")
+        self.assertNotContains(response, "If an account exists")
+
+    @patch("et.views_auth.supabase_configured", return_value=True)
+    def test_reset_password_rejects_missing_link(self, _configured):
+        response = self.client.post(
+            reverse("et:reset_password"),
+            {"password": "newpassword1", "password_confirm": "newpassword1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "invalid or has expired")
+
+    @patch("et.views_auth.supabase_configured", return_value=True)
+    def test_reset_password_rejects_mismatch(self, _configured):
+        response = self.client.post(
+            reverse("et:reset_password"),
+            {
+                "password": "newpassword1",
+                "password_confirm": "different1",
+                "access_token": "header.payload.sig",
+                "refresh_token": "refresh-token",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Passwords do not match.")
+
+    @patch("et.views_auth.supabase_configured", return_value=True)
+    @patch("et.views_auth.create_anon_client")
+    def test_reset_password_updates_and_signs_in(self, mock_create, _configured):
+        from types import SimpleNamespace
+
+        user = SimpleNamespace(id="11111111-1111-1111-1111-111111111111", email="farmer@example.com")
+        session = SimpleNamespace(access_token="header.payload.sig", refresh_token="refresh-token", user=user)
+        client = mock_create.return_value
+        client.auth.set_session.return_value = SimpleNamespace(session=session, user=user)
+        client.auth.update_user.return_value = SimpleNamespace(user=user)
+
+        response = self.client.post(
+            reverse("et:reset_password"),
+            {
+                "password": "newpassword1",
+                "password_confirm": "newpassword1",
+                "access_token": "header.payload.sig",
+                "refresh_token": "refresh-token",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("et:dashboard"), response.url)
+        client.auth.set_session.assert_called_once_with("header.payload.sig", "refresh-token")
+        client.auth.update_user.assert_called_once_with({"password": "newpassword1"})
+        self.assertEqual(self.client.session["supabase_user_id"], user.id)
