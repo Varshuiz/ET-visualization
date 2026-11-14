@@ -12,6 +12,7 @@
             <div class="stat-item"><span class="stat-label">Maximum:</span><span class="stat-value">{{ et_stats.PT.max|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
             <div class="stat-item"><span class="stat-label">Minimum:</span><span class="stat-value">{{ et_stats.PT.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
             <div class="stat-item"><span class="stat-label">Std deviation:</span><span class="stat-value">{{ et_stats.PT.std|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <a class="method-formula-link" href="{% url 'et:et_calculation_trace' %}?method=pt&amp;unit={{ selected_unit|default:'mm' }}{% if is_saved_run and run.id %}&amp;run={{ run.id }}{% endif %}">View inputs &amp; formula →</a>
         </div>
         {% endif %}
         {% if et_stats.PM %}
@@ -24,6 +25,7 @@
             <div class="stat-item"><span class="stat-label">Maximum:</span><span class="stat-value">{{ et_stats.PM.max|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
             <div class="stat-item"><span class="stat-label">Minimum:</span><span class="stat-value">{{ et_stats.PM.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
             <div class="stat-item"><span class="stat-label">Std deviation:</span><span class="stat-value">{{ et_stats.PM.std|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <a class="method-formula-link" href="{% url 'et:et_calculation_trace' %}?method=pm&amp;unit={{ selected_unit|default:'mm' }}{% if is_saved_run and run.id %}&amp;run={{ run.id }}{% endif %}">View inputs &amp; formula →</a>
         </div>
         {% endif %}
         {% if et_stats.Maule %}
@@ -36,6 +38,7 @@
             <div class="stat-item"><span class="stat-label">Maximum:</span><span class="stat-value">{{ et_stats.Maule.max|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
             <div class="stat-item"><span class="stat-label">Minimum:</span><span class="stat-value">{{ et_stats.Maule.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
             <div class="stat-item"><span class="stat-label">Std deviation:</span><span class="stat-value">{{ et_stats.Maule.std|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <a class="method-formula-link" href="{% url 'et:et_calculation_trace' %}?method=maule&amp;unit={{ selected_unit|default:'mm' }}{% if is_saved_run and run.id %}&amp;run={{ run.id }}{% endif %}">View inputs &amp; formula →</a>
         </div>
         {% endif %}
         {% if et_stats.Hargreaves %}
@@ -48,6 +51,7 @@
             <div class="stat-item"><span class="stat-label">Maximum:</span><span class="stat-value">{{ et_stats.Hargreaves.max|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
             <div class="stat-item"><span class="stat-label">Minimum:</span><span class="stat-value">{{ et_stats.Hargreaves.min|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
             <div class="stat-item"><span class="stat-label">Std deviation:</span><span class="stat-value">{{ et_stats.Hargreaves.std|floatformat:unit_info.decimal_places }} {{ unit_info.daily_label }}</span></div>
+            <a class="method-formula-link" href="{% url 'et:et_calculation_trace' %}?method=hargreaves&amp;unit={{ selected_unit|default:'mm' }}{% if is_saved_run and run.id %}&amp;run={{ run.id }}{% endif %}">View inputs &amp; formula →</a>
         </div>
         {% endif %}
     </div>

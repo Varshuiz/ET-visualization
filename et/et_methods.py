@@ -160,8 +160,8 @@ def _to_float32_array(x):
     return a
 
 
-def net_radiation_estimate_vec(Rs, Tmax, Tmin, Ra, RH=None, elevation=766):
-    """Vectorized version of :func:`net_radiation_estimate`."""
+def net_radiation_parts_vec(Rs, Tmax, Tmin, Ra, RH=None, elevation=766):
+    """Vectorized net-radiation terms. ``Rn`` matches :func:`net_radiation_estimate_vec`."""
     rs = _to_float32_array(Rs)
     tmax = _to_float32_array(Tmax)
     tmin = _to_float32_array(Tmin)
@@ -177,6 +177,7 @@ def net_radiation_estimate_vec(Rs, Tmax, Tmin, Ra, RH=None, elevation=766):
         rs_rso = np.where(rso > 0, np.minimum(rs / rso, 1.0), 0.8)
 
         tmean = (tmax + tmin) / 2.0
+        ea = np.full(rs.shape, np.nan, dtype=np.float32)
         if RH is None:
             rnl = sigma * (tmaxk**4 + tmink**4) / 2.0 * 0.2 * (1.35 * rs_rso - 0.35)
         else:
@@ -193,14 +194,29 @@ def net_radiation_estimate_vec(Rs, Tmax, Tmin, Ra, RH=None, elevation=766):
 
         rn = rns - rnl
         rn = np.where(np.isfinite(rn), np.maximum(rn, 0.0), np.nan)
-    return rn
+    return {
+        "Tmean": tmean,
+        "Rns": rns,
+        "Rnl": rnl,
+        "Rso": rso,
+        "Rs_Rso": rs_rso,
+        "ea": ea,
+        "Rn": rn,
+    }
 
 
-def priestley_taylor_ET_vec(Tavg, Rn, alpha=1.26, gamma=0.066, lambda_val=2.45):
+def net_radiation_estimate_vec(Rs, Tmax, Tmin, Ra, RH=None, elevation=766):
+    """Vectorized version of :func:`net_radiation_estimate`."""
+    return net_radiation_parts_vec(Rs, Tmax, Tmin, Ra, RH, elevation)["Rn"]
+
+
+def priestley_taylor_parts_vec(Tavg, Rn, alpha=1.26, gamma=0.066, lambda_val=2.45):
+    """Priestley-Taylor terms. ``ET`` matches :func:`priestley_taylor_ET_vec`."""
     tavg = _to_float32_array(Tavg)
     rn = _to_float32_array(Rn)
     with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
-        delta = 4098.0 * (0.6108 * np.exp((17.27 * tavg) / (tavg + 237.3))) / (tavg + 237.3) ** 2
+        es = 0.6108 * np.exp((17.27 * tavg) / (tavg + 237.3))
+        delta = 4098.0 * es / (tavg + 237.3) ** 2
         denom = delta + gamma
         safe_ratio = np.where(denom > 0, delta / denom, 0.0)
         if lambda_val == 0:
@@ -208,10 +224,15 @@ def priestley_taylor_ET_vec(Tavg, Rn, alpha=1.26, gamma=0.066, lambda_val=2.45):
         else:
             et0 = alpha * safe_ratio * (rn / lambda_val)
         et0 = np.where(np.isfinite(et0), np.maximum(et0, 0.0), np.nan)
-    return et0
+    return {"Tmean": tavg, "es": es, "delta": delta, "Rn": rn, "ET": et0}
 
 
-def penman_monteith_ET_vec(Tmax, Tmin, RH, u2, Rs, Ra, elevation=766):
+def priestley_taylor_ET_vec(Tavg, Rn, alpha=1.26, gamma=0.066, lambda_val=2.45):
+    return priestley_taylor_parts_vec(Tavg, Rn, alpha, gamma, lambda_val)["ET"]
+
+
+def penman_monteith_parts_vec(Tmax, Tmin, RH, u2, Rs, Ra, elevation=766):
+    """FAO-56 terms as implemented. ``ET`` matches :func:`penman_monteith_ET_vec`."""
     tmax = _to_float32_array(Tmax)
     tmin = _to_float32_array(Tmin)
     rh = _to_float32_array(RH)
@@ -221,23 +242,42 @@ def penman_monteith_ET_vec(Tmax, Tmin, RH, u2, Rs, Ra, elevation=766):
 
     tmean = (tmax + tmin) / 2.0
     with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
-        delta = 4098.0 * (0.6108 * np.exp((17.27 * tmean) / (tmean + 237.3))) / (tmean + 237.3) ** 2
+        es_tmean = 0.6108 * np.exp((17.27 * tmean) / (tmean + 237.3))
+        delta = 4098.0 * es_tmean / (tmean + 237.3) ** 2
         gamma = psychrometric_constant(elevation)
         # Vector-safe saturation vapour pressure (avoid math.exp on arrays).
         es = (
             0.6108 * np.exp((17.27 * tmax) / (tmax + 237.3))
             + 0.6108 * np.exp((17.27 * tmin) / (tmin + 237.3))
         ) / 2.0
-        es_tmean = 0.6108 * np.exp((17.27 * tmean) / (tmean + 237.3))
         ea = es_tmean * (rh / 100.0)
-        rn = net_radiation_estimate_vec(rs, tmax, tmin, ra, rh, elevation)
+        radiation = net_radiation_parts_vec(rs, tmax, tmin, ra, rh, elevation)
+        rn = radiation["Rn"]
 
         wind_term = 900.0 / (tmean + 273.0) * u2a * (es - ea)
         numerator = 0.408 * delta * rn + gamma * wind_term
         denominator = delta + gamma * (1.0 + 0.34 * u2a)
         et0 = numerator / denominator
         et0 = np.where(np.isfinite(et0), np.maximum(et0, 0.0), np.nan)
-    return et0
+    return {
+        "Tmean": tmean,
+        "delta": delta,
+        "gamma": gamma,
+        "es": es,
+        "ea": ea,
+        "vpd": es - ea,
+        "Rn": rn,
+        "Rns": radiation["Rns"],
+        "Rnl": radiation["Rnl"],
+        "Rso": radiation["Rso"],
+        "Rs_Rso": radiation["Rs_Rso"],
+        "wind_term": wind_term,
+        "ET": et0,
+    }
+
+
+def penman_monteith_ET_vec(Tmax, Tmin, RH, u2, Rs, Ra, elevation=766):
+    return penman_monteith_parts_vec(Tmax, Tmin, RH, u2, Rs, Ra, elevation)["ET"]
 
 
 def penman_monteith_ET_with_rn_vec(Tmax, Tmin, RH, u2, Rn, elevation=766):
@@ -265,7 +305,8 @@ def penman_monteith_ET_with_rn_vec(Tmax, Tmin, RH, u2, Rn, elevation=766):
     return et0
 
 
-def maule_ET_vec(Tmax, Tmin, Rs, RH=None, latitude=49.7):
+def maule_parts_vec(Tmax, Tmin, Rs, RH=None, latitude=49.7):
+    """Maulé terms. ``ET`` matches :func:`maule_ET_vec`. Latitude is unused."""
     tmax = _to_float32_array(Tmax)
     tmin = _to_float32_array(Tmin)
     rs = _to_float32_array(Rs)
@@ -289,22 +330,45 @@ def maule_ET_vec(Tmax, Tmin, Rs, RH=None, latitude=49.7):
 
     et_maule = et_base * humidity_factor * range_factor
     et_maule = np.where(np.isfinite(et_maule), np.maximum(et_maule, 0.0), np.nan)
-    return et_maule
+    return {
+        "Tmean": tmean,
+        "Trange": trange,
+        "et_base": et_base,
+        "humidity_factor": humidity_factor,
+        "range_factor": range_factor,
+        "ET": et_maule,
+    }
 
 
-def hargreaves_ET_vec(Tmax, Tmin, Ra, latitude=49.7):
+def maule_ET_vec(Tmax, Tmin, Rs, RH=None, latitude=49.7):
+    return maule_parts_vec(Tmax, Tmin, Rs, RH, latitude)["ET"]
+
+
+def hargreaves_parts_vec(Tmax, Tmin, Ra, latitude=49.7):
+    """Hargreaves-Samani terms. ``ET`` matches :func:`hargreaves_ET_vec`."""
     tmax = _to_float32_array(Tmax)
     tmin = _to_float32_array(Tmin)
     ra = _to_float32_array(Ra)
+    _ = latitude
     tmean = (tmax + tmin) / 2.0
     trange = tmax - tmin
 
     ra_mm_equivalent = ra / 2.45
     c_h = 0.0023
     with np.errstate(invalid="ignore"):
-        et_h = c_h * (tmean + 17.8) * np.sqrt(np.clip(trange, 0, None)) * ra_mm_equivalent
+        trange_floor = np.clip(trange, 0, None)
+        et_h = c_h * (tmean + 17.8) * np.sqrt(trange_floor) * ra_mm_equivalent
         et_h = np.where(np.isfinite(et_h), np.maximum(et_h, 0.0), np.nan)
-    return et_h
+    return {
+        "Tmean": tmean,
+        "Trange": trange,
+        "Ra_mm": ra_mm_equivalent,
+        "ET": et_h,
+    }
+
+
+def hargreaves_ET_vec(Tmax, Tmin, Ra, latitude=49.7):
+    return hargreaves_parts_vec(Tmax, Tmin, Ra, latitude)["ET"]
 
 
 def calculate_extraterrestrial_radiation(latitude, day_of_year):

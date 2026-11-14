@@ -41,6 +41,7 @@ from .views_auth import (
     register_view,
     reset_password_view,
 )
+from .views_et_trace import et_calculation_trace_download_view, et_calculation_trace_view
 from .views_dashboard import (
     aquacrop_run_detail_view,
     dashboard_view,
@@ -70,6 +71,8 @@ __all__ = [
     "about",
     "acis_data_view",
     "comparison_with_acis",
+    "et_calculation_trace_view",
+    "et_calculation_trace_download_view",
     "location_search_api",
     "update_comparison_plot",
     "env_canada_forecast_view",
@@ -120,6 +123,7 @@ from django.core.cache import cache
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 
+from .et_calculation_trace import prepare_et_results_frame
 from .et_growing_season import (
     calculate_growing_season_stats,
     create_growing_season_plots,
@@ -1918,118 +1922,8 @@ def comparison_with_acis(request):
     ec_city_name = None
     
     try:
-        # Clamp negative Tmax/Tavg (keep Tmin raw so temperature range is preserved).
-        if 'Tmax' in df.columns:
-            df['Tmax'] = pd.to_numeric(df['Tmax'], errors='coerce').clip(lower=0)
-            # Used by several ET methods; must exist even if ET columns are already present in session.
-            df['Tmax_clamped'] = df['Tmax'].clip(lower=0)
-        if 'Tmin' in df.columns:
-            df['Tmin'] = pd.to_numeric(df['Tmin'], errors='coerce')
-        if 'Tavg' in df.columns:
-            df['Tavg'] = pd.to_numeric(df['Tavg'], errors='coerce').clip(lower=0)
+        df = prepare_et_results_frame(df, location_info.get('latitude', 49.7))
 
-        # Add day of year column for radiation calculations
-        df['day_of_year'] = df['Date'].dt.dayofyear
-        
-        # Get latitude from session
-        latitude = location_info.get('latitude', 49.7)
-        
-        # We need temperature columns only when ET columns are not already present.
-        existing_et_columns = ['ET_PT', 'ET_PM', 'ET_Maule', 'ET_Hargreaves']
-        has_existing_et = any(col in df.columns for col in existing_et_columns)
-        if ('Tmax' not in df.columns or 'Tmin' not in df.columns) and not has_existing_et:
-            raise ValueError("Missing temperature data")
-        
-        # Calculate ET inputs only when ET series are not already available.
-        if not has_existing_et:
-            # Calculate Tavg if not present
-            if 'Tavg' not in df.columns:
-                df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
-        
-            # Assign solar radiation
-            if 'Solar_Radiation' in df.columns:
-                df['Rs'] = df['Solar_Radiation']
-            elif 'Rs' not in df.columns:
-                # Estimate if not available
-                df['Rs'] = (df['Tmax'] - df['Tmin']) * 0.16 * np.sqrt(12)
-            
-            # Assign wind speed
-            if 'Wind_Speed' in df.columns:
-                df['u2'] = df['Wind_Speed']
-            elif 'u2' not in df.columns:
-                df['u2'] = 2.0  # Default
-            
-            # Assign relative humidity
-            if 'RH' not in df.columns:
-                df['RH'] = 65.0  # Default
-            else:
-                df['RH'] = pd.to_numeric(df['RH'], errors='coerce').fillna(65.0)
-            
-            # Calculate extraterrestrial radiation (vectorized; major speedup)
-            df['Ra'] = calculate_extraterrestrial_radiation_vec(latitude, df['day_of_year'].to_numpy())
-        else:
-            # Session may include partial weather + partial ET; ensure required drivers exist
-            # for any still-missing ET method columns.
-            if 'Tavg' not in df.columns and {'Tmax', 'Tmin'}.issubset(df.columns):
-                df['Tavg'] = (df['Tmax'] + df['Tmin']) / 2
-            if 'Rs' not in df.columns and {'Tmax', 'Tmin'}.issubset(df.columns):
-                df['Rs'] = (df['Tmax'] - df['Tmin']) * 0.16 * np.sqrt(12)
-            if 'u2' not in df.columns:
-                if 'Wind_Speed' in df.columns:
-                    df['u2'] = df['Wind_Speed']
-                else:
-                    df['u2'] = 2.0
-            if 'RH' not in df.columns:
-                df['RH'] = 65.0
-            else:
-                df['RH'] = pd.to_numeric(df['RH'], errors='coerce').fillna(65.0)
-            if 'Ra' not in df.columns and 'day_of_year' in df.columns:
-                df['Ra'] = calculate_extraterrestrial_radiation_vec(latitude, df['day_of_year'].to_numpy())
-        
-        # Calculate ET using all four methods (only if not already present)
-        if 'ET_PT' not in df.columns:
-            try:
-                df['Rn'] = net_radiation_estimate_vec(
-                    df['Rs'], df['Tmax'], df['Tmin'], df['Ra'], df['RH'], elevation=766
-                )
-                df['ET_PT'] = priestley_taylor_ET_vec(df['Tavg'], df['Rn'])
-            except Exception as e:
-                print(f"PT calculation failed: {e}")
-                df['ET_PT'] = np.nan
-        
-        need_pm = 'ET_PM' not in df.columns
-        if not need_pm:
-            need_pm = bool(df['ET_PM'].isna().all())
-        if need_pm:
-            try:
-                if 'Tmax' in df.columns and 'Tmax_clamped' not in df.columns:
-                    df['Tmax_clamped'] = pd.to_numeric(df['Tmax'], errors='coerce').clip(lower=0)
-                df['ET_PM'] = penman_monteith_ET_vec(
-                    df['Tmax_clamped'], df['Tmin'], df['RH'], df['u2'], df['Rs'], df['Ra'], elevation=766
-                )
-            except Exception as e:
-                print(f"PM calculation failed: {e}")
-                df['ET_PM'] = np.nan
-        
-        if 'ET_Maule' not in df.columns:
-            try:
-                df['ET_Maule'] = maule_ET_vec(df['Tmax_clamped'], df['Tmin'], df['Rs'], df['RH'], latitude=latitude)
-            except Exception as e:
-                print(f"Maule calculation failed: {e}")
-                df['ET_Maule'] = np.nan
-        
-        if 'ET_Hargreaves' not in df.columns:
-            try:
-                df['ET_Hargreaves'] = hargreaves_ET_vec(df['Tmax_clamped'], df['Tmin'], df['Ra'], latitude=latitude)
-            except Exception as e:
-                print(f"Hargreaves calculation failed: {e}")
-                df['ET_Hargreaves'] = np.nan
-        
-        # Remove rows with ALL NaN ET values across supported ET methods.
-        et_columns = ['ET_PT', 'ET_PM', 'ET_Maule', 'ET_Hargreaves']
-        
-        df = df.dropna(subset=et_columns, how='all')
-        
         if len(df) == 0:
             raise ValueError("No valid ET values could be calculated for any method")
         

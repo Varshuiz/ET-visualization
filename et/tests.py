@@ -43,6 +43,130 @@ class ETPlannerViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("et:acis_fetch"), response.url)
 
+    def _seed_weather_only(self):
+        df = pd.DataFrame(
+            {
+                "Date": pd.to_datetime(["2025-06-01", "2025-06-02", "2025-06-03"]),
+                "Tmax": [24.0, 25.0, 23.0],
+                "Tmin": [12.0, 11.0, 10.0],
+                "RH": [60.0, 62.0, 58.0],
+                "Wind_Speed": [2.0, 2.1, 1.9],
+                "Solar_Radiation": [18.0, 17.5, 16.8],
+            }
+        )
+        session = self.client.session
+        session["acis_data"] = df.to_json(date_format="iso")
+        session["acis_location"] = {
+            "description": "Calgary",
+            "latitude": 51.0,
+            "start_date": "2025-06-01",
+            "end_date": "2025-06-03",
+        }
+        session.save()
+
+    def _assert_trace_et_matches_results(self, unit):
+        results = self.client.get(reverse("et:comparison_with_acis") + f"?unit={unit}")
+        self.assertEqual(results.status_code, 200)
+        et_data = results.context["et_data"]
+        places = results.context["unit_info"]["decimal_places"]
+        columns = {
+            "pt": "ET_PT",
+            "pm": "ET_PM",
+            "maule": "ET_Maule",
+            "hargreaves": "ET_Hargreaves",
+        }
+        for slug, column in columns.items():
+            page = self.client.get(reverse("et:et_calculation_trace") + f"?method={slug}&unit={unit}")
+            self.assertEqual(page.status_code, 200)
+            rows = page.context["spec"]["rows"]
+            self.assertEqual(len(rows), len(et_data))
+            for record, row in zip(et_data, rows):
+                expected = f"{float(record[column]):.{places}f}"
+                self.assertEqual(row[-1], expected)
+                self.assertContains(page, expected)
+
+    def test_results_cards_link_to_formula_page(self):
+        self._seed_acis_session()
+        response = self.client.get(reverse("et:comparison_with_acis"))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn("View inputs &amp; formula", html)
+        self.assertIn('href="/et/results/calculations/?method=pm&amp;unit=mm"', html)
+        for slug in ("pt", "pm", "maule", "hargreaves"):
+            self.assertIn(f"method={slug}", html)
+
+    def test_formula_page_requires_session_weather(self):
+        response = self.client.get(reverse("et:et_calculation_trace"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("et:acis_fetch"), response.url)
+
+    def test_formula_page_et_matches_results_page(self):
+        self._seed_weather_only()
+        self._assert_trace_et_matches_results("mm")
+        self._assert_trace_et_matches_results("inches")
+
+    def test_formula_page_keeps_precomputed_et(self):
+        self._seed_acis_session()
+        results = self.client.get(reverse("et:comparison_with_acis"))
+        page = self.client.get(reverse("et:et_calculation_trace") + "?method=pm")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'class="trace-tab active"')
+        self.assertContains(page, "Penman-Monteith")
+        for record, row in zip(results.context["et_data"], page.context["spec"]["rows"]):
+            self.assertEqual(row[-1], f"{float(record['ET_PM']):.1f}")
+        pt = self.client.get(reverse("et:et_calculation_trace") + "?method=pt")
+        for record, row in zip(results.context["et_data"], pt.context["spec"]["rows"]):
+            self.assertEqual(row[-1], f"{float(record['ET_PT']):.1f}")
+
+    def test_formula_page_downloads_csv_and_zip(self):
+        import io
+        import zipfile
+
+        self._seed_weather_only()
+        csv_response = self.client.get(
+            reverse("et:et_calculation_trace_download") + "?method=pm&unit=mm"
+        )
+        self.assertEqual(csv_response.status_code, 200)
+        body = csv_response.content.decode("utf-8")
+        self.assertIn("Tmax", body)
+        self.assertIn("Latitude", body)
+        self.assertIn("ET (mm/day)", body)
+
+        zip_response = self.client.get(
+            reverse("et:et_calculation_trace_download") + "?method=all&unit=inches"
+        )
+        self.assertEqual(zip_response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(zip_response.content)) as archive:
+            self.assertEqual(
+                sorted(archive.namelist()),
+                ["hargreaves_inputs.csv", "maule_inputs.csv", "pm_inputs.csv", "pt_inputs.csv"],
+            )
+            pm_csv = archive.read("pm_inputs.csv").decode("utf-8")
+            self.assertIn("ET (in/day)", pm_csv)
+
+    def test_vector_parts_match_previous_expressions(self):
+        import numpy as np
+
+        from et.et_methods import priestley_taylor_parts_vec, penman_monteith_parts_vec
+
+        tavg = np.array([18.0, 20.5], dtype=np.float32)
+        rn = np.array([10.0, 12.0], dtype=np.float32)
+        parts = priestley_taylor_parts_vec(tavg, rn)
+        delta = 4098.0 * (0.6108 * np.exp((17.27 * tavg) / (tavg + 237.3))) / (tavg + 237.3) ** 2
+        np.testing.assert_array_equal(parts["delta"], delta.astype(np.float32))
+
+        tmax = np.array([24.0, 25.0], dtype=np.float32)
+        tmin = np.array([12.0, 11.0], dtype=np.float32)
+        rh = np.array([60.0, 62.0], dtype=np.float32)
+        u2 = np.array([2.0, 2.1], dtype=np.float32)
+        rs = np.array([18.0, 17.5], dtype=np.float32)
+        ra = np.array([40.0, 40.2], dtype=np.float32)
+        pm = penman_monteith_parts_vec(tmax, tmin, rh, u2, rs, ra, elevation=766)
+        tmean = (tmax + tmin) / 2.0
+        es_tmean = 0.6108 * np.exp((17.27 * tmean) / (tmean + 237.3))
+        pm_delta = 4098.0 * es_tmean / (tmean + 237.3) ** 2
+        np.testing.assert_array_equal(pm["delta"], pm_delta.astype(np.float32))
+
     def test_et_results_recomputes_pm_when_column_missing(self):
         """Session weather with PT only should still yield PM for comparison UI."""
         df = pd.DataFrame(

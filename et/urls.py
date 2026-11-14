@@ -55,6 +55,12 @@ urlpatterns = [
     path("api/convert-units/", protect(views.convert_et_units_api), name="convert_units_api"),
     path("fetch-data/", protect(views.acis_data_view), name="acis_fetch"),
     path("comparison-acis/", protect(views.comparison_with_acis), name="comparison_with_acis"),
+    path("results/calculations/", protect(views.et_calculation_trace_view), name="et_calculation_trace"),
+    path(
+        "results/calculations/download/",
+        protect(views.et_calculation_trace_download_view),
+        name="et_calculation_trace_download",
+    ),
     path("api/location-search/", protect(views.location_search_api), name="location_search_api"),
     path("update-comparison-plot/", protect(views.update_comparison_plot), name="update_comparison_plot"),
     path("env-canada-forecast/", protect(views.env_canada_forecast_view), name="env_canada_forecast"),

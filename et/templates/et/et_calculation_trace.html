@@ -1,0 +1,196 @@
+{% extends 'et/base.html' %}
+
+{% block title %}{{ spec.label }} inputs | AqualET{% endblock %}
+
+{% block body_class %}et-results-page{% endblock %}
+
+{% block head_assets %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<style>
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    body.et-results-page { font-family: 'Inter', sans-serif; background: #f8faf9; color: #191c1c; }
+    body.et-results-page .navbar { display: none !important; }
+    body.et-results-page > .container { max-width: none; width: 100%; padding: 0; margin: 0; }
+    .trace-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .trace-tab {
+        display: inline-block;
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 1px solid #bfc8c8;
+        background: #fff;
+        color: #3f4848;
+        text-decoration: none;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    .trace-tab.active { background: #0c5252; color: #fff; border-color: #0c5252; }
+    .trace-card {
+        background: #fff;
+        border: 1px solid #eceeed;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+    }
+    .trace-card h2 { margin: 0 0 12px; color: #095256; font-size: 1.15rem; }
+    .trace-formula { overflow-x: auto; margin: 0 0 12px; padding: 8px 0; }
+    .trace-legend, .trace-constants { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    .trace-legend th, .trace-constants th, .trace-legend td, .trace-constants td {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid #eceeed;
+        vertical-align: top;
+    }
+    .trace-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 18px; }
+    .trace-actions a {
+        display: inline-block;
+        background: #0c5252;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    .trace-actions a.secondary { background: #fff; color: #0c5252; border: 1px solid #0c5252; }
+    .trace-note { color: #3f4848; font-size: 0.92rem; }
+</style>
+{% endblock %}
+
+{% block extra_css %}
+{% include 'et/partials/et_comparison_styles.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen">
+    {% include 'et/partials/stitch_sidebar.html' with sidebar_active='et_analysis' %}
+
+    <main class="ml-[260px] flex-1 flex flex-col min-h-screen">
+        <header class="w-full min-h-[180px] flex flex-col justify-end relative overflow-hidden shadow-sm p-8" style="background-color: #2D6A6A;">
+            <div class="relative z-10 max-w-4xl">
+                <a href="{{ back_url }}" class="inline-flex items-center gap-1 text-[#c2e4da] hover:text-white text-sm font-semibold mb-3 no-underline">
+                    <span class="material-symbols-outlined text-sm">arrow_back</span>
+                    Back to ET Results
+                </a>
+                <h2 class="text-3xl font-bold text-white mb-2">Inputs and formula</h2>
+                {% if location.description %}
+                <p class="text-[#abe8e7]/90 text-base mb-1">{{ location.description }}</p>
+                {% endif %}
+                {% if location.start_date or location.end_date %}
+                <p class="text-[#abe8e7]/75 text-sm">Data period: {{ location.start_date }} to {{ location.end_date }}</p>
+                {% endif %}
+            </div>
+        </header>
+
+        <div class="et-results-toolbar bg-white border-b border-[#eceeed] px-8 py-4 shadow-sm">
+            <div class="unit-toggle-section flex flex-wrap items-center gap-4">
+                <span class="unit-label {% if selected_unit == 'mm' %}active{% endif %}">mm</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="unitToggle" {% if selected_unit == 'inches' %}checked{% endif %}>
+                    <span class="slider"></span>
+                </label>
+                <span class="unit-label {% if selected_unit == 'inches' %}active{% endif %}">inches</span>
+            </div>
+        </div>
+
+        <div class="p-8 max-w-[1600px] w-full flex-1">
+            <nav class="trace-tabs" aria-label="ET methods">
+                {% for tab in tabs %}
+                <a class="trace-tab {% if tab.active %}active{% endif %}" href="{{ tab.url }}">{{ tab.label }}</a>
+                {% endfor %}
+            </nav>
+
+            <section class="trace-card">
+                <h2>{{ spec.label }}</h2>
+                {% for formula in spec.formulas %}
+                <div class="trace-formula">\[{{ formula }}\]</div>
+                {% endfor %}
+            </section>
+
+            <section class="trace-card">
+                <h2>Symbol legend</h2>
+                <table class="trace-legend">
+                    <thead><tr><th>Symbol</th><th>Meaning</th><th>Units</th></tr></thead>
+                    <tbody>
+                        {% for item in spec.legend %}
+                        <tr><td>{{ item.symbol }}</td><td>{{ item.meaning }}</td><td>{{ item.units }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="trace-card">
+                <h2>Constants and site parameters</h2>
+                <table class="trace-constants">
+                    <thead><tr><th>Parameter</th><th>Value</th><th>Units</th></tr></thead>
+                    <tbody>
+                        {% for item in spec.constants %}
+                        <tr><td>{{ item.name }}</td><td>{{ item.value }}</td><td>{{ item.units }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+
+            {% if missing_weather %}
+            <section class="trace-card">
+                <p class="trace-note">Daily weather for this result is not available, so the input table cannot be rebuilt. Open the calculation from ET Results in this session, or run it again.</p>
+            </section>
+            {% else %}
+            <div class="trace-actions">
+                <a href="{{ download_url }}">Download inputs (CSV)</a>
+                <a class="secondary" href="{{ download_all_url }}">Download all methods (CSV/ZIP)</a>
+            </div>
+            <section class="trace-card">
+                <h2>Daily values</h2>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                {% for header in spec.headers %}<th>{{ header }}</th>{% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in spec.rows %}
+                            <tr>
+                                {% for cell in row %}<td>{{ cell|default:"—" }}</td>{% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            {% endif %}
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+            delimiters: [
+                {left: '\\[', right: '\\]', display: true},
+                {left: '\\(', right: '\\)', display: false}
+            ],
+            throwOnError: false
+        });
+    }
+    var unitToggle = document.getElementById('unitToggle');
+    if (!unitToggle) return;
+    unitToggle.addEventListener('change', function () {
+        var url = new URL(window.location.href);
+        url.searchParams.set('unit', this.checked ? 'inches' : 'mm');
+        window.location.href = url.toString();
+    });
+});
+</script>
+{% endblock %}
