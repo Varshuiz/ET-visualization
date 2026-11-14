@@ -443,6 +443,83 @@ class AquaCropSeasonDataTests(TestCase):
         self.assertEqual(merged["weather_rows"][0]["tmax"], "18")
 
 
+class AquaCropInitialWaterTests(TestCase):
+    def _weather(self):
+        import pandas as pd
+
+        dates = pd.date_range("2024-05-01", "2024-05-20")
+        return pd.DataFrame(
+            {
+                "MinTemp": 8.0,
+                "MaxTemp": 20.0,
+                "Precipitation": 0.0,
+                "ReferenceET": 4.0,
+                "Date": dates,
+            }
+        )
+
+    def test_crop_condition_maps_to_initial_water_content(self):
+        from aquacrop import AquaCropModel, Crop, InitialWaterContent, IrrigationManagement, Soil
+
+        from et.aquacrop_simulator import run_aquacrop_simulation
+        from et.crop_catalog import initial_water_for_crop_condition
+
+        expected = {
+            "optimal": ("Prop", "FC", "Field capacity (100% TAW)"),
+            "mild_stress": ("Pct", 80.0, "80% of total available water"),
+            "moderate_stress": ("Pct", 60.0, "60% of total available water"),
+            "severe_stress": ("Pct", 40.0, "40% of total available water"),
+            "wilting": ("Prop", "WP", "Wilting point (0% TAW)"),
+            "": ("Prop", "FC", "Field capacity (100% TAW)"),
+        }
+        soil = Soil(soil_type="Loam")
+        hyd = None
+        for key, (wc_type, wc_value, label) in expected.items():
+            spec = initial_water_for_crop_condition(key)
+            self.assertEqual(spec["wc_type"], wc_type)
+            self.assertEqual(spec["wc_value"], wc_value)
+            self.assertEqual(spec["starting_soil_moisture"], label)
+            initial_wc = InitialWaterContent(
+                wc_type=spec["wc_type"],
+                method="Layer",
+                depth_layer=[1],
+                value=[spec["wc_value"]],
+            )
+            model = AquaCropModel(
+                sim_start_time="2024/05/01",
+                sim_end_time="2024/05/20",
+                weather_df=self._weather(),
+                soil=soil,
+                crop=Crop("Wheat", planting_date="05/01"),
+                initial_water_content=initial_wc,
+                irrigation_management=IrrigationManagement(irrigation_method=0),
+            )
+            model._initialize()
+            th = float(model._init_cond.th[0])
+            layer = model._param_struct.Soil.Hydrology.loc[1]
+            if wc_type == "Prop" and wc_value == "FC":
+                self.assertAlmostEqual(th, float(layer.th_fc), places=4)
+            elif wc_type == "Prop" and wc_value == "WP":
+                self.assertAlmostEqual(th, float(layer.th_wp), places=4)
+            else:
+                taw = float(layer.th_fc) - float(layer.th_wp)
+                self.assertAlmostEqual(th, float(layer.th_wp) + (wc_value / 100.0) * taw, places=4)
+            hyd = layer
+
+        self.assertIsNotNone(hyd)
+        results = run_aquacrop_simulation(
+            crop="Wheat",
+            soil="Loam",
+            start_date="2024/05/01",
+            end_date="2024/05/20",
+            irrigation="rainfed",
+            weather_df=self._weather(),
+            crop_condition="moderate_stress",
+        )
+        self.assertEqual(results["starting_soil_moisture"], "60% of total available water")
+        self.assertEqual(results["crop_condition"], "moderate_stress")
+
+
 class AquaCropActualVsOptimalTests(TestCase):
     def test_expand_season_to_daily(self):
         from et.aquacrop_actual_vs_optimal import expand_season_to_daily

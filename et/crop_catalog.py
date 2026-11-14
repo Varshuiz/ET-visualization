@@ -126,12 +126,61 @@ CROP_GDD_PROFILES: dict[str, list[tuple[int, float, str]]] = {
 }
 
 CROP_CONDITION_OPTIONS: dict[str, dict[str, Any]] = {
-    "optimal": {"label": "Optimal", "soil_moisture_pct": 100.0, "hint": "Field at field capacity (FC)."},
-    "mild_stress": {"label": "Mild Stress (50% water availability)", "soil_moisture_pct": 50.0},
-    "moderate_stress": {"label": "Moderate Stress", "soil_moisture_pct": 35.0},
-    "severe_stress": {"label": "Severe Stress (Near Wilting Point)", "soil_moisture_pct": 20.0},
-    "wilting": {"label": "Wilting", "soil_moisture_pct": 10.0},
+    "optimal": {
+        "label": "Optimal",
+        "soil_moisture_pct": 100.0,
+        "hint": "Field at field capacity (FC).",
+        "wc_type": "Prop",
+        "wc_value": "FC",
+        "starting_soil_moisture": "Field capacity (100% TAW)",
+    },
+    "mild_stress": {
+        "label": "Mild Stress (80% TAW)",
+        "soil_moisture_pct": 80.0,
+        "wc_type": "Pct",
+        "wc_value": 80.0,
+        "starting_soil_moisture": "80% of total available water",
+    },
+    "moderate_stress": {
+        "label": "Moderate Stress (60% TAW)",
+        "soil_moisture_pct": 60.0,
+        "wc_type": "Pct",
+        "wc_value": 60.0,
+        "starting_soil_moisture": "60% of total available water",
+    },
+    "severe_stress": {
+        "label": "Severe Stress (40% TAW)",
+        "soil_moisture_pct": 40.0,
+        "wc_type": "Pct",
+        "wc_value": 40.0,
+        "starting_soil_moisture": "40% of total available water",
+    },
+    "wilting": {
+        "label": "Wilting",
+        "soil_moisture_pct": 0.0,
+        "hint": "Wilting point.",
+        "wc_type": "Prop",
+        "wc_value": "WP",
+        "starting_soil_moisture": "Wilting point (0% TAW)",
+    },
 }
+
+
+def initial_water_for_crop_condition(crop_condition: str | None) -> dict[str, Any]:
+    """Map the crop-condition dropdown to the AquaCrop initial water content."""
+    key = (crop_condition or "").strip().lower()
+    spec = CROP_CONDITION_OPTIONS.get(key)
+    if spec is None:
+        spec = CROP_CONDITION_OPTIONS["optimal"]
+        key = "optimal"
+    return {
+        "key": key,
+        "label": spec["label"],
+        "wc_type": spec["wc_type"],
+        "wc_value": spec["wc_value"],
+        "soil_moisture_pct": spec["soil_moisture_pct"],
+        "starting_soil_moisture": spec["starting_soil_moisture"],
+    }
 
 
 def crop_categories() -> list[str]:

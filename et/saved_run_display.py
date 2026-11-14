@@ -131,6 +131,9 @@ def aquacrop_context_from_saved_row(row: dict) -> dict[str, Any]:
         "reached_maturity",
         "partial_results",
         "result_note",
+        "starting_soil_moisture",
+        "starting_soil_moisture_pct",
+        "crop_condition",
     )
     results: dict[str, Any] = {k: data[k] for k in scalar_keys if k in data}
     if data.get("growth_chart"):

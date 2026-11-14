@@ -5,6 +5,7 @@
 {% block body_class %}et-results-page{% endblock %}
 
 {% block head_assets %}
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js"></script>
@@ -18,6 +19,31 @@
     body.et-results-page { font-family: 'Inter', sans-serif; background: #f8faf9; color: #191c1c; }
     body.et-results-page .navbar { display: none !important; }
     body.et-results-page > .container { max-width: none; width: 100%; padding: 0; margin: 0; }
+    /* Keep the sidebar logo at icon size even if utility CSS has not loaded. */
+    body.et-results-page aside {
+        width: 260px;
+        min-height: 100vh;
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        background: #0D170D;
+    }
+    body.et-results-page aside img {
+        width: 40px;
+        height: 40px;
+        object-fit: cover;
+        display: block;
+    }
+    body.et-results-page main {
+        margin-left: 260px;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
     .trace-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
     .trace-tab {
         display: inline-block;

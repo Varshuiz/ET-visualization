@@ -3041,6 +3041,7 @@ def aquacrop_simulation(request):
             crop = resolve_aquacrop_model(crop_slug)
             soil = request.POST.get("soil", "Loam")
             irrigation = request.POST.get("irrigation", "full")
+            crop_condition = (request.POST.get("crop_condition") or "").strip()
             city_name = request.POST.get("city_name", default_city).strip()
             if city_name and city_name not in available_cities:
                 city_name = default_city
@@ -3157,6 +3158,7 @@ def aquacrop_simulation(request):
                                 end_date=ed,
                                 irrigation=irrigation,
                                 weather_df=wd_y,
+                                crop_condition=crop_condition,
                             )
                             historical_results_rows.append(
                                 {
@@ -3233,6 +3235,7 @@ def aquacrop_simulation(request):
                     end_date=end_date,
                     irrigation=irrigation,
                     weather_df=weather_df,
+                    crop_condition=crop_condition,
                 )
                 if had_file_upload:
                     historical_results_rows = [
@@ -3367,6 +3370,7 @@ def aquacrop_simulation(request):
                         application_efficiency_pct=float(
                             season_post.get("application_efficiency_pct") or 81
                         ),
+                        crop_condition=crop_condition,
                     )
                     context["has_actual_vs_optimal"] = True
                     if context["actual_vs_optimal"].get("weekly_yield_comparison"):

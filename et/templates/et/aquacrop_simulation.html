@@ -334,7 +334,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
                 {% endif %}
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <h2 class="text-xl font-semibold text-primary">Simulation Results</h2>
+                    <div>
+                        <h2 class="text-xl font-semibold text-primary">Simulation Results</h2>
+                        {% if results.starting_soil_moisture %}
+                        <p class="text-sm text-on-surface-variant mt-1 mb-0">Starting soil moisture: {{ results.starting_soil_moisture }}</p>
+                        {% endif %}
+                    </div>
                     <div class="flex flex-wrap gap-2">
                         {% if is_saved_run %}
                         <a href="{% url 'et:dashboard' %}#recent-history" class="inline-flex items-center justify-center no-underline text-primary font-semibold px-5 py-3 rounded-xl border border-outline-variant/60 bg-white hover:bg-surface-container-low">

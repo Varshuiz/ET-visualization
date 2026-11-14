@@ -208,6 +208,7 @@ def build_actual_vs_optimal_payload(
     end_date: str,
     weather_df: pd.DataFrame | None,
     application_efficiency_pct: float = 81.0,
+    crop_condition: str | None = None,
 ) -> dict[str, Any]:
     """
     Build JSON-serializable chart payloads comparing AquaCrop optimal vs farmer irrigation.
@@ -235,6 +236,7 @@ def build_actual_vs_optimal_payload(
             irrigation="rainfed",
             weather_df=weather_df,
             irrigation_schedule=schedule if not schedule.empty else None,
+            crop_condition=crop_condition,
         )
 
     actual_weeks = (

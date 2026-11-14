@@ -704,6 +704,9 @@ def compact_aquacrop_result_data(results: dict, extra: dict | None = None) -> di
         "reached_maturity",
         "partial_results",
         "result_note",
+        "starting_soil_moisture",
+        "starting_soil_moisture_pct",
+        "crop_condition",
     )
     payload: dict[str, Any] = {k: results.get(k) for k in scalar_keys if k in results}
     if results.get("growth_chart"):

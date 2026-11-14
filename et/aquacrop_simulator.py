@@ -10,6 +10,8 @@ from aquacrop import (
     InitialWaterContent,
     IrrigationManagement
 )
+
+from .crop_catalog import initial_water_for_crop_condition
 import pandas as pd
 import numpy as np
 import traceback
@@ -98,6 +100,7 @@ class AquaCropSimulator:
         irrigation_method='rainfed',
         initial_water_content='FC',
         irrigation_schedule=None,
+        crop_condition=None,
     ):
         """
         Run AquaCrop simulation following official format
@@ -155,12 +158,29 @@ class AquaCropSimulator:
                 print(traceback.format_exc())
                 raise
             
-            if initial_water_content == 'FC':
+            water_spec = initial_water_for_crop_condition(crop_condition)
+            if crop_condition:
+                initial_wc = InitialWaterContent(
+                    wc_type=water_spec["wc_type"],
+                    method="Layer",
+                    depth_layer=[1],
+                    value=[water_spec["wc_value"]],
+                )
+                initial_water_content = water_spec["starting_soil_moisture"]
+            elif initial_water_content == 'FC':
                 initial_wc = InitialWaterContent(value=['FC'])
+                water_spec = initial_water_for_crop_condition("optimal")
             elif initial_water_content == 'WP':
                 initial_wc = InitialWaterContent(value=['WP'])
+                water_spec = initial_water_for_crop_condition("wilting")
             else:
                 initial_wc = InitialWaterContent(value=[initial_water_content])
+                water_spec = {
+                    "key": "",
+                    "label": "",
+                    "soil_moisture_pct": None,
+                    "starting_soil_moisture": str(initial_water_content),
+                }
             
             # Irrigation
             if irrigation_schedule is not None and len(irrigation_schedule) > 0:
@@ -202,6 +222,10 @@ class AquaCropSimulator:
             
             # Process results
             results = self._process_results(model)
+            results["crop_condition"] = water_spec.get("key") or ""
+            results["crop_condition_label"] = water_spec.get("label") or ""
+            results["starting_soil_moisture"] = water_spec.get("starting_soil_moisture") or ""
+            results["starting_soil_moisture_pct"] = water_spec.get("soil_moisture_pct")
             
             print("\nSimulation Complete!")
             print(f"   Yield: {results['yield_fresh']:.1f} tonnes/ha")
@@ -534,6 +558,7 @@ def run_aquacrop_simulation(
     irrigation='rainfed',
     weather_df=None,
     irrigation_schedule=None,
+    crop_condition=None,
 ):
     """Convenience function"""
     simulator = AquaCropSimulator()
@@ -545,6 +570,7 @@ def run_aquacrop_simulation(
         irrigation_method=irrigation,
         weather_data=weather_df,
         irrigation_schedule=irrigation_schedule,
+        crop_condition=crop_condition,
     )
     
     results['growth_chart'] = simulator.get_growth_chart_data()
