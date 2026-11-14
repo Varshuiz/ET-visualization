@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 import pandas as pd
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 
@@ -604,6 +604,11 @@ class PasswordResetTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("et:forgot_password"))
 
+    def test_login_page_forwards_recovery_hash_to_reset(self):
+        response = self.client.get(reverse("et:login"))
+        self.assertContains(response, '!== "recovery"')
+        self.assertContains(response, reverse("et:reset_password"))
+
     def test_forgot_password_page_renders(self):
         response = self.client.get(reverse("et:forgot_password"))
         self.assertEqual(response.status_code, 200)
@@ -614,6 +619,9 @@ class PasswordResetTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Choose a new password")
         self.assertContains(response, "id_access_token")
+        self.assertContains(response, "id_auth_code")
+        self.assertContains(response, 'searchParams.get("code")')
+        self.assertContains(response, "access_token")
 
     @patch("et.views_auth.supabase_configured", return_value=True)
     @patch("et.views_auth.get_anon_client")
@@ -689,3 +697,137 @@ class PasswordResetTests(TestCase):
         client.auth.set_session.assert_called_once_with("header.payload.sig", "refresh-token")
         client.auth.update_user.assert_called_once_with({"password": "newpassword1"})
         self.assertEqual(self.client.session["supabase_user_id"], user.id)
+
+    @override_settings(ALLOWED_HOSTS=["et-site.onrender.com", "localhost", "127.0.0.1"])
+    @patch("et.views_auth.supabase_configured", return_value=True)
+    @patch("et.views_auth.get_anon_client")
+    def test_forgot_password_redirect_is_https_on_render(self, mock_get_client, _configured):
+        response = self.client.post(
+            reverse("et:forgot_password"),
+            {"email": "farmer@example.com"},
+            HTTP_HOST="et-site.onrender.com",
+            HTTP_X_FORWARDED_PROTO="https",
+        )
+        self.assertEqual(response.status_code, 200)
+        _email, options = mock_get_client.return_value.auth.reset_password_for_email.call_args.args
+        self.assertEqual(
+            options["redirect_to"],
+            "https://et-site.onrender.com/et/auth/reset-password/",
+        )
+        self.assertNotIn("localhost", options["redirect_to"])
+        self.assertNotIn("127.0.0.1", options["redirect_to"])
+
+    @patch("et.views_auth.supabase_configured", return_value=True)
+    def test_reset_password_rejects_short_password(self, _configured):
+        response = self.client.post(
+            reverse("et:reset_password"),
+            {
+                "password": "short",
+                "password_confirm": "short",
+                "access_token": "header.payload.sig",
+                "refresh_token": "refresh-token",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Password is too short")
+
+    @patch("et.views_auth.supabase_configured", return_value=True)
+    @patch("et.views_auth.create_anon_client")
+    def test_reset_password_exchanges_pkce_code(self, mock_create, _configured):
+        from types import SimpleNamespace
+
+        user = SimpleNamespace(id="11111111-1111-1111-1111-111111111111", email="farmer@example.com")
+        session = SimpleNamespace(access_token="header.payload.sig", refresh_token="refresh-token", user=user)
+        client = mock_create.return_value
+        client.auth.exchange_code_for_session.return_value = SimpleNamespace(session=session, user=user)
+        client.auth.update_user.return_value = SimpleNamespace(user=user)
+
+        response = self.client.post(
+            reverse("et:reset_password"),
+            {
+                "password": "newpassword1",
+                "password_confirm": "newpassword1",
+                "auth_code": "recovery-code",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        client.auth.exchange_code_for_session.assert_called_once_with({"auth_code": "recovery-code"})
+        client.auth.set_session.assert_not_called()
+        client.auth.update_user.assert_called_once_with({"password": "newpassword1"})
+
+    def test_root_forwards_recovery_code_to_reset(self):
+        response = self.client.get("/?code=abc123")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/et/auth/reset-password/", response.url)
+        self.assertIn("code=abc123", response.url)
+
+    def test_change_password_requires_login(self):
+        response = self.client.get(reverse("et:change_password"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("et:login"), response.url)
+
+    @patch("et.views_auth.supabase_configured", return_value=True)
+    def test_change_password_page_renders_for_signed_in_user(self, _configured):
+        session = self.client.session
+        session["supabase_user_id"] = "11111111-1111-1111-1111-111111111111"
+        session["supabase_access_token"] = "header.payload.sig"
+        session["supabase_refresh_token"] = "refresh-token"
+        session.save()
+        response = self.client.get(reverse("et:change_password"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Change password")
+
+    @patch("et.views_auth.supabase_configured", return_value=True)
+    def test_change_password_rejects_mismatch_and_short(self, _configured):
+        session = self.client.session
+        session["supabase_user_id"] = "11111111-1111-1111-1111-111111111111"
+        session.save()
+        mismatch = self.client.post(
+            reverse("et:change_password"),
+            {"password": "newpassword1", "password_confirm": "different1"},
+        )
+        self.assertContains(mismatch, "Passwords do not match.")
+        short = self.client.post(
+            reverse("et:change_password"),
+            {"password": "short", "password_confirm": "short"},
+        )
+        self.assertContains(short, "Password is too short")
+
+    @patch("et.views_auth.supabase_configured", return_value=True)
+    @patch("et.views_auth.create_anon_client")
+    def test_change_password_updates_user(self, mock_create, _configured):
+        from types import SimpleNamespace
+
+        user = SimpleNamespace(id="11111111-1111-1111-1111-111111111111", email="farmer@example.com")
+        session = SimpleNamespace(access_token="header.payload.sig", refresh_token="refresh-token", user=user)
+        client = mock_create.return_value
+        client.auth.set_session.return_value = SimpleNamespace(session=session, user=user)
+        client.auth.update_user.return_value = SimpleNamespace(user=user)
+
+        store = self.client.session
+        store["supabase_user_id"] = user.id
+        store["supabase_user_email"] = user.email
+        store["supabase_access_token"] = "header.payload.sig"
+        store["supabase_refresh_token"] = "refresh-token"
+        store.save()
+
+        response = self.client.post(
+            reverse("et:change_password"),
+            {"password": "newpassword1", "password_confirm": "newpassword1"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("et:dashboard"), response.url)
+        client.auth.set_session.assert_called_once_with("header.payload.sig", "refresh-token")
+        client.auth.update_user.assert_called_once_with({"password": "newpassword1"})
+
+    @patch("et.views_auth.supabase_configured", return_value=True)
+    def test_change_password_requires_session_tokens(self, _configured):
+        session = self.client.session
+        session["supabase_user_id"] = "11111111-1111-1111-1111-111111111111"
+        session.save()
+        response = self.client.post(
+            reverse("et:change_password"),
+            {"password": "newpassword1", "password_confirm": "newpassword1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Your session has expired")

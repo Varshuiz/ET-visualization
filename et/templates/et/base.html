@@ -3,6 +3,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    {% include "et/partials/recovery_redirect.html" %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0c4f54">
     <title>{% block title %}AqualET{% endblock %}</title>
@@ -624,6 +625,9 @@
                 </a></li>
                 <li><a href="{% url 'et:farm_profile' %}" {% if request.resolver_match.url_name == 'farm_profile' %}class="active"{% endif %}>
                     Your Regions
+                </a></li>
+                <li><a href="{% url 'et:change_password' %}" {% if request.resolver_match.url_name == 'change_password' %}class="active"{% endif %}>
+                    Password
                 </a></li>
                 <li><a href="{% url 'et:logout' %}">Sign out</a></li>
                 {% else %}

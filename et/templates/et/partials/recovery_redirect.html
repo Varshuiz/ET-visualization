@@ -1,0 +1,24 @@
+<script>
+(function () {
+    var path = window.location.pathname || "/";
+    if (path.indexOf("/auth/reset-password") !== -1) return;
+    var resetUrl = "{% url 'et:reset_password' %}";
+    var hash = window.location.hash || "";
+    if (hash) {
+        var hashParams = new URLSearchParams(hash.charAt(0) === "#" ? hash.slice(1) : hash);
+        if ((hashParams.get("type") || "").toLowerCase() !== "recovery") {
+            /* not a recovery hash; still check the query string below */
+        } else {
+            window.location.replace(resetUrl + hash);
+            return;
+        }
+    }
+    var search = window.location.search || "";
+    if (!search) return;
+    var searchParams = new URLSearchParams(search.charAt(0) === "?" ? search.slice(1) : search);
+    var type = (searchParams.get("type") || "").toLowerCase();
+    if (searchParams.get("code") || searchParams.get("token_hash") || type === "recovery") {
+        window.location.replace(resetUrl + search);
+    }
+})();
+</script>

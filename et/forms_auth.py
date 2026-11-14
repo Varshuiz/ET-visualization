@@ -36,36 +36,64 @@ class ForgotPasswordForm(forms.Form):
     email = forms.EmailField()
 
 
-class ResetPasswordForm(forms.Form):
-    password = forms.CharField(widget=forms.PasswordInput, min_length=8)
-    password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm password")
-    access_token = forms.CharField(required=False, max_length=4096, widget=forms.HiddenInput)
-    refresh_token = forms.CharField(required=False, max_length=4096, widget=forms.HiddenInput)
-    token_hash = forms.CharField(required=False, max_length=512, widget=forms.HiddenInput)
+PASSWORD_TOO_SHORT = "Password is too short. Use at least 8 characters."
+PASSWORDS_DONT_MATCH = "Passwords do not match."
+RESET_LINK_INVALID = "This reset link is invalid or has expired. Request a new one."
+
+
+class NewPasswordForm(forms.Form):
+    password = forms.CharField(
+        label="New password",
+        widget=forms.PasswordInput,
+        min_length=8,
+        error_messages={
+            "required": "Enter a new password.",
+            "min_length": PASSWORD_TOO_SHORT,
+        },
+    )
+    password_confirm = forms.CharField(
+        label="Confirm password",
+        widget=forms.PasswordInput,
+        error_messages={"required": "Confirm your new password."},
+    )
 
     def clean(self):
         cleaned = super().clean()
         p1 = cleaned.get("password")
         p2 = cleaned.get("password_confirm")
         if p1 and p2 and p1 != p2:
-            raise forms.ValidationError("Passwords do not match.")
+            raise forms.ValidationError(PASSWORDS_DONT_MATCH)
+        return cleaned
 
+
+class ChangePasswordForm(NewPasswordForm):
+    """New password for a user who is already signed in."""
+
+
+class ResetPasswordForm(NewPasswordForm):
+    access_token = forms.CharField(required=False, max_length=4096, widget=forms.HiddenInput)
+    refresh_token = forms.CharField(required=False, max_length=4096, widget=forms.HiddenInput)
+    token_hash = forms.CharField(required=False, max_length=512, widget=forms.HiddenInput)
+    auth_code = forms.CharField(required=False, max_length=2048, widget=forms.HiddenInput)
+
+    def clean(self):
+        cleaned = super().clean()
         access = (cleaned.get("access_token") or "").strip()
         refresh = (cleaned.get("refresh_token") or "").strip()
         token_hash = (cleaned.get("token_hash") or "").strip()
+        auth_code = (cleaned.get("auth_code") or "").strip()
         cleaned["access_token"] = access
         cleaned["refresh_token"] = refresh
         cleaned["token_hash"] = token_hash
+        cleaned["auth_code"] = auth_code
 
-        if not p1:
+        if not cleaned.get("password"):
             return cleaned
-        if token_hash:
+        if token_hash or auth_code:
             return cleaned
         if access and refresh and access.count(".") == 2:
             return cleaned
-        raise forms.ValidationError(
-            "This reset link is invalid or has expired. Request a new one."
-        )
+        raise forms.ValidationError(RESET_LINK_INVALID)
 
 
 _REGION_SELECT_ATTRS = {"class": "region-form-select"}

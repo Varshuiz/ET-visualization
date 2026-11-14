@@ -34,6 +34,7 @@ from .views_ingestion import acis_data_view
 from .views_legacy import location_search_api
 from .views_pages import about, help_guide, method_comparison_info
 from .views_auth import (
+    change_password_view,
     forgot_password_view,
     login_view,
     logout_view,
@@ -87,6 +88,7 @@ __all__ = [
     "logout_view",
     "forgot_password_view",
     "reset_password_view",
+    "change_password_view",
     "dashboard_view",
     "farm_profile_view",
     "et_run_detail_view",

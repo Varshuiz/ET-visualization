@@ -165,6 +165,10 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+# Render terminates TLS and forwards plain HTTP. Trust this header so
+# request.build_absolute_uri() is https://…onrender.com (Supabase rejects
+# an http redirect and falls back to the Site URL, often localhost).
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 if not DEBUG:
     SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "True").lower() in (
         "1",
