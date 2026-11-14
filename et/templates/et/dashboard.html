@@ -161,8 +161,12 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="flex flex-wrap justify-between items-start gap-6 w-full">
                 <div class="flex flex-col gap-2">
                     <div class="flex items-center gap-2 flex-wrap">
-                        {% if first_name %}
+                        {% if just_registered and first_name %}
+                        <span class="text-3xl md:text-4xl font-bold text-white">Welcome, {{ first_name }}!</span>
+                        {% elif first_name %}
                         <span class="text-3xl md:text-4xl font-bold text-white">Welcome back, {{ first_name }}!</span>
+                        {% elif just_registered %}
+                        <span class="text-3xl md:text-4xl font-bold text-white">Welcome!</span>
                         {% else %}
                         <span class="text-3xl md:text-4xl font-bold text-white">Dashboard</span>
                         {% endif %}

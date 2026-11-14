@@ -687,6 +687,33 @@ class RootRedirectTests(TestCase):
         self.assertIn(reverse("et:login"), response.url)
 
 
+class DashboardWelcomeTests(TestCase):
+    def _sign_in(self, *, just_registered=False):
+        session = self.client.session
+        session["supabase_user_id"] = "11111111-1111-1111-1111-111111111111"
+        if just_registered:
+            session["just_registered"] = True
+            session["just_registered_name"] = "Varsha Singh"
+        session.save()
+
+    @patch("et.views_dashboard.list_recent_forecast_runs", return_value=[])
+    @patch("et.views_dashboard.list_recent_aquacrop_runs", return_value=[])
+    @patch("et.views_dashboard.list_recent_et_calculations", return_value=[])
+    @patch("et.views_dashboard.list_locations_for_user", return_value=[])
+    @patch("et.views_dashboard.get_primary_location_for_user", return_value=None)
+    @patch("et.views_dashboard.get_profile", return_value={"full_name": "Varsha Singh"})
+    def test_new_account_shows_welcome_name_without_banner(self, *_mocks):
+        self._sign_in(just_registered=True)
+        response = self.client.get(reverse("et:dashboard"))
+        self.assertContains(response, "Welcome, Varsha!")
+        self.assertNotContains(response, "Account created")
+        self.assertNotContains(response, "Welcome back, Varsha!")
+
+        again = self.client.get(reverse("et:dashboard"))
+        self.assertContains(again, "Welcome back, Varsha!")
+        self.assertNotContains(again, "Welcome, Varsha!")
+
+
 class AquacropSoilMatchTests(TestCase):
     def test_match_aquacrop_soil_normalizes_labels(self):
         from et.views import _match_aquacrop_soil

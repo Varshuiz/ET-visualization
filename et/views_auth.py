@@ -132,7 +132,8 @@ def register_view(request):
                         access_token=session.access_token,
                         refresh_token=getattr(session, "refresh_token", None),
                     )
-                    messages.success(request, "Account created. Welcome to AqualET!")
+                    request.session["just_registered"] = True
+                    request.session["just_registered_name"] = (full_name or "").strip()
                     return redirect(_safe_next(request))
                 messages.info(
                     request,

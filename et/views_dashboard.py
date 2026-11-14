@@ -150,6 +150,11 @@ def dashboard_view(request):
         "forecast_runs": supabase_data["forecast_runs"],
         **_profile_context_from_row(supabase_data["profile"]),
     }
+    just_registered = bool(request.session.pop("just_registered", False))
+    registered_name = (request.session.pop("just_registered_name", "") or "").strip()
+    if just_registered and not context.get("first_name") and registered_name:
+        context["first_name"] = _first_name(registered_name)
+    context["just_registered"] = just_registered
     return render(request, "et/dashboard.html", context)
 
 
